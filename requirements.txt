@@ -1,0 +1,14 @@
+funcy
+librosa
+matplotlib
+numpy
+opencv-python
+sacred
+scikit-learn
+scikit-image
+tensorboardX
+torch
+torchaudio
+torchvision
+tqdm
+ujson
