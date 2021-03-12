@@ -67,7 +67,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulator
                 x_corrs[i].append(x_corr[i].item())
                 y_corrs[i].append(y_corr[i].item())
 
-            losses.append(loss.item()
+            losses.append(loss.item())
             progress_bar.set_postfix(
                 loss=np.mean(losses),
                 x_corr_1st=np.mean(x_corrs[0]),
@@ -225,7 +225,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
-        articulators=articulators
+        articulators=articulators,
         device=device,
         regularize_out=True
     )
