@@ -13,7 +13,8 @@ from loss import pearsons_correlation
 
 COLORS = {
     "lower-lip": "lime",
-    "upper-lip": "fuchsia",
+    "pharynx": "salmon",
+    "upper-lip": "magenta",
     "tongue": "darkorange",
     "soft-palate": "dodgerblue"
 }
@@ -36,14 +37,14 @@ def save_outputs(outputs, targets, phonemes, save_to, regularize_out):
             art_arr = art_arr.detach().numpy()
             if regularize_out:
                 resX, resY = regularize_Bsplines(art_arr.transpose(1, 0), 3)
-                art_arr = np.array([resX, resY])
+                reg_art_arr = np.array([resX, resY])
 
             npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}.npy")
             with open(npy_filepath, "wb") as f:
-                np.save(f, art_arr)
+                np.save(f, reg_art_arr)
 
-            x, y = art_arr * 136
-            plt.plot(x, 136 - y, linewidth=lw, c=COLORS[art])
+            reg_x, reg_y = reg_art_arr * 136
+            plt.plot(reg_x, 136 - reg_y, linewidth=lw, c=COLORS[art])
 
         for art, art_arr in [
             ("lower-lip", lower_lip_true),

@@ -21,9 +21,9 @@ class ArtSpeechDataset(Dataset):
 
         with open(filepath) as f:
             data = json.load(f)
-            self.data = self._collect_data(data)
+            self.data = self._collect_data(data, save_missing)
 
-    def _collect_data(self, data):
+    def _collect_data(self, data, save_missing):
         dataset = []
         missing_data = []
         for item in data:

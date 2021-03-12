@@ -16,5 +16,7 @@ __pycache__
 config/*
 !config/*.yaml.example
 
+data
+
 results
 runs

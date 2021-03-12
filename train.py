@@ -11,7 +11,7 @@ from sacred import Experiment
 from sacred.observers import FileStorageObserver
 from tensorboardX import SummaryWriter
 from torch.optim import Adam
-from torch.optim.lr_scheduler import CyclicLR, ReduceLROnPlateau
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -145,14 +145,6 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
 
     loss_fn = EuclideanDistanceLoss()
     optimizer = Adam(model.parameters(), lr=learning_rate)
-    # base_lr = learning_rate / 10.
-    # max_lr = learning_rate * 10.
-    # scheduler = CyclicLR(
-    #     optimizer,
-    #     base_lr=base_lr,
-    #     max_lr=max_lr,
-    #     cycle_momentum=False
-    # )
     scheduler = ReduceLROnPlateau(
         optimizer,
         factor=0.1,
