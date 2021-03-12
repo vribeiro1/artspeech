@@ -32,7 +32,7 @@ fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "results"))
 ex.observers.append(fs_observer)
 
 
-def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None, device=None):
+def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulators, writer=None, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     training = phase == TRAIN
@@ -43,8 +43,8 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
         model.eval()
 
     losses = []
-    x_corrs = [[], [], [], []]
-    y_corrs = [[], [], [], []]
+    x_corrs = [[] for _ in articulators]
+    y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
     for i, (sentence, targets, _) in enumerate(progress_bar):
         sentence = sentence.to(device)
@@ -60,25 +60,18 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
                 optimizer.step()
 
             x_corr, y_corr = pearsons_correlation(outputs, targets)
-            llip_x_corr, sp_x_corr, tongue_x_corr, ulip_x_corr = x_corr.mean(dim=-1)[0]
-            llip_y_corr, sp_y_corr, tongue_y_corr, ulip_y_corr = y_corr.mean(dim=-1)[0]
+            x_corr = x_corr.mean(dim=-1)[0]
+            y_corr = y_corr.mean(dim=-1)[0]
 
-            x_corrs[0].append(llip_x_corr.item())
-            x_corrs[1].append(sp_x_corr.item())
-            x_corrs[2].append(tongue_x_corr.item())
-            x_corrs[3].append(ulip_x_corr.item())
+            for i, _ in enumerate(articulators):
+                x_corrs[i].append(x_corr[i].item())
+                y_corrs[i].append(y_corr[i].item())
 
-            y_corrs[0].append(llip_y_corr.item())
-            y_corrs[1].append(sp_y_corr.item())
-            y_corrs[2].append(tongue_y_corr.item())
-            y_corrs[3].append(ulip_y_corr.item())
-
-            losses.append(loss.item())
-
+            losses.append(loss.item()
             progress_bar.set_postfix(
                 loss=np.mean(losses),
-                llip_x_corr=np.mean(x_corrs[0]),
-                llip_y_corr=np.mean(y_corrs[0])
+                x_corr_1st=np.mean(x_corrs[0]),
+                y_corr_1st=np.mean(y_corrs[0])
             )
 
     mean_loss = np.mean(losses)
@@ -86,43 +79,23 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
     if writer is not None:
         writer.add_scalar(loss_tag, mean_loss, epoch)
 
-    mean_x_corr_llip = np.mean(x_corrs[0])
-    mean_y_corr_llip = np.mean(y_corrs[0])
-
-    mean_x_corr_sp = np.mean(x_corrs[1])
-    mean_y_corr_sp = np.mean(y_corrs[1])
-
-    mean_x_corr_tongue = np.mean(x_corrs[2])
-    mean_y_corr_tongue = np.mean(y_corrs[2])
-
-    mean_x_corr_ulip = np.mean(x_corrs[3])
-    mean_y_corr_ulip = np.mean(y_corrs[3])
-
     info = {
-        "loss": mean_loss,
-        "lower-lip": {
-            "x_corr": mean_x_corr_llip,
-            "y_corr": mean_y_corr_llip
-        },
-        "soft-palate": {
-            "x_corr": mean_x_corr_sp,
-            "y_corr": mean_y_corr_sp
-        },
-        "tongue": {
-            "x_corr": mean_x_corr_tongue,
-            "y_corr": mean_y_corr_tongue
-        },
-        "upper-lip": {
-            "x_corr": mean_x_corr_ulip,
-            "y_corr": mean_y_corr_ulip
-        },
+        "loss": mean_loss
     }
+
+    info.update({
+        art: {
+            "x_corr": np.mean(x_corrs[i_art]),
+            "y_corr": np.mean(y_corrs[i_art])
+        }
+        for i_art, art in enumerate(articulators)
+    })
 
     return info
 
 
 @ex.automain
-def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid_filepath, test_filepath, vocab_filepath, register_targets=False, state_dict_fpath=None):
+def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid_filepath, test_filepath, vocab_filepath, articulators, register_targets=False, state_dict_fpath=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     writer = SummaryWriter(os.path.join(BASE_DIR, "runs", f"experiment-{_run._id}"))
@@ -137,7 +110,9 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         tokens = json.load(f)
         vocabulary = {token: i for i, token in enumerate(tokens)}
 
-    model = ArtSpeech(len(vocabulary))
+    n_articulators = len(articulators)
+
+    model = ArtSpeech(len(vocabulary), n_articulators)
     if state_dict_fpath is not None:
         state_dict = torch.load(state_dict_fpath, map_location=device)
         model.load_state_dict(state_dict)
@@ -155,6 +130,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         os.path.dirname(datadir),
         train_filepath,
         vocabulary,
+        n_articulators,
         register=register_targets
     )
     train_dataloader = DataLoader(
@@ -168,6 +144,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         os.path.dirname(datadir),
         valid_filepath,
         vocabulary,
+        n_articulators,
         register=register_targets
     )
     valid_dataloader = DataLoader(
@@ -190,6 +167,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
             dataloader=train_dataloader,
             optimizer=optimizer,
             criterion=loss_fn,
+            articulators=articulators,
             writer=writer,
             device=device
         )
@@ -201,6 +179,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
             dataloader=valid_dataloader,
             optimizer=optimizer,
             criterion=loss_fn,
+            articulators=articulators,
             writer=writer,
             device=device
         )
@@ -221,6 +200,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         os.path.dirname(datadir),
         test_filepath,
         vocabulary,
+        n_articulators,
         register=register_targets
     )
     test_dataloader = DataLoader(
@@ -230,7 +210,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         worker_init_fn=set_seeds
     )
 
-    best_model = ArtSpeech(len(vocabulary))
+    best_model = ArtSpeech(len(vocabulary), 4)
     state_dict = torch.load(best_model_path, map_location=device)
     best_model.load_state_dict(state_dict)
     best_model.to(device)
@@ -245,6 +225,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
+        articulators=articulators
         device=device,
         regularize_out=True
     )

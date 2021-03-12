@@ -21,15 +21,13 @@ class ArticulatorPredictor(nn.Module):
     def forward(self, inputs):
         linear_out = self.linear(inputs)
         x_pos = self.x_coords(linear_out)
-        # x_pos = torch.sigmoid(x_pos)
         y_pos = self.y_coords(linear_out)
-        # y_pos = torch.sigmoid(y_pos)
 
         return torch.stack([x_pos, y_pos], dim=2)
 
 
 class ArtSpeech(nn.Module):
-    def __init__(self, vocab_size, n_articulators=4, embed_dim=64, hidden_size=128, n_samples=50):
+    def __init__(self, vocab_size, n_articulators, embed_dim=64, hidden_size=128, n_samples=50):
         super(ArtSpeech, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         self.rnn = nn.GRU(embed_dim, hidden_size, num_layers=2, bidirectional=True)

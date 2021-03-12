@@ -20,7 +20,7 @@ COLORS = {
 }
 
 
-def save_outputs(outputs, targets, phonemes, save_to, regularize_out):
+def save_outputs(outputs, targets, phonemes, save_to, regularize_out, articulators):
     for j, (out, target, phoneme) in enumerate(zip(outputs, targets, phonemes)):
         lower_lip, soft_palate, tongue, upper_lip = out
         lower_lip_true, soft_palate_true, tongue_true, upper_lip_true = target
@@ -28,13 +28,8 @@ def save_outputs(outputs, targets, phonemes, save_to, regularize_out):
         plt.figure(figsize=(10, 10))
 
         lw = 5
-        for art, art_arr in [
-            ("lower-lip", lower_lip),
-            ("soft-palate", soft_palate),
-            ("tongue", tongue),
-            ("upper-lip", upper_lip)
-        ]:
-            art_arr = art_arr.detach().numpy()
+        for i_art, art in enumerate(sorted(articulators)):
+            art_arr = out[i_art].detach().numpy()
             if regularize_out:
                 resX, resY = regularize_Bsplines(art_arr.transpose(1, 0), 3)
                 reg_art_arr = np.array([resX, resY])
@@ -44,16 +39,11 @@ def save_outputs(outputs, targets, phonemes, save_to, regularize_out):
                 np.save(f, reg_art_arr)
 
             reg_x, reg_y = reg_art_arr * 136
-            plt.plot(reg_x, 136 - reg_y, linewidth=lw, c=COLORS[art])
+            color = COLORS.get(art, "black")
+            plt.plot(reg_x, 136 - reg_y, linewidth=lw, c=color)
 
-        for art, art_arr in [
-            ("lower-lip", lower_lip_true),
-            ("soft-palate", soft_palate_true),
-            ("tongue", tongue_true),
-            ("upper-lip", upper_lip_true)
-        ]:
-
-            art_arr = art_arr.detach().numpy()
+        for i_art, art in enumerate(sorted(articulators)):
+            art_arr = target[i_art].detach().numpy()
 
             npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}_true.npy")
             with open(npy_filepath, "wb") as f:
@@ -80,7 +70,7 @@ def save_outputs(outputs, targets, phonemes, save_to, regularize_out):
 
 
 
-def run_test(epoch, model, dataloader, criterion, outputs_dir, device=None, regularize_out=False):
+def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, device=None, regularize_out=False):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -91,8 +81,8 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, device=None, regu
     model.eval()
 
     losses = []
-    x_corrs = [[], [], [], []]
-    y_corrs = [[], [], [], []]
+    x_corrs = [[] for _ in articulators]
+    y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - inference")
     for i, (sentence, targets, phonemes) in enumerate(progress_bar):
         saves_i_dir = os.path.join(epoch_outputs_dir, str(i))
@@ -107,18 +97,12 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, device=None, regu
             loss = criterion(outputs, targets)
 
             x_corr, y_corr = pearsons_correlation(outputs, targets)
-            llip_x_corr, sp_x_corr, tongue_x_corr, ulip_x_corr = x_corr.mean(dim=-1)[0]
-            llip_y_corr, sp_y_corr, tongue_y_corr, ulip_y_corr = y_corr.mean(dim=-1)[0]
+            x_corr = x_corr.mean(dim=-1)[0]
+            y_corr = y_corr.mean(dim=-1)[0]
 
-            x_corrs[0].append(llip_x_corr.item())
-            x_corrs[1].append(sp_x_corr.item())
-            x_corrs[2].append(tongue_x_corr.item())
-            x_corrs[3].append(ulip_x_corr.item())
-
-            y_corrs[0].append(llip_y_corr.item())
-            y_corrs[1].append(sp_y_corr.item())
-            y_corrs[2].append(tongue_y_corr.item())
-            y_corrs[3].append(ulip_y_corr.item())
+            for i, _ in enumerate(articulators):
+                x_corrs[i].append(x_corr[i].item())
+                y_corrs[i].append(y_corr[i].item())
 
             losses.append(loss.item())
             progress_bar.set_postfix(loss=np.mean(losses))
@@ -126,40 +110,20 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, device=None, regu
             outputs = outputs.squeeze(dim=0)
             targets = targets.squeeze(dim=0)
 
-            save_outputs(outputs, targets, phonemes, saves_i_dir, regularize_out)
+            save_outputs(outputs, targets, phonemes, saves_i_dir, regularize_out, articulators)
 
     mean_loss = np.mean(losses)
 
-    mean_x_corr_llip = np.mean(x_corrs[0])
-    mean_y_corr_llip = np.mean(y_corrs[0])
-
-    mean_x_corr_sp = np.mean(x_corrs[1])
-    mean_y_corr_sp = np.mean(y_corrs[1])
-
-    mean_x_corr_tongue = np.mean(x_corrs[2])
-    mean_y_corr_tongue = np.mean(y_corrs[2])
-
-    mean_x_corr_ulip = np.mean(x_corrs[3])
-    mean_y_corr_ulip = np.mean(y_corrs[3])
-
     info = {
-        "loss": mean_loss,
-        "lower-lip": {
-            "x_corr": mean_x_corr_llip,
-            "y_corr": mean_y_corr_llip
-        },
-        "soft-palate": {
-            "x_corr": mean_x_corr_sp,
-            "y_corr": mean_y_corr_sp
-        },
-        "tongue": {
-            "x_corr": mean_x_corr_tongue,
-            "y_corr": mean_y_corr_tongue
-        },
-        "upper-lip": {
-            "x_corr": mean_x_corr_ulip,
-            "y_corr": mean_y_corr_ulip
-        },
+        "loss": mean_loss
     }
+
+    info.update({
+        art: {
+            "x_corr": np.mean(x_corrs[i_art]),
+            "y_corr": np.mean(y_corrs[i_art])
+        }
+        for i_art, art in enumerate(articulators)
+    })
 
     return info

@@ -11,7 +11,7 @@ from torch.utils.data import Dataset
 
 
 class ArtSpeechDataset(Dataset):
-    def __init__(self, datadir, filepath, vocabulary, n_articulators=4, n_samples=50, size=136, register=False, save_missing=None):
+    def __init__(self, datadir, filepath, vocabulary, n_articulators, n_samples=50, size=136, register=False, save_missing=None):
         self.vocabulary = vocabulary
         self.datadir = datadir
         self.n_articulators = n_articulators
