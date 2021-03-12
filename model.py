@@ -14,23 +14,22 @@ class ArticulatorPredictor(nn.Module):
             nn.ReLU(),
             nn.LayerNorm(256),
         )
+
         self.x_coords = nn.Linear(256, n_samples)
         self.y_coords = nn.Linear(256, n_samples)
 
     def forward(self, inputs):
         linear_out = self.linear(inputs)
-
         x_pos = self.x_coords(linear_out)
-        x_pos = torch.sigmoid(x_pos)
-
+        # x_pos = torch.sigmoid(x_pos)
         y_pos = self.y_coords(linear_out)
-        y_pos = torch.sigmoid(y_pos)
+        # y_pos = torch.sigmoid(y_pos)
 
         return torch.stack([x_pos, y_pos], dim=2)
 
 
 class ArtSpeech(nn.Module):
-    def __init__(self, vocab_size, embed_dim=64, hidden_size=128, n_samples=50):
+    def __init__(self, vocab_size, n_articulators=4, embed_dim=64, hidden_size=128, n_samples=50):
         super(ArtSpeech, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         self.rnn = nn.GRU(embed_dim, hidden_size, num_layers=2, bidirectional=True)
@@ -40,10 +39,9 @@ class ArtSpeech(nn.Module):
             nn.ReLU()
         )
 
-        self.llip_predictor = ArticulatorPredictor(hidden_size, n_samples)
-        self.velum_predictor = ArticulatorPredictor(hidden_size, n_samples)
-        self.tongue_predictor = ArticulatorPredictor(hidden_size, n_samples)
-        self.ulip_predictor = ArticulatorPredictor(hidden_size, n_samples)
+        self.predictors = nn.ModuleList([
+            ArticulatorPredictor(hidden_size, n_samples) for i in range(n_articulators)
+        ])
 
     def forward(self, x):
         embed = self.embedding(x)
@@ -55,11 +53,8 @@ class ArtSpeech(nn.Module):
         rnn_out = rnn_out.transpose(1, 0)
 
         linear_out = self.linear(rnn_out)
+        out = torch.stack([
+            predictor(linear_out) for predictor in self.predictors
+        ], dim=2)
 
-        llip = self.llip_predictor(linear_out)
-        velum = self.velum_predictor(linear_out)
-        tongue = self.tongue_predictor(linear_out)
-        ulip = self.ulip_predictor(linear_out)
-
-        out = torch.stack([llip, velum, tongue, ulip], dim=2)
-        return out
+        return torch.sigmoid(out)
