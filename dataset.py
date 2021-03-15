@@ -81,7 +81,7 @@ class ArtSpeechDataset(Dataset):
 
         if save_missing is not None:
             with open(save_missing, "w") as f:
-                json.dump(missing_art, f)
+                json.dump(missing_data, f)
 
         return dataset
 

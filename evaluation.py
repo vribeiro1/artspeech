@@ -13,7 +13,7 @@ from loss import pearsons_correlation
 
 COLORS = {
     "lower-lip": "lime",
-    "pharynx": "salmon",
+    "pharynx": "goldenrod",
     "upper-lip": "magenta",
     "tongue": "darkorange",
     "soft-palate": "dodgerblue"
@@ -22,9 +22,6 @@ COLORS = {
 
 def save_outputs(outputs, targets, phonemes, save_to, regularize_out, articulators):
     for j, (out, target, phoneme) in enumerate(zip(outputs, targets, phonemes)):
-        lower_lip, soft_palate, tongue, upper_lip = out
-        lower_lip_true, soft_palate_true, tongue_true, upper_lip_true = target
-
         plt.figure(figsize=(10, 10))
 
         lw = 5

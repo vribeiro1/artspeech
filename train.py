@@ -131,7 +131,8 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         train_filepath,
         vocabulary,
         n_articulators,
-        register=register_targets
+        register=register_targets,
+        save_missing=os.path.join(fs_observer.dir, "train_missing.json")
     )
     train_dataloader = DataLoader(
         train_dataset,
@@ -145,7 +146,8 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         valid_filepath,
         vocabulary,
         n_articulators,
-        register=register_targets
+        register=register_targets,
+        save_missing=os.path.join(fs_observer.dir, "valid_missing.json")
     )
     valid_dataloader = DataLoader(
         valid_dataset,
@@ -201,7 +203,8 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         test_filepath,
         vocabulary,
         n_articulators,
-        register=register_targets
+        register=register_targets,
+        save_missing=os.path.join(fs_observer.dir, "test_missing.json")
     )
     test_dataloader = DataLoader(
         test_dataset,
@@ -210,7 +213,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         worker_init_fn=set_seeds
     )
 
-    best_model = ArtSpeech(len(vocabulary), 4)
+    best_model = ArtSpeech(len(vocabulary), n_articulators)
     state_dict = torch.load(best_model_path, map_location=device)
     best_model.load_state_dict(state_dict)
     best_model.to(device)
