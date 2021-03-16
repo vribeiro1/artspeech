@@ -6,6 +6,8 @@
 *.csv
 *.out
 *.pdf
+*.gif
+*.png
 *.jpg
 *.avi
 *.wav
