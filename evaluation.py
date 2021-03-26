@@ -55,7 +55,6 @@ def save_outputs(outputs, targets, phonemes, save_to, regularize_out, articulato
         plt.xlim([0, 80])
         plt.ylim([20, 100])
 
-        # plt.title("".join(funcy.lflatten(phonemes)))
         plt.axis("off")
         plt.tight_layout()
 

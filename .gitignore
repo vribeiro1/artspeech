@@ -11,6 +11,7 @@
 *.jpg
 *.avi
 *.wav
+*.zip
 
 .ipynb_checkpoints
 __pycache__

@@ -98,7 +98,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulator
 def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid_filepath, test_filepath, vocab_filepath, articulators, register_targets=False, state_dict_fpath=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    writer = SummaryWriter(os.path.join(BASE_DIR, "runs", f"experiment-{_run._id}"))
+    writer = SummaryWriter(os.path.join(fs_observer.dir, f"experiment"))
     best_model_path = os.path.join(fs_observer.dir, "best_model.pth")
     last_model_path = os.path.join(fs_observer.dir, "last_model.pth")
 
