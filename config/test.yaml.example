@@ -1,0 +1,11 @@
+datadir: /path/to/ArtSpeech_Database
+test_filepath: /path/to/test_data_file.json
+vocab_filepath: /path/to/vocabulary.json
+state_dict_fpath: /path/to/model.pth
+save_to: /path/to/save/dir
+articulators:
+  - lower-lip
+  - pharynx
+  - soft-palate
+  - tongue
+  - upper-lip
