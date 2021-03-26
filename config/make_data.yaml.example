@@ -1,0 +1,12 @@
+scheme: kfold or data-efficiency
+prefix: "prefix"
+suffix: "suffix"
+wav_suffix: "_DENOISED_SOUND"
+textgrid_suffix: "_TEXT_ALIGNMENT_ADJUSTED"
+trs_suffix: _TEXT_ALIGNMENT_ADJUSTED
+train_valid_seqs:
+  "subject_id":
+    - S*
+test_seqs:
+  "subject_id":
+    - S*
