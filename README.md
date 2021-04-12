@@ -1,4 +1,4 @@
-# Towards a complete model of the vocal tract: Learning articulators positions from the phonetic sequences
+# Towards the prediction of the vocal tract shape from the sequence of phonemes to be articulated
 
 <b>Vinicius de Paulo Souza Ribeiro</b><br>
 LORIA - Laboratoire Lorrain de Recherche en Informatique et ses Applications<br>

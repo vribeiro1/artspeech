@@ -56,22 +56,6 @@ def get_contours_for_frames(subject, sequence, instance_numbers):
     return contours
 
 
-def get_jaw_keypoints_for_frames(subject, sequences, instance_numbers):
-    keypoints = {}
-    for inumber in instance_numbers:
-        keypoints_filepaths = os.path.join(
-            ARTSPEECH_DIR,
-            subject,
-            sequences,
-            "jaw_keypoints",
-            f"{'%04d' % inumber}_jaw-keypoints.npy"
-        )
-
-        keypoints[inumber] = rm_basedir(exists_or_none(keypoints_filepaths))
-
-    return keypoints
-
-
 def all_contours_exist(filepath):
     basename = os.path.basename(filepath)
     instance_number = int(basename.split(".")[0])
@@ -157,7 +141,6 @@ def make_sentences_data(sequences, wav_suffix, textgrid_suffix, trs_suffix):
             frames = video.get_frames_interval(start_time, end_time)
             instance_numbers = funcy.lmap(get_instance_number_from_filepath, frames)
             contours = get_contours_for_frames(subject, sequence, instance_numbers)
-            jaw_keypoints = get_jaw_keypoints_for_frames(subject, sequence, instance_numbers)
 
             item = {
                 "start_time": start_time,
@@ -165,7 +148,6 @@ def make_sentences_data(sequences, wav_suffix, textgrid_suffix, trs_suffix):
                 "phonemes": phonemes,
                 "frames_filepaths": funcy.lmap(rm_basedir, frames),
                 "contours_filepaths": contours,
-                "jaw_keypoints_filepaths": jaw_keypoints,
                 "metadata": {
                     "subject": subject,
                     "sequence": sequence,
@@ -201,8 +183,12 @@ def make_kfold(cfg):
     )
     vocabulary.update(test_vocab)
 
+    kfold_dirname = os.path.join(BASE_DIR, "data", "kfold")
+    if not os.path.exists(kfold_dirname):
+        os.makedirs(kfold_dirname)
+
     filename = f"{prefix}test{suffix}.json"
-    with open(os.path.join(BASE_DIR, "data", "kfold", filename), "w") as f:
+    with open(os.path.join(kfold_dirname, filename), "w") as f:
         json.dump(test_data, f)
 
     n = 7
@@ -230,7 +216,7 @@ def make_kfold(cfg):
         vocabulary.update(train_vocab)
 
         filename = f"{prefix}train_fold_{fold_i + 1}{suffix}.json"
-        with open(os.path.join(BASE_DIR, "data", "kfold", filename), "w") as f:
+        with open(os.path.join(kfold_dirname, filename), "w") as f:
             json.dump(train_data, f)
 
         valid_subj_sequences = {
@@ -248,7 +234,7 @@ def make_kfold(cfg):
         vocabulary.update(valid_vocab)
 
         filename = f"{prefix}valid_fold_{fold_i + 1}{suffix}.json"
-        with open(os.path.join(BASE_DIR, "data", "kfold", filename), "w") as f:
+        with open(os.path.join(kfold_dirname, filename), "w") as f:
             json.dump(valid_data, f)
 
     return vocabulary
@@ -311,8 +297,12 @@ def make_data_efficiency(cfg):
     )
     vocabulary.update(test_vocab)
 
+    data_eff_dirname = os.path.join(BASE_DIR, "data", "data_efficiency")
+    if not os.path.exists(data_eff_dirname):
+        os.makedirs(data_eff_dirname)
+
     filename = "{prefix}test{suffix}.json"
-    with open(os.path.join(BASE_DIR, "data", "data_efficiency", filename), "w") as f:
+    with open(os.path.join(data_eff_dirname, filename), "w") as f:
         json.dump(test_data, f)
 
     # Make train
@@ -339,7 +329,7 @@ def make_data_efficiency(cfg):
         vocabulary.update(train_vocab)
 
         filename = f"{prefix}train_{len(train_sequences)}_acquisitions{suffix}.json"
-        with open(os.path.join(BASE_DIR, "data", "data_efficiency", filename), "w") as f:
+        with open(os.path.join(data_eff_dirname, filename), "w") as f:
             json.dump(train_data, f)
 
     return vocabulary
