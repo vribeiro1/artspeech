@@ -3,10 +3,13 @@ librosa
 matplotlib
 numpy
 opencv-python
+pydicom
+PyYAML
 sacred
 scikit-learn
 scikit-image
 tensorboardX
+tgt
 torch
 torchaudio
 torchvision
