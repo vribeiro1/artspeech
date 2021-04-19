@@ -11,10 +11,10 @@ from torch.utils.data import Dataset
 
 
 class ArtSpeechDataset(Dataset):
-    def __init__(self, datadir, filepath, vocabulary, n_articulators, n_samples=50, size=136, register=False, save_missing=None):
+    def __init__(self, datadir, filepath, vocabulary, articulators, n_samples=50, size=136, register=False, save_missing=None):
         self.vocabulary = vocabulary
         self.datadir = datadir
-        self.n_articulators = n_articulators
+        self.n_articulators = len(articulators)
         self.n_samples = n_samples
         self.size = size
         self.register_targets = register

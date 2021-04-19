@@ -16,11 +16,18 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ARTSPEECH_DIR = "/home/vsouzari/Documents/loria/datasets/ArtSpeech_Database"
 
 ARTICULATORS = [
+    "arytenoid-muscle",
+    "epiglottis",
+    "hyoid-bone",
+    "lower-incisor",
     "lower-lip",
     "pharynx",
     "soft-palate",
+    "thyroid-cartilage"
     "tongue",
-    "upper-lip"
+    "upper-incisor",
+    "upper-lip",
+    "vocal-folds"
 ]
 
 

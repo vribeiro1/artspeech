@@ -12,11 +12,18 @@ from bs_regularization import regularize_Bsplines
 from loss import pearsons_correlation
 
 COLORS = {
+    "arytenoid-muscle": "blueviolet",
+    "epiglottis": "turquoise",
+    "hyoid-bone": "slategray",
+    "lower-incisor": "cyan",
     "lower-lip": "lime",
     "pharynx": "goldenrod",
-    "upper-lip": "magenta",
+    "soft-palate": "dodgerblue",
+    "thyroid-cartilage": "saddlebrown",
     "tongue": "darkorange",
-    "soft-palate": "dodgerblue"
+    "upper-incisor": "yellow",
+    "upper-lip": "magenta",
+    "vocal-folds": "hotpink"
 }
 
 
@@ -47,7 +54,7 @@ def save_outputs(outputs, targets, phonemes, save_to, regularize_out, articulato
                 np.save(f, art_arr)
 
             x, y = art_arr * 136
-            plt.plot(x, 136 - y, "--r", linewidth=lw)
+            plt.plot(x, 136 - y, "--r", linewidth=lw, alpha=0.7)
 
         phone, = phoneme
         phone = f"/{phone}/"
@@ -63,7 +70,6 @@ def save_outputs(outputs, targets, phonemes, save_to, regularize_out, articulato
         filepath = os.path.join(save_to, f"{j}.pdf")
         plt.savefig(filepath)
         plt.close()
-
 
 
 def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, device=None, regularize_out=False):

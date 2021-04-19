@@ -130,7 +130,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         os.path.dirname(datadir),
         train_filepath,
         vocabulary,
-        n_articulators,
+        articulators,
         register=register_targets,
         save_missing=os.path.join(fs_observer.dir, "train_missing.json")
     )
@@ -145,7 +145,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         os.path.dirname(datadir),
         valid_filepath,
         vocabulary,
-        n_articulators,
+        articulators,
         register=register_targets,
         save_missing=os.path.join(fs_observer.dir, "valid_missing.json")
     )
@@ -202,7 +202,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
         os.path.dirname(datadir),
         test_filepath,
         vocabulary,
-        n_articulators,
+        articulators,
         register=register_targets,
         save_missing=os.path.join(fs_observer.dir, "test_missing.json")
     )
