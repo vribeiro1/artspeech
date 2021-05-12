@@ -6,21 +6,20 @@ import torch.nn as nn
 
 
 class EuclideanDistanceLoss(nn.Module):
-    REDUCTION = {
-        "none": lambda x: x,
-        "mean": torch.mean
-    }
-
     def __init__(self, reduction="mean"):
         super(EuclideanDistanceLoss, self).__init__()
-        self.reduction = self.REDUCTION[reduction]
+
+        self.reduction = getattr(torch, reduction, lambda x: x)
 
     def forward(self, outputs, targets):
-        x_outputs = outputs[:, :, :, 0, :]  # torch.Size([bs, seq_len, N_art, 2, N_samples])
-        y_outputs = outputs[:, :, :, 1, :]  # torch.Size([bs, seq_len, N_art, 2, N_samples])
+        # outputs: torch.Size([bs, seq_len, N_art, 2, N_samples])
+        # targets: torch.Size([bs, seq_len, N_art, 2, N_samples])
 
-        x_targets = targets[:, :, :, 0, :]
-        y_targets = targets[:, :, :, 1, :]
+        x_outputs = outputs[:, :, :, 0, :].clone()
+        y_outputs = outputs[:, :, :, 1, :].clone()
+
+        x_targets = targets[:, :, :, 0, :].clone()
+        y_targets = targets[:, :, :, 1, :].clone()
 
         dist = torch.sqrt((x_outputs - x_targets) ** 2 + (y_outputs - y_targets) ** 2)
         return self.reduction(dist)
