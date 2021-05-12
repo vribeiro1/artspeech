@@ -10,6 +10,10 @@ from tqdm import tqdm
 
 from bs_regularization import regularize_Bsplines
 from loss import pearsons_correlation
+from reconstruct_snail import reconstruct_snail_from_midline
+
+RES = 136
+PIXEL_SPACING = 1.62
 
 COLORS = {
     "arytenoid-muscle": "blueviolet",
@@ -26,25 +30,65 @@ COLORS = {
     "vocal-folds": "hotpink"
 }
 
+CLOSED = [
+    "arytenoid-muscle",
+    "hyoid-bone",
+    "thyroid-cartilage"
+]
 
-def save_outputs(outputs, targets, phonemes, save_to, regularize_out, articulators):
+SNAIL = {
+    "epiglottis": {
+        "width_int": 2 / (RES * PIXEL_SPACING),
+        "width_ext": 2 / (RES * PIXEL_SPACING),
+        "width_apex_int": 1 / (RES * PIXEL_SPACING),
+        "width_apex_ext": 1 / (RES * PIXEL_SPACING)
+    },
+    "soft-palate": {
+        "width_int": 2 / (RES * PIXEL_SPACING),
+        "width_ext": 6 / (RES * PIXEL_SPACING),
+        "width_apex_int": 1 / (RES * PIXEL_SPACING),
+        "width_apex_ext": 3 / (RES * PIXEL_SPACING)
+    }
+}
+
+
+def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_out, reconstruct_snail=False):
     for j, (out, target, phoneme) in enumerate(zip(outputs, targets, phonemes)):
         plt.figure(figsize=(10, 10))
 
         lw = 5
         for i_art, art in enumerate(sorted(articulators)):
             art_arr = out[i_art].detach().numpy()
+
             if regularize_out:
                 resX, resY = regularize_Bsplines(art_arr.transpose(1, 0), 3)
-                reg_art_arr = np.array([resX, resY])
+                art_arr = np.array([resX, resY])
 
             npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}.npy")
             with open(npy_filepath, "wb") as f:
-                np.save(f, reg_art_arr)
+                np.save(f, art_arr)
 
-            reg_x, reg_y = reg_art_arr * 136
+            art_arr = art_arr.transpose(1, 0)
+
+            if reconstruct_snail and art in SNAIL:
+                snail_params = SNAIL[art]
+                w_int = snail_params["width_int"]
+                w_ext = snail_params["width_ext"]
+                w_apex_int = snail_params["width_apex_int"]
+                w_apex_ext = snail_params["width_apex_ext"]
+
+                art_arr = reconstruct_snail_from_midline(
+                    art_arr,
+                    w_int, w_ext,
+                    w_apex_int, w_apex_ext
+                )
+
+            if art in CLOSED:
+                art_arr = np.append(art_arr, [art_arr[0]], axis=0)
+
+            reg_x, reg_y = (art_arr * RES).transpose(1, 0)
             color = COLORS.get(art, "black")
-            plt.plot(reg_x, 136 - reg_y, linewidth=lw, c=color)
+            plt.plot(reg_x, RES - reg_y, linewidth=lw, c=color)
 
         for i_art, art in enumerate(sorted(articulators)):
             art_arr = target[i_art].detach().numpy()
@@ -53,14 +97,19 @@ def save_outputs(outputs, targets, phonemes, save_to, regularize_out, articulato
             with open(npy_filepath, "wb") as f:
                 np.save(f, art_arr)
 
-            x, y = art_arr * 136
-            plt.plot(x, 136 - y, "--r", linewidth=lw, alpha=0.7)
+            if art in CLOSED:
+                art_arr = art_arr.transpose(1, 0)
+                art_arr = np.append(art_arr, [art_arr[0]], axis=0)
+                art_arr = art_arr.transpose(1, 0)
+
+            x, y = art_arr * RES
+            plt.plot(x, RES - y, "--r", linewidth=lw, alpha=0.5)
 
         phone, = phoneme
         phone = f"/{phone}/"
         plt.text(40, 90, phone, c="blue", fontsize=56)
-        plt.xlim([0, 80])
-        plt.ylim([20, 100])
+        plt.xlim([0, 90])
+        plt.ylim([10, 100])
 
         plt.axis("off")
         plt.tight_layout()
@@ -72,7 +121,8 @@ def save_outputs(outputs, targets, phonemes, save_to, regularize_out, articulato
         plt.close()
 
 
-def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, device=None, regularize_out=False):
+def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, device=None,
+             regularize_out=False, reconstruct_snail=False):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -112,7 +162,15 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
             outputs = outputs.squeeze(dim=0)
             targets = targets.squeeze(dim=0)
 
-            save_outputs(outputs, targets, phonemes, saves_i_dir, regularize_out, articulators)
+            save_outputs(
+                outputs,
+                targets,
+                phonemes,
+                saves_i_dir,
+                articulators,
+                regularize_out,
+                reconstruct_snail
+            )
 
     mean_loss = np.mean(losses)
 

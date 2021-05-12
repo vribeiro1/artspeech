@@ -23,7 +23,7 @@ ARTICULATORS = [
     "lower-lip",
     "pharynx",
     "soft-palate",
-    "thyroid-cartilage"
+    "thyroid-cartilage",
     "tongue",
     "upper-incisor",
     "upper-lip",
