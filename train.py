@@ -1,8 +1,6 @@
 import pdb
 
-import funcy
 import json
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import torch
@@ -194,6 +192,8 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
             epochs_since_best = 0
         else:
             epochs_since_best += 1
+
+        torch.save(model.state_dict(), last_model_path)
 
         if epochs_since_best > patience:
             break
