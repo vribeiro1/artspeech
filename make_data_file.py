@@ -114,11 +114,6 @@ def make_sentences_data(sequences, wav_suffix, textgrid_suffix, trs_suffix):
 
         video = Video(frames_filepaths, audio_filepath)
 
-        with open(textgrid_filepath, 'rb') as f:
-            # Read whole file into memory ignoring empty lines and lines consisting
-            # solely of a single double quotes.
-            stg = [line.strip() for line in f.readlines()
-                if line.strip() not in ['', '"']]
         try:
             textgrid = read_textgrid(textgrid_filepath)
         except Exception as e:

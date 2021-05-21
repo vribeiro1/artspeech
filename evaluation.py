@@ -58,7 +58,7 @@ def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_o
 
         lw = 5
         for i_art, art in enumerate(sorted(articulators)):
-            art_arr = out[i_art].detach().numpy()
+            art_arr = out[i_art].detach().cpu().numpy()
 
             if regularize_out:
                 resX, resY = regularize_Bsplines(art_arr.transpose(1, 0), 3)
@@ -91,7 +91,7 @@ def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_o
             plt.plot(reg_x, RES - reg_y, linewidth=lw, c=color)
 
         for i_art, art in enumerate(sorted(articulators)):
-            art_arr = target[i_art].detach().numpy()
+            art_arr = target[i_art].detach().cpu().numpy()
 
             npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}_true.npy")
             with open(npy_filepath, "wb") as f:
@@ -107,9 +107,9 @@ def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_o
 
         phone, = phoneme
         phone = f"/{phone}/"
-        plt.text(40, 90, phone, c="blue", fontsize=56)
-        plt.xlim([0, 90])
-        plt.ylim([10, 100])
+        plt.text(64, 10, phone, c="blue", fontsize=56)
+        plt.xlim([0, 136])
+        plt.ylim([0, 136])
 
         plt.axis("off")
         plt.tight_layout()
