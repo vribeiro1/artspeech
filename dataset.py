@@ -14,6 +14,7 @@ class ArtSpeechDataset(Dataset):
     def __init__(self, datadir, filepath, vocabulary, articulators, n_samples=50, size=136, register=False, save_missing=None):
         self.vocabulary = vocabulary
         self.datadir = datadir
+        self.articulators = articulators
         self.n_articulators = len(articulators)
         self.n_samples = n_samples
         self.size = size
@@ -43,6 +44,9 @@ class ArtSpeechDataset(Dataset):
             for i_number, filepaths in contours_filepaths.items():
                 target = torch.zeros(size=(0, 2, self.n_samples))
                 for art, filepath in sorted(filepaths.items(), key=lambda t: t[0]):
+                    if art not in self.articulators:
+                        continue
+
                     if filepath is None:
                         missing_data.append({
                             "subject": item["metadata"]["subject"],
@@ -138,6 +142,12 @@ class ArtSpeechDataset(Dataset):
 
     def __getitem__(self, item):
         sentence_numerized, sentence_targets, phonemes = self.data[item]
+
+        # Centralize the targets.
+        # Subtract the mean and add 0.5 to centralize in the 0-1 plane.
+        sentence_targets_mean = sentence_targets.mean(dim=(1, 3))
+        sentence_targets_mean = sentence_targets_mean.unsqueeze(dim=1).unsqueeze(dim=-1)
+        sentence_targets = sentence_targets - sentence_targets_mean + 0.5
 
         if self.register_targets:
             sentence_targets = self.register(sentence_targets)
