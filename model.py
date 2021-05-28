@@ -1,3 +1,5 @@
+import pdb
+
 import torch
 import torch.nn as nn
 
@@ -19,11 +21,16 @@ class ArticulatorPredictor(nn.Module):
         self.y_coords = nn.Linear(256, n_samples)
 
     def forward(self, inputs):
+        """
+        input: torch.Size([bs, seq_len, embed_size])
+        output: torch.Size([bs, seq_len, 2, n_samples])
+        """
         linear_out = self.linear(inputs)
         x_pos = self.x_coords(linear_out)
         y_pos = self.y_coords(linear_out)
+        out = torch.stack([x_pos, y_pos], dim=2)
 
-        return torch.stack([x_pos, y_pos], dim=2)
+        return out
 
 
 class ArtSpeech(nn.Module):
@@ -42,15 +49,19 @@ class ArtSpeech(nn.Module):
         ])
 
     def forward(self, x):
+        """
+        input: torch.Size([bs, seq_len])
+        output: torch.Size([bs, seq_len, n_articulators, 2, n_samples])
+        """
         embed = self.embedding(x)
 
         # Reshape as batch second
         embed = embed.transpose(1, 0)
-        rnn_out, h_n = self.rnn(embed)
+        rnn_out, _ = self.rnn(embed)
         # Reshape again as batch first
         rnn_out = rnn_out.transpose(1, 0)
 
-        linear_out = self.linear(rnn_out)
+        linear_out = self.linear(rnn_out)  # torch.Size([bs, seq_len, embed_dim])
         out = torch.stack([
             predictor(linear_out) for predictor in self.predictors
         ], dim=2)
