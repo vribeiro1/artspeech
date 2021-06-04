@@ -30,7 +30,6 @@ COLORS = {
 }
 
 CLOSED = [
-    "arytenoid-muscle",
     "hyoid-bone",
     "thyroid-cartilage"
 ]
