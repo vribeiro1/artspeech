@@ -14,11 +14,17 @@ from loss import EuclideanDistanceLoss
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 ARTICULATORS = sorted([
+    "arytenoid-muscle",
+    "epiglottis",
+    "lower-incisor",
     "lower-lip",
     "pharynx",
     "soft-palate",
+    "thyroid-cartilage",
     "tongue",
-    "upper-lip"
+    "upper-incisor",
+    "upper-lip",
+    "vocal-folds"
 ])
 
 
@@ -69,7 +75,12 @@ def distances_per_articulator(inferences_dir):
         for articulator in ARTICULATORS:
             filepaths_preds = sorted(glob(os.path.join(saved_outputs_dir, f"*_{articulator}.npy")))
             filepaths_targets = sorted(glob(os.path.join(saved_outputs_dir, f"*_{articulator}_true.npy")))
-            zipped.append(list(zip(filepaths_preds, filepaths_targets)))
+
+            zip_list = list(zip(filepaths_preds, filepaths_targets))
+            zipped.append(zip_list)
+
+        if len(zipped[0]) == 0:
+            continue
 
         sentences_dists = calculate_distances(zipped)
         distances = torch.cat([distances, sentences_dists], dim=0)

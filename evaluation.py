@@ -1,5 +1,6 @@
 import pdb
 
+import json
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -10,6 +11,7 @@ from tqdm import tqdm
 from bs_regularization import regularize_Bsplines
 from loss import pearsons_correlation
 from reconstruct_snail import reconstruct_snail_from_midline
+from tract_variables import calculate_vocal_tract_variables
 
 RES = 136
 PIXEL_SPACING = 1.62
@@ -56,7 +58,7 @@ def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_o
 
         lw = 5
         for i_art, art in enumerate(sorted(articulators)):
-            art_arr = out[i_art].detach().cpu().numpy()
+            art_arr = out[i_art].numpy()
 
             if regularize_out:
                 resX, resY = regularize_Bsplines(art_arr.transpose(1, 0), 3)
@@ -89,7 +91,7 @@ def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_o
             plt.plot(reg_x, RES - reg_y, linewidth=lw, c=color)
 
         for i_art, art in enumerate(sorted(articulators)):
-            art_arr = target[i_art].detach().cpu().numpy()
+            art_arr = target[i_art].numpy()
 
             npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}_true.npy")
             with open(npy_filepath, "wb") as f:
@@ -117,6 +119,64 @@ def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_o
         filepath = os.path.join(save_to, f"{j}.pdf")
         plt.savefig(filepath)
         plt.close()
+
+
+def prepare_for_serialization(TVs_out):
+    TVs_out_serializable = {}
+    for TV, TV_dict in TVs_out.items():
+        TV_dict_serializable = {
+            "value": TV_dict["value"],
+            "poc_1": TV_dict["poc_1"].tolist(),
+            "poc_2": TV_dict["poc_2"].tolist()
+        } if TV_dict is not None else None
+
+        TVs_out_serializable[TV] = TV_dict_serializable
+
+    return TVs_out_serializable
+
+
+def tract_variables(outputs, targets, phonemes, articulators, save_to=None):
+    TVs_data = []
+    for j, (out, target, phoneme) in enumerate(zip(outputs, targets, phonemes)):
+        pred_input_dict = {
+            art: tensor.T for art, tensor in zip(articulators, out)
+        }
+        pred_TVs = calculate_vocal_tract_variables(pred_input_dict)
+
+        target_input_dict = {
+            art: tensor.T for art, tensor in zip(articulators, target)
+        }
+        target_TVs = calculate_vocal_tract_variables(target_input_dict)
+
+        phone, = phoneme
+        TVs_data.append(
+            {
+                "frame": j,
+                "phoneme": phone,
+                "tract_variables": {
+                    "target": target_TVs,
+                    "predicted": pred_TVs
+                }
+            }
+        )
+
+    if save_to is not None:
+        serializable_data = [
+            {
+                "frame": item["frame"],
+                "phoneme": item["phoneme"],
+                "tract_variables": {
+                    "target": prepare_for_serialization(item["tract_variables"]["target"]),
+                    "predicted": prepare_for_serialization(item["tract_variables"]["predicted"])
+                }
+            } for item in TVs_data
+        ]
+
+        json_filepath = os.path.join(save_to, "tract_variables_data.json")
+        with open(json_filepath, "w") as f:
+            json.dump(serializable_data, f)
+
+    return TVs_data
 
 
 def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, device=None,
@@ -160,15 +220,23 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
             outputs = outputs.squeeze(dim=0)
             targets = targets.squeeze(dim=0)
 
-            save_outputs(
-                outputs,
-                targets,
+            tract_variables(
+                outputs.detach().cpu(),
+                targets.detach().cpu(),
                 phonemes,
-                saves_i_dir,
                 articulators,
-                regularize_out,
-                reconstruct_snail
+                saves_i_dir
             )
+
+            # save_outputs(
+            #     outputs.detach().cpu(),
+            #     targets.detach().cpu(),
+            #     phonemes,
+            #     saves_i_dir,
+            #     articulators,
+            #     regularize_out,
+            #     reconstruct_snail
+            # )
 
     mean_loss = np.mean(losses)
 

@@ -3,6 +3,7 @@ librosa
 matplotlib
 numpy
 opencv-python
+pandas
 pydicom
 PyYAML
 sacred
