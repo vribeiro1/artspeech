@@ -228,15 +228,15 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
                 saves_i_dir
             )
 
-            # save_outputs(
-            #     outputs.detach().cpu(),
-            #     targets.detach().cpu(),
-            #     phonemes,
-            #     saves_i_dir,
-            #     articulators,
-            #     regularize_out,
-            #     reconstruct_snail
-            # )
+            save_outputs(
+                outputs.detach().cpu(),
+                targets.detach().cpu(),
+                phonemes,
+                saves_i_dir,
+                articulators,
+                regularize_out,
+                reconstruct_snail
+            )
 
     mean_loss = np.mean(losses)
 

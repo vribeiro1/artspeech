@@ -11,7 +11,25 @@ from torch.utils.data import Dataset
 
 
 class ArtSpeechDataset(Dataset):
-    def __init__(self, datadir, filepath, vocabulary, articulators, n_samples=50, size=136, register=False, save_missing=None):
+    def __init__(
+        self, datadir, filepath, vocabulary, articulators, n_samples=50, size=136,
+        register=False, lazy_load=False
+    ):
+        """
+        ArtSpeech Dataset class
+
+        Keyword arguments:
+
+        datadir (str): Dirname of the dataset directory.
+        filepath (str): Path to the data file.
+        vocabulary (Dict[str, int]): Dictionary mapping tokens to their numerical values.
+        articulators (List[str]): List of articulators.
+        n_samples (int): Number of samples in the contour.
+        size (int): Interval domain of the contours' x- and y- coordinates.
+        register (bool): If should register the contours in relation to the complete sentences.
+        lazy_load (bool): If should load the data on demand.
+        """
+
         self.vocabulary = vocabulary
         self.datadir = datadir
         self.articulators = articulators
@@ -21,73 +39,83 @@ class ArtSpeechDataset(Dataset):
         self.register_targets = register
 
         with open(filepath) as f:
-            data = json.load(f)
-            self.data = self._collect_data(data, save_missing)
+            data = funcy.lfilter(self._exclude_missing_data, json.load(f))
 
-    def _collect_data(self, data, save_missing):
-        dataset = []
-        missing_data = []
-        for item in data:
-            missing = False
+        self.data = data if lazy_load else self._collect_data(data)
+        self.load_fn = self._collect_sentence if lazy_load else lambda x: x
 
-            phonemes = item["phonemes"]
-            sentence_tokens = funcy.lflatten([
-                [phoneme["text"]] * phoneme["n_frames"] for phoneme in phonemes
-            ])
+    @staticmethod
+    def _get_frames_interval(start, end, timed_frame_keys):
+        on_interval = filter(lambda d: start <= d[0] < end, timed_frame_keys)
+        frame_keys = [d[1] for d in on_interval]
+        return frame_keys
 
-            sentence_numerized = torch.tensor([
-                self.vocabulary[token] for token in sentence_tokens
-            ], dtype=torch.long)
+    def _exclude_missing_data(self, item):
+        """
+        Returns False, if any articulator in any frame in the sentence is None,
+        returns True otherwise.
+        """
+        contours_filepaths = item["contours_filepaths"]
 
-            contours_filepaths = item["contours_filepaths"]
-            sentence_targets = torch.zeros(size=(0, self.n_articulators, 2, self.n_samples))
-            for i_number, filepaths in contours_filepaths.items():
-                target = torch.zeros(size=(0, 2, self.n_samples))
-                for art, filepath in sorted(filepaths.items(), key=lambda t: t[0]):
+        frame_is_missing = [
+            any([
+                art_fp is None
+                for art, art_fp in art_filepaths.items()
+                if art in self.articulators
+            ]) for frame_number, art_filepaths in contours_filepaths.items()
+        ]
+
+        return not any(frame_is_missing)
+
+    def _collect_data(self, data):
+        dataset = funcy.lmap(self._collect_sentence, data)
+        return dataset
+
+    def _collect_sentence(self, item):
+        phonemes = item["phonemes"]
+
+        first_phoneme = phonemes[0]
+        sentence_start = first_phoneme["start_time"]
+
+        last_phoneme = phonemes[-1]
+        sentence_end = last_phoneme["end_time"]
+
+        contours_filepaths = item["contours_filepaths"]
+        frame_keys = list(contours_filepaths.keys())
+
+        time = np.linspace(sentence_start, sentence_end, len(frame_keys))
+        timed_frame_keys = list(zip(time, frame_keys))
+
+        sentence_tokens = []
+        sentence_targets = torch.zeros(size=(0, self.n_articulators, 2, self.n_samples))
+        for phoneme in phonemes:
+            phone_start = phoneme["start_time"]
+            phone_end = phoneme["end_time"]
+            phoneme_frame_keys = self._get_frames_interval(phone_start, phone_end, timed_frame_keys)
+            sentence_tokens.extend([phoneme["text"]] * len(phoneme_frame_keys))
+
+            for frame_key in phoneme_frame_keys:
+                frame_contours_filepaths = contours_filepaths[frame_key]
+                frame_targets = torch.zeros(size=(0, 2, self.n_samples))
+                for art, contour_fp in sorted(frame_contours_filepaths.items(), key=lambda t: t[0]):
                     if art not in self.articulators:
                         continue
 
-                    if filepath is None:
-                        missing_data.append({
-                            "subject": item["metadata"]["subject"],
-                            "sequence": item["metadata"]["sequence"],
-                            "instance_number": i_number,
-                            "articulator": art
-                        })
-
-                        missing = True
-                        continue
-                    abs_filepath = os.path.join(self.datadir, filepath)
-
-                    contour = torch.tensor(np.load(abs_filepath)) / self.size  # torch.Size([self.n_samples, 2])
+                    abs_contour_fp = os.path.join(self.datadir, contour_fp)
+                    contour = torch.tensor(np.load(abs_contour_fp)) / self.size  # torch.Size([self.n_samples, 2])
                     contour = contour.transpose(1, 0)  # torch.Size([2, self.n_samples])
-                    contour = contour.unsqueeze(dim=0)  # torch.Size([1, 2, self.n_samples])
+                    contour = contour.unsqueeze(dim=0)  # torch.Size([1, 2, self.n_samples]
 
-                    target = torch.cat([target, contour])
+                    frame_targets = torch.cat([frame_targets, contour])
 
-                n_art, _, _ = target.shape
-                if n_art != self.n_articulators:
-                    continue
+                frame_targets = frame_targets.unsqueeze(dim=0)
+                sentence_targets = torch.cat([sentence_targets, frame_targets])
 
-                target = target.unsqueeze(dim=0)
-                sentence_targets = torch.cat([sentence_targets, target])
+        sentence_numerized = torch.tensor([
+            self.vocabulary[token] for token in sentence_tokens
+        ], dtype=torch.long)
 
-            if not missing:
-                len_sentence, = sentence_numerized.shape
-                len_target, _, _, _ = sentence_targets.shape
-
-                if len_sentence == len_target:
-                    dataset.append((
-                        sentence_numerized,
-                        sentence_targets.float(),
-                        sentence_tokens
-                    ))
-
-        if save_missing is not None:
-            with open(save_missing, "w") as f:
-                json.dump(missing_data, f)
-
-        return dataset
+        return sentence_numerized, sentence_targets, sentence_tokens
 
     @staticmethod
     def register(targets):
@@ -141,7 +169,7 @@ class ArtSpeechDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, item):
-        sentence_numerized, sentence_targets, phonemes = self.data[item]
+        sentence_numerized, sentence_targets, phonemes = self.load_fn(self.data[item])
 
         # Centralize the targets.
         # Subtract the mean and add 0.5 to centralize in the 0-1 plane.
