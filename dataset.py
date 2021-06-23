@@ -6,14 +6,59 @@ import numpy as np
 import os
 import torch
 
+from functools import reduce
 from scipy.spatial.distance import euclidean
 from torch.utils.data import Dataset
+
+
+def get_token_intervals(token_sequence, break_token):
+    token_intervals = []
+
+    seq_start = seq_end = None
+    for i, token in enumerate(token_sequence):
+        if seq_start is None:
+            if token == break_token:
+                seq_start = i
+
+                if i == len(token_sequence) - 1:
+                    token_intervals.append((seq_start, i + 1))
+        else:
+            if token != break_token:
+                seq_end = i
+
+                token_intervals.append((seq_start, seq_end))
+                seq_start = seq_end = None
+
+    return token_intervals
+
+
+def get_break_points(break_intervals):
+    break_points = funcy.lmap(int, map(
+        lambda tup: np.ceil(tup[0] + (tup[1] - tup[0]) / 2),
+        break_intervals
+    ))
+
+    return break_points
+
+
+def break_sequence(sequence, break_points):
+    segments = []
+    i = 0
+    for break_point in break_points:
+        segment = sequence[i:break_point]
+        segments.append(segment)
+
+        i = break_point
+
+    segments.append(sequence[break_point:])
+
+    return segments
 
 
 class ArtSpeechDataset(Dataset):
     def __init__(
         self, datadir, filepath, vocabulary, articulators, n_samples=50, size=136,
-        register=False, lazy_load=False
+        register=False, lazy_load=False, p_aug=0.
     ):
         """
         ArtSpeech Dataset class
@@ -28,6 +73,7 @@ class ArtSpeechDataset(Dataset):
         size (int): Interval domain of the contours' x- and y- coordinates.
         register (bool): If should register the contours in relation to the complete sentences.
         lazy_load (bool): If should load the data on demand.
+        p_aug (float): Probability of data augmentation.
         """
 
         self.vocabulary = vocabulary
@@ -37,6 +83,7 @@ class ArtSpeechDataset(Dataset):
         self.n_samples = n_samples
         self.size = size
         self.register_targets = register
+        self.p_aug = p_aug
 
         with open(filepath) as f:
             data = funcy.lfilter(self._exclude_missing_data, json.load(f))
@@ -165,11 +212,66 @@ class ArtSpeechDataset(Dataset):
 
         return new_targets
 
+    def augment(self, sentence_numerized, sentence_targets, phonemes):
+        # Get silence intervals in the original sentence
+        orig_token_intervals = get_token_intervals(phonemes, "#")
+        orig_break_points = get_break_points(orig_token_intervals)
+
+        # If there are no points to break in the original sentence, return it unchanged
+        if len(orig_break_points) == 0:
+            return sentence_numerized, sentence_targets, phonemes
+
+        # Break the original sentence
+        orig_segments_numerized = break_sequence(sentence_numerized, orig_break_points)
+        orig_segments_targets = break_sequence(sentence_targets, orig_break_points)
+        orig_segments_phonemes = break_sequence(phonemes, orig_break_points)
+
+        rand_break_points = []
+        while len(rand_break_points) == 0:
+            # Randomly select a sentence in the dataset
+            rand_idx = np.random.randint(0, len(self.data))
+            rand_sentence_numerized, rand_sentence_targets, rand_phonemes = self.load_fn(self.data[rand_idx])
+
+            # Get silence intervals in the selected sentence
+            rand_token_intervals = get_token_intervals(rand_phonemes, "#")
+            rand_break_points = get_break_points(rand_token_intervals)
+
+        # Break the selected sentence
+        rand_segments_numerized = break_sequence(rand_sentence_numerized, rand_break_points)
+        rand_segments_targets = break_sequence(rand_sentence_targets, rand_break_points)
+        rand_segments_phonemes = break_sequence(rand_phonemes, rand_break_points)
+
+        # Randomly select a new segment to include
+        new_segment_idx = np.random.randint(0, len(rand_segments_phonemes))
+        new_segment_numerized = rand_segments_numerized[new_segment_idx]
+        new_segment_targets = rand_segments_targets[new_segment_idx]
+        new_segment_phonemes = rand_segments_phonemes[new_segment_idx]
+
+        # Randomly select an original segment to remove
+        orig_segment_idx = np.random.randint(low=0, high=len(orig_segments_phonemes))
+
+        # Replace the original segment by the new segment
+        orig_segments_numerized[orig_segment_idx] = new_segment_numerized
+        orig_segments_targets[orig_segment_idx] = new_segment_targets
+        orig_segments_phonemes[orig_segment_idx] = new_segment_phonemes
+
+        # Reconstruct the data item
+        aug_sentence_numerized = torch.cat(orig_segments_numerized)
+        aug_segments_targets = torch.cat(orig_segments_targets)
+        aug_segments_phonemes = reduce(lambda l1, l2: l1 + l2, orig_segments_phonemes)
+
+        return aug_sentence_numerized, aug_segments_targets, aug_segments_phonemes
+
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, item):
         sentence_numerized, sentence_targets, phonemes = self.load_fn(self.data[item])
+
+        if np.random.rand() < self.p_aug:
+            sentence_numerized, sentence_targets, phonemes = self.augment(
+                sentence_numerized, sentence_targets, phonemes
+            )
 
         # Centralize the targets.
         # Subtract the mean and add 0.5 to centralize in the 0-1 plane.
