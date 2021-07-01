@@ -29,7 +29,8 @@ def main(cfg):
         os.path.dirname(cfg["datadir"]),
         cfg["test_filepath"],
         vocabulary,
-        articulators
+        articulators,
+        p_aug=0.
     )
     test_dataloader = DataLoader(
         test_dataset,
