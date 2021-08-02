@@ -93,7 +93,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulator
 
 
 @ex.automain
-def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid_filepath, test_filepath, vocab_filepath, articulators, p_aug=0., register_targets=False, state_dict_fpath=None):
+def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_filepath, valid_filepath, test_filepath, vocab_filepath, articulators, p_aug=0., register_targets=False, state_dict_fpath=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     writer = SummaryWriter(os.path.join(fs_observer.dir, f"experiment"))
@@ -117,7 +117,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, train_filepath, valid
     model.to(device)
 
     loss_fn = EuclideanDistanceLoss()
-    optimizer = Adam(model.parameters(), lr=learning_rate)
+    optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = ReduceLROnPlateau(
         optimizer,
         factor=0.1,
