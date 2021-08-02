@@ -88,8 +88,9 @@ def _calculate_VEL(soft_palate_velum_arr, pharynx_arr):
 
 def calculate_vocal_tract_variables(inputs_dict):
     """
-    inputs_dict: Dictionary containing the articulator name as key and the articulator points as value
-    return: Dictionary containing the TV name as key and the value and location as value
+    inputs_dict: Dictionary containing the articulator name as key and the articulator points as value.
+
+    return: Dictionary containing the TV name as key and the value and location as value.
 
     Measured vocal tract variables are:
     LA - Lip aperture

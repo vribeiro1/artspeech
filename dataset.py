@@ -58,7 +58,7 @@ def break_sequence(sequence, break_points):
 class ArtSpeechDataset(Dataset):
     def __init__(
         self, datadir, filepath, vocabulary, articulators, n_samples=50, size=136,
-        register=False, lazy_load=False, p_aug=0.
+        lazy_load=False, p_aug=0.
     ):
         """
         ArtSpeech Dataset class
@@ -71,19 +71,20 @@ class ArtSpeechDataset(Dataset):
         articulators (List[str]): List of articulators.
         n_samples (int): Number of samples in the contour.
         size (int): Interval domain of the contours' x- and y- coordinates.
-        register (bool): If should register the contours in relation to the complete sentences.
         lazy_load (bool): If should load the data on demand.
         p_aug (float): Probability of data augmentation.
         """
 
         self.vocabulary = vocabulary
         self.datadir = datadir
-        self.articulators = articulators
+        self.articulators = sorted(articulators)
         self.n_articulators = len(articulators)
         self.n_samples = n_samples
         self.size = size
-        self.register_targets = register
         self.p_aug = p_aug
+
+        if "upper-incisor" in self.articulators:
+            self.upper_incisor_index = self.articulators.index("upper-incisor")
 
         with open(filepath) as f:
             data = funcy.lfilter(self._exclude_missing_data, json.load(f))
@@ -164,54 +165,6 @@ class ArtSpeechDataset(Dataset):
 
         return sentence_numerized, sentence_targets, sentence_tokens
 
-    @staticmethod
-    def register(targets):
-        n_frames, n_art, _, n_samples = targets.shape
-
-        first_frame = targets[0]
-
-        _, _, tongue, _ = first_frame
-        first, last = tongue[:, 0], tongue[:, -1]
-        first_x, first_y = first
-        last_x, last_y = last
-
-        # We want to translate the vocal tract from the position (x_disp, y_disp) to the center of
-        # first quadrant in the cartesian plane (0.5, 0.5).
-        x_, y_ = 0.5, 0.5
-        x_disp = (first_frame[:, 0].min() + (first_frame[:, 0].max() - first_frame[:, 0].min()) / 2).item()
-        y_disp = (first_frame[:, 1].min() + (first_frame[:, 1].max() - first_frame[:, 1].min()) / 2).item()
-
-        dist = euclidean(first, last)
-        theta_sin = abs(last_y - first_y) / dist
-        theta_cos = abs(last_x - first_x) / dist
-        theta = np.arctan2(theta_sin, theta_cos)
-        rot_theta = -1 * theta
-
-        R = torch.tensor([
-            [np.cos(rot_theta), -np.sin(rot_theta)],
-            [np.sin(rot_theta), np.cos(rot_theta)]
-        ])
-
-        new_targets = torch.zeros(size=(0, n_art, 2, n_samples), dtype=targets.dtype, device=targets.device)
-        for target in targets:
-            new_target = torch.zeros(size=(0, 2, n_samples), dtype=target.dtype, device=target.device)
-            for art in target:
-                new_art = torch.zeros_like(art)
-                new_art[0] = art[0] - x_disp
-                new_art[1] = art[1] - y_disp
-
-                new_art = torch.matmul(R, new_art)
-                new_art[0] = new_art[0] + x_
-                new_art[1] = new_art[1] + y_
-                new_art = new_art.unsqueeze(dim=0)
-
-                new_target = torch.cat([new_target, new_art])
-
-            new_target = new_target.unsqueeze(dim=0)
-            new_targets = torch.cat([new_targets, new_target])
-
-        return new_targets
-
     def augment(self, sentence_numerized, sentence_targets, phonemes):
         # Get silence intervals in the original sentence
         orig_token_intervals = get_token_intervals(phonemes, "#")
@@ -273,13 +226,18 @@ class ArtSpeechDataset(Dataset):
                 sentence_numerized, sentence_targets, phonemes
             )
 
-        # Centralize the targets.
-        # Subtract the mean and add 0.5 to centralize in the 0-1 plane.
-        sentence_targets_mean = sentence_targets.mean(dim=(1, 3))
-        sentence_targets_mean = sentence_targets_mean.unsqueeze(dim=1).unsqueeze(dim=-1)
-        sentence_targets = sentence_targets - sentence_targets_mean + 0.5
+        # Centralize the targets using the upper incisor as the reference of the coordinates system
 
-        if self.register_targets:
-            sentence_targets = self.register(sentence_targets)
+        if "upper-incisor" in self.articulators:
+            upper_incisor_first_samples = sentence_targets[:, self.upper_incisor_index, :, 0]
+            subtract_array = upper_incisor_first_samples.unsqueeze(1).unsqueeze(-1)
+
+            sentence_targets = sentence_targets - subtract_array
+            sentence_targets[:, :, 0, :] = sentence_targets[:, :, 0, :] + 0.3
+            sentence_targets[:, :, 1, :] = sentence_targets[:, :, 1, :] + 0.3
+
+        # sentence_targets_mean = sentence_targets.mean(dim=(1, 3))
+        # sentence_targets_mean = sentence_targets_mean.unsqueeze(dim=1).unsqueeze(dim=-1)
+        # sentence_targets = sentence_targets - sentence_targets_mean + 0.5
 
         return sentence_numerized, sentence_targets, phonemes
