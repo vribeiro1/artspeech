@@ -14,7 +14,8 @@ from reconstruct_snail import reconstruct_snail_from_midline
 from tract_variables import calculate_vocal_tract_variables
 
 RES = 136
-PIXEL_SPACING = 1.62
+# PIXEL_SPACING = 1.62
+PIXEL_SPACING = 1.4117647409439
 
 COLORS = {
     "arytenoid-muscle": "blueviolet",
@@ -58,17 +59,22 @@ def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_o
 
         lw = 5
         for i_art, art in enumerate(sorted(articulators)):
-            art_arr = out[i_art].numpy()
+            pred_art_arr = out[i_art].numpy()
+            true_art_arr = target[i_art].numpy()
 
             if regularize_out:
-                resX, resY = regularize_Bsplines(art_arr.transpose(1, 0), 3)
-                art_arr = np.array([resX, resY])
+                resX, resY = regularize_Bsplines(pred_art_arr.transpose(1, 0), 3)
+                pred_art_arr = np.array([resX, resY])
 
-            npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}.npy")
-            with open(npy_filepath, "wb") as f:
-                np.save(f, art_arr)
+            pred_npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}.npy")
+            with open(pred_npy_filepath, "wb") as f:
+                np.save(f, pred_art_arr)
 
-            art_arr = art_arr.transpose(1, 0)
+            true_npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}_true.npy")
+            with open(true_npy_filepath, "wb") as f:
+                np.save(f, true_art_arr)
+
+            pred_art_arr = pred_art_arr.transpose(1, 0)
 
             if reconstruct_snail and art in SNAIL:
                 snail_params = SNAIL[art]
@@ -77,33 +83,25 @@ def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_o
                 w_apex_int = snail_params["width_apex_int"]
                 w_apex_ext = snail_params["width_apex_ext"]
 
-                art_arr = reconstruct_snail_from_midline(
-                    art_arr,
+                pred_art_arr = reconstruct_snail_from_midline(
+                    pred_art_arr,
                     w_int, w_ext,
                     w_apex_int, w_apex_ext
                 )
 
             if art in CLOSED:
-                art_arr = np.append(art_arr, [art_arr[0]], axis=0)
+                pred_art_arr = np.append(pred_art_arr, [pred_art_arr[0]], axis=0)
 
-            reg_x, reg_y = (art_arr * RES).transpose(1, 0)
+                true_art_arr = true_art_arr.transpose(1, 0)
+                true_art_arr = np.append(true_art_arr, [true_art_arr[0]], axis=0)
+                true_art_arr = true_art_arr.transpose(1, 0)
+
+            pred_reg_x, pred_reg_y = (pred_art_arr * RES).transpose(1, 0)
             color = COLORS.get(art, "black")
-            plt.plot(reg_x, RES - reg_y, linewidth=lw, c=color)
+            plt.plot(pred_reg_x, RES - pred_reg_y, linewidth=lw, c=color)
 
-        for i_art, art in enumerate(sorted(articulators)):
-            art_arr = target[i_art].numpy()
-
-            npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}_true.npy")
-            with open(npy_filepath, "wb") as f:
-                np.save(f, art_arr)
-
-            if art in CLOSED:
-                art_arr = art_arr.transpose(1, 0)
-                art_arr = np.append(art_arr, [art_arr[0]], axis=0)
-                art_arr = art_arr.transpose(1, 0)
-
-            x, y = art_arr * RES
-            plt.plot(x, RES - y, "--r", linewidth=lw, alpha=0.5)
+            true_x, true_y = true_art_arr * RES
+            plt.plot(true_x, RES - true_y, "--r", linewidth=lw, alpha=0.5)
 
         phone, = phoneme
         phone = f"/{phone}/"
