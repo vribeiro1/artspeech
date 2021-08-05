@@ -34,10 +34,12 @@ class ArticulatorPredictor(nn.Module):
 
 
 class ArtSpeech(nn.Module):
-    def __init__(self, vocab_size, n_articulators, embed_dim=64, hidden_size=128, n_samples=50):
+    def __init__(
+        self, vocab_size, n_articulators, embed_dim=64, hidden_size=128, n_samples=50, gru_dropout=0.
+    ):
         super(ArtSpeech, self).__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.rnn = nn.GRU(embed_dim, hidden_size, num_layers=2, bidirectional=True)
+        self.rnn = nn.GRU(embed_dim, hidden_size, num_layers=2, bidirectional=True, dropout=gru_dropout)
 
         self.linear = nn.Sequential(
             nn.Linear(2 * hidden_size, hidden_size),
