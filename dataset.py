@@ -182,9 +182,6 @@ class ArtSpeechDataset(Dataset):
         with open(filepath) as f:
             data = funcy.lfilter(self._exclude_missing_data, json.load(f))
 
-        self.data = data if lazy_load else self._collect_data(data)
-        self.load_fn = self._collect_sentence if lazy_load else lambda x: x
-
         tail_clip_refs = ["lower-incisor", "upper-incisor", "epiglottis"]
         if clip_tails and not all(map(lambda art: art in articulators, tail_clip_refs)):
             raise ValueError(
@@ -193,6 +190,9 @@ class ArtSpeechDataset(Dataset):
             )
 
         self.clip_tails = clip_tails
+
+        self.data = data if lazy_load else self._collect_data(data)
+        self.load_fn = self._collect_sentence if lazy_load else lambda x: x
 
     @staticmethod
     def _get_frames_interval(start, end, timed_frame_keys):
