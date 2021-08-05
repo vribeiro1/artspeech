@@ -7,8 +7,9 @@ import os
 import torch
 
 from functools import reduce
-from scipy.spatial.distance import euclidean
 from torch.utils.data import Dataset
+
+from bs_regularization import regularize_Bsplines
 
 
 def get_token_intervals(token_sequence, break_token):
@@ -55,10 +56,100 @@ def break_sequence(sequence, break_points):
     return segments
 
 
+class TailClipper:
+    @classmethod
+    def clip_tongue_tails(cls, tongue, lower_incisor, epiglottis, reg_out=True, **kwargs):
+        # Remove the front tail of the tongue using the lower incisor as the reference
+        ref_idx = lower_incisor[:, 1].argmax()
+        reference = lower_incisor[ref_idx]
+
+        tongue_cp = tongue.copy()
+
+        tongue_1st_half = tongue_cp[:25]
+        tongue_2nd_half = tongue_cp[25:]
+
+        keep_indices = np.where(tongue_2nd_half[:, 1] < reference[1])
+
+        tailless_tongue = np.concatenate([
+            tongue_1st_half,
+            tongue_2nd_half[keep_indices]
+        ])
+
+        # Remove the back tail of the tongue using the epiglottis as the reference
+        ref_idx = epiglottis[:, 1].argmin()
+        reference = epiglottis[ref_idx]
+
+        tongue_cp = tailless_tongue.copy()
+
+        tongue_1st_half = tongue_cp[:25]
+        tongue_2nd_half = tongue_cp[25:]
+
+        keep_indices = np.where(tongue_1st_half[:, 1] < reference[1] + (10 / pixel_spacing))
+
+        tailless_tongue = np.concatenate([
+            tongue_1st_half[keep_indices],
+            tongue_2nd_half
+        ])
+
+        if reg_out:
+            reg_x, reg_y = regularize_Bsplines(tailless_tongue, 3)
+            tailless_tongue = np.array([reg_x, reg_y]).T
+
+        return tailless_tongue
+
+    @classmethod
+    def clip_lower_lip_tails(cls, lower_lip, lower_incisor, reg_out=True, **kwargs):
+        # Remove the back tail of the lower lip using the lower incisor as the reference
+        ref_idx = lower_incisor[:, 1].argmax()
+        reference = lower_incisor[ref_idx]
+
+        llip_cp = lower_lip.copy()
+
+        llip_1st_half = llip_cp[:25]
+        llip_2nd_half = llip_cp[25:]
+
+        keep_indices = np.where(llip_1st_half[:, 1] < reference[1])
+
+        tailless_llip = np.concatenate([
+            llip_1st_half[keep_indices],
+            llip_2nd_half
+        ])
+
+        if reg_out:
+            reg_x, reg_y = regularize_Bsplines(tailless_llip, 3)
+            tailless_llip = np.array([reg_x, reg_y]).T
+
+        return tailless_llip
+
+    @classmethod
+    def clip_upper_lip_tails(cls, upper_lip, upper_incisor, reg_out=True, **kwargs):
+        # Remove the back tail of the upper lip using the upper incisor as the reference
+        ref_idx = -1
+        reference = upper_incisor[ref_idx]
+
+        ulip_cp = upper_lip.copy()
+
+        ulip_1st_half = ulip_cp[:25]
+        ulip_2nd_half = ulip_cp[25:]
+
+        keep_indices = np.where(ulip_1st_half[:, 1] > reference[1] - (5 / pixel_spacing))
+
+        tailless_ulip = np.concatenate([
+            ulip_1st_half[keep_indices],
+            ulip_2nd_half
+        ])
+
+        if reg_out:
+            reg_x, reg_y = regularize_Bsplines(tailless_ulip, 3)
+            tailless_ulip = np.array([reg_x, reg_y]).T
+
+        return tailless_ulip
+
+
 class ArtSpeechDataset(Dataset):
     def __init__(
         self, datadir, filepath, vocabulary, articulators, n_samples=50, size=136,
-        lazy_load=False, p_aug=0.
+        lazy_load=False, p_aug=0., clip_tails=False
     ):
         """
         ArtSpeech Dataset class
@@ -73,6 +164,8 @@ class ArtSpeechDataset(Dataset):
         size (int): Interval domain of the contours' x- and y- coordinates.
         lazy_load (bool): If should load the data on demand.
         p_aug (float): Probability of data augmentation.
+        clip_tails (bool): If should clip the tails of some articulators to keep only the
+            acoustically relevant parts of the articulator.
         """
 
         self.vocabulary = vocabulary
@@ -92,11 +185,35 @@ class ArtSpeechDataset(Dataset):
         self.data = data if lazy_load else self._collect_data(data)
         self.load_fn = self._collect_sentence if lazy_load else lambda x: x
 
+        tail_clip_refs = ["lower-incisor", "upper-incisor", "epiglottis"]
+        if clip_tails and not all(map(lambda art: art in articulators, tail_clip_refs)):
+            raise ValueError(
+                f"clip_tails == True requires that all the references are available."
+                "References are {tail_clip_refs}"
+            )
+
+        self.clip_tails = clip_tails
+
     @staticmethod
     def _get_frames_interval(start, end, timed_frame_keys):
         on_interval = filter(lambda d: start <= d[0] < end, timed_frame_keys)
         frame_keys = [d[1] for d in on_interval]
         return frame_keys
+
+    @staticmethod
+    def load_target_array(filepath):
+        """
+        Loads the target array with the proper orientation (right to left)
+        """
+
+        target_array = np.load(filepath)
+
+        # All the countors should be oriented from right to left. If it is the opposite,
+        # we flip the array.
+        if target_array[0][0] < target_array[-1][0]:
+            target_array = np.flip(target_array, axis=0)
+
+        return target_array
 
     def _exclude_missing_data(self, item):
         """
@@ -110,7 +227,7 @@ class ArtSpeechDataset(Dataset):
                 art_fp is None
                 for art, art_fp in art_filepaths.items()
                 if art in self.articulators
-            ]) for frame_number, art_filepaths in contours_filepaths.items()
+            ]) for _, art_filepaths in contours_filepaths.items()
         ]
 
         return not any(frame_is_missing)
@@ -144,13 +261,37 @@ class ArtSpeechDataset(Dataset):
 
             for frame_key in phoneme_frame_keys:
                 frame_contours_filepaths = contours_filepaths[frame_key]
+
+                # References for tail clipping
+                if self.clip_tails:
+                    lower_incisor = self.load_target_array(frame_contours_filepaths["lower-incisor"])
+                    upper_incisor = self.load_target_array(frame_contours_filepaths["upper-incisor"])
+                    epiglottis = self.load_target_array(frame_contours_filepaths["epiglottis"])
+                else:
+                    lower_incisor = upper_incisor = epiglottis = None
+
                 frame_targets = torch.zeros(size=(0, 2, self.n_samples))
                 for art, contour_fp in sorted(frame_contours_filepaths.items(), key=lambda t: t[0]):
                     if art not in self.articulators:
                         continue
 
                     abs_contour_fp = os.path.join(self.datadir, contour_fp)
-                    contour = torch.tensor(np.load(abs_contour_fp)) / self.size  # torch.Size([self.n_samples, 2])
+                    contour_arr = self.load_target_array(abs_contour_fp)
+
+                    if self.clip_tails:
+                        tail_clip_method = getattr(
+                            TailClipper, f"clip_{art.replace('-', '_')}_tails", None
+                        )
+
+                        if tail_clip_method:
+                            contour = tail_clip_method(
+                                contour,
+                                lower_incisor=lower_incisor,
+                                upper_incisor=upper_incisor,
+                                epiglottis=epiglottis
+                            )
+
+                    contour = torch.tensor(contour_arr) / self.size  # torch.Size([self.n_samples, 2])
                     contour = contour.transpose(1, 0)  # torch.Size([2, self.n_samples])
                     contour = contour.unsqueeze(dim=0)  # torch.Size([1, 2, self.n_samples]
 
@@ -227,7 +368,6 @@ class ArtSpeechDataset(Dataset):
             )
 
         # Centralize the targets using the upper incisor as the reference of the coordinates system
-
         if "upper-incisor" in self.articulators:
             upper_incisor_first_samples = sentence_targets[:, self.upper_incisor_index, :, 0]
             subtract_array = upper_incisor_first_samples.unsqueeze(1).unsqueeze(-1)
