@@ -129,7 +129,6 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
         train_filepath,
         vocabulary,
         articulators,
-        register=register_targets,
         p_aug=p_aug
     )
     train_dataloader = DataLoader(
@@ -144,7 +143,6 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
         valid_filepath,
         vocabulary,
         articulators,
-        register=register_targets,
         p_aug=p_aug
     )
     valid_dataloader = DataLoader(
@@ -202,8 +200,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
         os.path.dirname(datadir),
         test_filepath,
         vocabulary,
-        articulators,
-        register=register_targets
+        articulators
     )
     test_dataloader = DataLoader(
         test_dataset,
