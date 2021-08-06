@@ -93,7 +93,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulator
 
 
 @ex.automain
-def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_filepath, valid_filepath, test_filepath, vocab_filepath, articulators, p_aug=0., register_targets=False, state_dict_fpath=None):
+def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_filepath, valid_filepath, test_filepath, vocab_filepath, articulators, p_aug=0., state_dict_fpath=None):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     writer = SummaryWriter(os.path.join(fs_observer.dir, f"experiment"))
@@ -110,7 +110,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
 
     n_articulators = len(articulators)
 
-    model = ArtSpeech(len(vocabulary), n_articulators)
+    model = ArtSpeech(len(vocabulary), n_articulators, gru_dropout=0.2)
     if state_dict_fpath is not None:
         state_dict = torch.load(state_dict_fpath, map_location=device)
         model.load_state_dict(state_dict)
@@ -129,7 +129,8 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
         train_filepath,
         vocabulary,
         articulators,
-        p_aug=p_aug
+        p_aug=p_aug,
+        clip_tails=True
     )
     train_dataloader = DataLoader(
         train_dataset,
@@ -143,7 +144,8 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
         valid_filepath,
         vocabulary,
         articulators,
-        p_aug=p_aug
+        p_aug=p_aug,
+        clip_tails=True
     )
     valid_dataloader = DataLoader(
         valid_dataset,
@@ -200,7 +202,9 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
         os.path.dirname(datadir),
         test_filepath,
         vocabulary,
-        articulators
+        articulators,
+        lazy_load=True,
+        clip_tails=True
     )
     test_dataloader = DataLoader(
         test_dataset,
@@ -209,7 +213,7 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
         worker_init_fn=set_seeds
     )
 
-    best_model = ArtSpeech(len(vocabulary), n_articulators)
+    best_model = ArtSpeech(len(vocabulary), n_articulators, gru_dropout=0.2)
     state_dict = torch.load(best_model_path, map_location=device)
     best_model.load_state_dict(state_dict)
     best_model.to(device)

@@ -57,6 +57,8 @@ def break_sequence(sequence, break_points):
 
 
 class TailClipper:
+    PIXEL_SPACING = 1.4117647409439
+
     @classmethod
     def clip_tongue_tails(cls, tongue, lower_incisor, epiglottis, reg_out=True, **kwargs):
         # Remove the front tail of the tongue using the lower incisor as the reference
@@ -84,7 +86,7 @@ class TailClipper:
         tongue_1st_half = tongue_cp[:25]
         tongue_2nd_half = tongue_cp[25:]
 
-        keep_indices = np.where(tongue_1st_half[:, 1] < reference[1] + (10 / pixel_spacing))
+        keep_indices = np.where(tongue_1st_half[:, 1] < reference[1] + (10 / cls.PIXEL_SPACING))
 
         tailless_tongue = np.concatenate([
             tongue_1st_half[keep_indices],
@@ -132,7 +134,7 @@ class TailClipper:
         ulip_1st_half = ulip_cp[:25]
         ulip_2nd_half = ulip_cp[25:]
 
-        keep_indices = np.where(ulip_1st_half[:, 1] > reference[1] - (5 / pixel_spacing))
+        keep_indices = np.where(ulip_1st_half[:, 1] > reference[1] - (5 / cls.PIXEL_SPACING))
 
         tailless_ulip = np.concatenate([
             ulip_1st_half[keep_indices],
@@ -213,7 +215,7 @@ class ArtSpeechDataset(Dataset):
         if target_array[0][0] < target_array[-1][0]:
             target_array = np.flip(target_array, axis=0)
 
-        return target_array
+        return target_array.copy()
 
     def _exclude_missing_data(self, item):
         """
@@ -264,9 +266,14 @@ class ArtSpeechDataset(Dataset):
 
                 # References for tail clipping
                 if self.clip_tails:
-                    lower_incisor = self.load_target_array(frame_contours_filepaths["lower-incisor"])
-                    upper_incisor = self.load_target_array(frame_contours_filepaths["upper-incisor"])
-                    epiglottis = self.load_target_array(frame_contours_filepaths["epiglottis"])
+                    lower_incisor_fp = os.path.join(self.datadir, frame_contours_filepaths["lower-incisor"])
+                    lower_incisor = self.load_target_array(lower_incisor_fp)
+
+                    upper_incisor_fp = os.path.join(self.datadir, frame_contours_filepaths["upper-incisor"])
+                    upper_incisor = self.load_target_array(upper_incisor_fp)
+
+                    epiglottis_fp = os.path.join(self.datadir, frame_contours_filepaths["epiglottis"])
+                    epiglottis = self.load_target_array(epiglottis_fp)
                 else:
                     lower_incisor = upper_incisor = epiglottis = None
 
@@ -284,14 +291,14 @@ class ArtSpeechDataset(Dataset):
                         )
 
                         if tail_clip_method:
-                            contour = tail_clip_method(
-                                contour,
+                            contour_arr = tail_clip_method(
+                                contour_arr,
                                 lower_incisor=lower_incisor,
                                 upper_incisor=upper_incisor,
                                 epiglottis=epiglottis
                             )
 
-                    contour = torch.tensor(contour_arr) / self.size  # torch.Size([self.n_samples, 2])
+                    contour = torch.from_numpy(contour_arr) / self.size  # torch.Size([self.n_samples, 2])
                     contour = contour.transpose(1, 0)  # torch.Size([2, self.n_samples])
                     contour = contour.unsqueeze(dim=0)  # torch.Size([1, 2, self.n_samples]
 
@@ -369,8 +376,8 @@ class ArtSpeechDataset(Dataset):
 
         # Centralize the targets using the upper incisor as the reference of the coordinates system
         if "upper-incisor" in self.articulators:
-            upper_incisor_first_samples = sentence_targets[:, self.upper_incisor_index, :, 0]
-            subtract_array = upper_incisor_first_samples.unsqueeze(1).unsqueeze(-1)
+            upper_incisor_last_samples = sentence_targets[:, self.upper_incisor_index, :, -1]
+            subtract_array = upper_incisor_last_samples.unsqueeze(1).unsqueeze(-1)
 
             sentence_targets = sentence_targets - subtract_array
             sentence_targets[:, :, 0, :] = sentence_targets[:, :, 0, :] + 0.3
