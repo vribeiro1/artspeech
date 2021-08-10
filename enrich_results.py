@@ -7,9 +7,12 @@ import os
 import pandas as pd
 import torch
 
+from time import time
+from tqdm import tqdm
 from glob import glob
 
 from loss import EuclideanDistanceLoss
+from metrics import p2cp_distance
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -44,9 +47,7 @@ def load_art_tensors(zipped):
     return preds, targets
 
 
-def calculate_distances(zips):
-    distance_fn = EuclideanDistanceLoss(reduction="none")
-
+def calculate_distances(zips, distance_fn):
     preds = torch.zeros(size=(len(zips[0]), 0, 2, 50))
     targets = torch.zeros(size=(len(zips[0]), 0, 2, 50))
     for zipped in zips:
@@ -59,16 +60,16 @@ def calculate_distances(zips):
     targets = targets.unsqueeze(dim=0)
 
     distances = distance_fn(preds, targets)
-    distances = distances.mean(dim=-1).mean(dim=1)
+    distances = distances.mean(dim=1)
 
     return distances
 
 
-def distances_per_articulator(inferences_dir):
+def distances_per_articulator(inferences_dir, distance_fn):
     sentences = os.listdir(inferences_dir)
 
     distances = torch.zeros(size=(0, len(ARTICULATORS)))
-    for sentence in sorted(sentences):
+    for sentence in tqdm(sorted(sentences)):
         saved_outputs_dir = os.path.join(inferences_dir, sentence, "contours")
 
         zipped = []
@@ -82,7 +83,7 @@ def distances_per_articulator(inferences_dir):
         if len(zipped[0]) == 0:
             continue
 
-        sentences_dists = calculate_distances(zipped)
+        sentences_dists = calculate_distances(zipped, distance_fn)
         distances = torch.cat([distances, sentences_dists], dim=0)
 
     dist_means = distances.mean(dim=0)
@@ -96,6 +97,13 @@ def distances_per_articulator(inferences_dir):
     }
 
 
+def euclidean_distance(outputs, targets):
+    # outputs: torch.Size([bs, seq_len, N_art, 2, N_samples])
+    # targets: torch.Size([bs, seq_len, N_art, 2, N_samples])
+    euclidean_distance_fn = EuclideanDistanceLoss(reduction="none")
+    return euclidean_distance_fn( outputs, targets).mean(dim=-1)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--basedir", dest="basedir")
@@ -105,15 +113,20 @@ if __name__ == "__main__":
 
     results = []
     for exp in args.exps:
+        start_time = time()
+        print(f"Starting to process experiment #{exp}")
         exp_dir = os.path.join(args.basedir, str(exp))
         with open(os.path.join(exp_dir, "test_results.json")) as f:
             test_results = json.load(f)
 
         inferences_dir = os.path.join(exp_dir, "test_outputs", "0")
-        dist_per_art = distances_per_articulator(inferences_dir)
+
+        p2cp_per_art = distances_per_articulator(inferences_dir, p2cp_distance)
+        dist_per_art = distances_per_articulator(inferences_dir, euclidean_distance)
 
         for articulator in ARTICULATORS:
             test_results[articulator]["med"] = dist_per_art[articulator]["mean"]
+            test_results[articulator]["p2cp"] = p2cp_per_art[articulator]["mean"]
 
         with open(os.path.join(exp_dir, "test_results_update.json"), "w") as f:
             json.dump(test_results, f)
@@ -123,11 +136,15 @@ if __name__ == "__main__":
             "Loss": test_results["loss"]
         }
         for articulator in ARTICULATORS:
+            results_item[f"P2CP_{articulator}"] = test_results[articulator]["p2cp"]
             results_item[f"MED_{articulator}"] = test_results[articulator]["med"]
             results_item[f"X_corr_{articulator}"] = test_results[articulator]["x_corr"]
             results_item[f"Y_corr_{articulator}"] = test_results[articulator]["y_corr"]
 
         results.append(results_item)
+        end_time = time()
+        enlapsed = end_time - start_time
+        print(f"Finished processing experiment #{exp}. Enlapsed time was {enlapsed} seconds.")
 
     df = pd.DataFrame(results)
     df_filepath = os.path.join(args.save_to, "results.csv")

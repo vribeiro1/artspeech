@@ -110,7 +110,7 @@ class TailClipper:
         llip_1st_half = llip_cp[:25]
         llip_2nd_half = llip_cp[25:]
 
-        keep_indices = np.where(llip_2nd_half[:, 1] < reference[1] + (5 / pixel_spacing))
+        keep_indices = np.where(llip_2nd_half[:, 1] < reference[1] + (5 / cls.PIXEL_SPACING))
 
         tailless_llip = np.concatenate([
             llip_1st_half,
