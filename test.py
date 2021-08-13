@@ -30,7 +30,8 @@ def main(cfg):
         cfg["test_filepath"],
         vocabulary,
         articulators,
-        p_aug=0.
+        p_aug=0.,
+        lazy_load=True
     )
     test_dataloader = DataLoader(
         test_dataset,

@@ -4,36 +4,16 @@ import cv2
 import math
 import torch
 
+from metrics import p2cp_mean
+
 ART_SLICES = {
     "tongue-tip": (30, 45),
     "tongue-body": (10, 30),
-    "upper-incisor": (0, 25),
-    "hard-palate": (25, 50),
-    "soft-palate": (0, 35),
-    "velum": (35, 50)
+    "upper-incisor": (25, 50),
+    "hard-palate": (0, 25),
+    "soft-palate": (35, 50),
+    "velum": (0, 15)
 }
-
-
-def p2cp(i, u, v):
-    ui = u[i]
-    ui2cp = min(torch.cdist(ui, vj) for vj in v)
-    return ui2cp
-
-
-def p2cp_mean(u_, v_):
-    n = len(u_)
-    m = len(v_)
-
-    dist_mtx = torch.zeros((n, m))
-    for i in range(n):
-        for j in range(m):
-            dist_mtx[i][j] = torch.cdist(u_[i], v_[j])
-
-    u2cv = dist_mtx.min(axis=1)
-    v2cu = dist_mtx.min(axis=0)
-    mean_p2cp = (sum(u2cv) + sum(v2cu)) / (n + m)
-
-    return mean_p2cp
 
 
 def _calculate_TV(arr1, arr2):
