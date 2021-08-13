@@ -10,54 +10,14 @@ from tqdm import tqdm
 
 from bs_regularization import regularize_Bsplines
 from loss import pearsons_correlation
-from reconstruct_snail import reconstruct_snail_from_midline
 from tract_variables import calculate_vocal_tract_variables
 
 RES = 136
 # PIXEL_SPACING = 1.62
 PIXEL_SPACING = 1.4117647409439
 
-COLORS = {
-    "arytenoid-muscle": "blueviolet",
-    "epiglottis": "turquoise",
-    "hyoid-bone": "slategray",
-    "lower-incisor": "cyan",
-    "lower-lip": "lime",
-    "pharynx": "goldenrod",
-    "soft-palate": "dodgerblue",
-    "thyroid-cartilage": "saddlebrown",
-    "tongue": "darkorange",
-    "upper-incisor": "yellow",
-    "upper-lip": "magenta",
-    "vocal-folds": "hotpink"
-}
-
-CLOSED = [
-    "hyoid-bone",
-    "thyroid-cartilage"
-]
-
-SNAIL = {
-    "epiglottis": {
-        "width_int": 2 / (RES * PIXEL_SPACING),
-        "width_ext": 2 / (RES * PIXEL_SPACING),
-        "width_apex_int": 1 / (RES * PIXEL_SPACING),
-        "width_apex_ext": 1 / (RES * PIXEL_SPACING)
-    },
-    "soft-palate": {
-        "width_int": 2 / (RES * PIXEL_SPACING),
-        "width_ext": 6 / (RES * PIXEL_SPACING),
-        "width_apex_int": 1 / (RES * PIXEL_SPACING),
-        "width_apex_ext": 3 / (RES * PIXEL_SPACING)
-    }
-}
-
-
 def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_out, reconstruct_snail=False):
     for j, (out, target, phoneme) in enumerate(zip(outputs, targets, phonemes)):
-        plt.figure(figsize=(10, 10))
-
-        lw = 5
         for i_art, art in enumerate(sorted(articulators)):
             pred_art_arr = out[i_art].numpy()
             true_art_arr = target[i_art].numpy()
@@ -73,50 +33,6 @@ def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_o
             true_npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}_true.npy")
             with open(true_npy_filepath, "wb") as f:
                 np.save(f, true_art_arr)
-
-            pred_art_arr = pred_art_arr.transpose(1, 0)
-
-            if reconstruct_snail and art in SNAIL:
-                snail_params = SNAIL[art]
-                w_int = snail_params["width_int"]
-                w_ext = snail_params["width_ext"]
-                w_apex_int = snail_params["width_apex_int"]
-                w_apex_ext = snail_params["width_apex_ext"]
-
-                pred_art_arr = reconstruct_snail_from_midline(
-                    pred_art_arr,
-                    w_int, w_ext,
-                    w_apex_int, w_apex_ext
-                )
-
-            if art in CLOSED:
-                pred_art_arr = np.append(pred_art_arr, [pred_art_arr[0]], axis=0)
-
-                true_art_arr = true_art_arr.transpose(1, 0)
-                true_art_arr = np.append(true_art_arr, [true_art_arr[0]], axis=0)
-                true_art_arr = true_art_arr.transpose(1, 0)
-
-            pred_reg_x, pred_reg_y = (pred_art_arr * RES).transpose(1, 0)
-            color = COLORS.get(art, "black")
-            plt.plot(pred_reg_x, RES - pred_reg_y, linewidth=lw, c=color)
-
-            true_x, true_y = true_art_arr * RES
-            plt.plot(true_x, RES - true_y, "--r", linewidth=lw, alpha=0.5)
-
-        phone, = phoneme
-        phone = f"/{phone}/"
-        plt.text(64, 10, phone, c="blue", fontsize=56)
-        plt.xlim([0, 136])
-        plt.ylim([0, 136])
-
-        plt.axis("off")
-        plt.tight_layout()
-
-        filepath = os.path.join(save_to, f"{j}.jpg")
-        plt.savefig(filepath)
-        filepath = os.path.join(save_to, f"{j}.pdf")
-        plt.savefig(filepath)
-        plt.close()
 
 
 def prepare_for_serialization(TVs_out):
