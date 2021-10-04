@@ -38,7 +38,7 @@ def get_repeated_phoneme(phone, framerate):
     period = 1 / framerate
     phone_duration = phone.end_time - phone.start_time
 
-    return [phone.text] * int(phone_duration // period)
+    return [phone.text] * int("%.0f" % (phone_duration / period))
 
 
 def get_phonetic_sequences(textgrid, framerate=55):
