@@ -42,8 +42,6 @@ def get_repeated_phoneme(phone, framerate):
 
 
 def get_phonetic_sequences(textgrid, framerate=55):
-    period = 1 / framerate
-
     phone_tier = textgrid.get_tier_by_name("PhonTier")
     sentence_tier = textgrid.get_tier_by_name("SentenceTier")
 
@@ -107,8 +105,6 @@ def make_vocal_tract_shape_video(outputs, phonemes, save_to, regularize_outputs=
         video_writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
 
     video_writer.release()
-
-    video_audio_filepath = os.path.join(save_to, f"animation.avi")
 
 
 def save_vocal_tract_shape(outputs, phonemes, save_to, regularize_outputs=True):

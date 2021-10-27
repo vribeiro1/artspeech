@@ -1,4 +1,3 @@
-import funcy
 import numpy as np
 import pydicom
 import torch

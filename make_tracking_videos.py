@@ -3,7 +3,6 @@ import pdb
 import argparse
 import cv2
 import funcy
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pydicom
@@ -177,7 +176,7 @@ def make_video(sequence_dirname, save_to):
         video_filepath = os.path.join(save_to, f"{i}.avi")
         video_writer = cv2.VideoWriter(
             video_filepath,
-            cv2.VideoWriter_fourcc(*"DIVX"),    
+            cv2.VideoWriter_fourcc(*"DIVX"),
             video.framerate,
             (1000, 1000)
         )

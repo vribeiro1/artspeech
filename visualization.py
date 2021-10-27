@@ -42,10 +42,10 @@ def plot_complete_vocal_tract(pred_curves, true_curves, save_dir, frame, phoneme
 
     plt.text(0.5, 0.15, f"/{phoneme}/", fontsize=56, color="blue")
 
-    jpg_filepath = os.path.join(TEST_OUTPUTS_DIR, str(sentence_number), f"{frame}.jpg")
+    jpg_filepath = os.path.join(save_dir, f"{frame}.jpg")
     plt.savefig(jpg_filepath, format="jpg")
 
-    pdf_filepath = os.path.join(TEST_OUTPUTS_DIR, str(sentence_number), f"{frame}.pdf")
+    pdf_filepath = os.path.join(save_dir, f"{frame}.pdf")
     plt.savefig(pdf_filepath, format="pdf")
 
     plt.close()
@@ -83,7 +83,7 @@ def plot_sentence(outputs_dir, save_to):
                 true_curve = np.load(true_filepath).T
                 true_curves[articulator] = true_curve
 
-            save_dir = os.path.join(outputs_dir, str(sentence_number))
+            save_dir = os.path.join(save_to, str(sentence_number))
             plot_complete_vocal_tract(
                 pred_curves,
                 true_curves,
