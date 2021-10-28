@@ -1,3 +1,4 @@
+datadir: /path/to/the/data
 scheme: kfold or data-efficiency
 prefix: "prefix"
 suffix: "suffix"

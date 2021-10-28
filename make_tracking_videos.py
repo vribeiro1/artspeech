@@ -12,35 +12,38 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from scipy.io import wavfile
 from tgt import read_textgrid
+from vt_tracker import (
+    ARYTENOID_MUSCLE,
+    EPIGLOTTIS,
+    LOWER_INCISOR,
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    THYROID_CARTILAGE,
+    TONGUE,
+    UPPER_INCISOR,
+    UPPER_LIP,
+    VOCAL_FOLDS
+)
+from vt_tracker.helpers import uint16_to_uint8
+from vt_tracker.visualization import COLORS
 
 from dataset import ArtSpeechDataset, TailClipper
 from video import Video
-from visualization import COLORS
 
-ARTICULATORS = [
-    "arytenoid-muscle",
-    "epiglottis",
-    # "hyoid-bone",
-    "lower-incisor",
-    "lower-lip",
-    "pharynx",
-    "soft-palate",
-    "thyroid-cartilage",
-    "tongue",
-    "upper-incisor",
-    "upper-lip",
-    "vocal-folds"
-]
-
-
-def uint16_to_uint8(img_arr, norm_hist=False):
-    max_val = np.amax(img_arr)
-    img_arr = img_arr.astype(float) * 255 / max_val
-
-    if norm_hist:
-        img_arr = cv2.equalizeHist(img_arr)
-
-    return img_arr.astype(np.uint8)
+ARTICULATORS = sorted([
+    ARYTENOID_MUSCLE,
+    EPIGLOTTIS,
+    LOWER_INCISOR,
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    THYROID_CARTILAGE,
+    TONGUE,
+    UPPER_INCISOR,
+    UPPER_LIP,
+    VOCAL_FOLDS
+])
 
 
 def load_input_image(filepath):

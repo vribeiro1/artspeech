@@ -1,10 +1,5 @@
-import pdb
-
-import cv2
-import math
 import torch
 
-from metrics import p2cp_mean
 
 ART_SLICES = {
     "tongue-tip": (30, 45),

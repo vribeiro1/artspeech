@@ -7,9 +7,22 @@ import os
 import pandas as pd
 import torch
 
+from glob import glob
 from time import time
 from tqdm import tqdm
-from glob import glob
+from vt_tracker import (
+    ARYTENOID_MUSCLE,
+    EPIGLOTTIS,
+    LOWER_INCISOR,
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    THYROID_CARTILAGE,
+    TONGUE,
+    UPPER_INCISOR,
+    UPPER_LIP,
+    VOCAL_FOLDS
+)
 
 from loss import EuclideanDistanceLoss
 from metrics import p2cp_distance
@@ -17,17 +30,17 @@ from metrics import p2cp_distance
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 ARTICULATORS = sorted([
-    "arytenoid-muscle",
-    "epiglottis",
-    "lower-incisor",
-    "lower-lip",
-    "pharynx",
-    "soft-palate",
-    "thyroid-cartilage",
-    "tongue",
-    "upper-incisor",
-    "upper-lip",
-    "vocal-folds"
+    ARYTENOID_MUSCLE,
+    EPIGLOTTIS,
+    LOWER_INCISOR,
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    THYROID_CARTILAGE,
+    TONGUE,
+    UPPER_INCISOR,
+    UPPER_LIP,
+    VOCAL_FOLDS
 ])
 
 

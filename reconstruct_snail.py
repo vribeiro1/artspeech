@@ -130,6 +130,6 @@ def reconstruct_snail_from_midline(midline_, width_int, width_ext, width_apex_in
 
     snail = np.array(int_snail_points + list(np.flip(apex, axis=0)) + ext_snail_points)
     resX, resY = regularize_Bsplines(snail, 3)
-    reg_snail = np.array([resX, resY]).transpose(1, 0)
+    reg_snail = np.array([resX, resY]).T
 
     return reg_snail

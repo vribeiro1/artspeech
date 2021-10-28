@@ -9,26 +9,38 @@ from glob import glob
 from sklearn.model_selection import KFold
 from tgt.io import read_textgrid
 from tqdm import tqdm
+from vt_tracker import (
+    ARYTENOID_MUSCLE,
+    EPIGLOTTIS,
+    LOWER_INCISOR,
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    THYROID_CARTILAGE,
+    TONGUE,
+    UPPER_INCISOR,
+    UPPER_LIP,
+    VOCAL_FOLDS
+)
 
 from video import Video
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ARTSPEECH_DIR = "/home/vsouzari/Documents/loria/datasets/ArtSpeech_Database"
 
-ARTICULATORS = [
-    "arytenoid-muscle",
-    "epiglottis",
-    "hyoid-bone",
-    "lower-incisor",
-    "lower-lip",
-    "pharynx",
-    "soft-palate",
-    "thyroid-cartilage",
-    "tongue",
-    "upper-incisor",
-    "upper-lip",
-    "vocal-folds"
-]
+ARTICULATORS = sorted([
+    ARYTENOID_MUSCLE,
+    EPIGLOTTIS,
+    LOWER_INCISOR,
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    THYROID_CARTILAGE,
+    TONGUE,
+    UPPER_INCISOR,
+    UPPER_LIP,
+    VOCAL_FOLDS
+])
 
 
 def exists_or_none(filepath):
@@ -243,6 +255,7 @@ def make_kfold(cfg):
 
 def make_data_efficiency(cfg):
     vocabulary = set()
+    datadir = cfg["datadir"]
     prefix = cfg["prefix"]
     suffix = cfg["suffix"]
 

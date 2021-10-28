@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from bs_regularization import regularize_Bsplines
 from helpers import set_seeds
 from model import ArtSpeech
-from visualization import COLORS
+from vt_tracker.visualization import COLORS
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 VOCABULARY_FILEPATH = os.path.join(BASE_DIR, "data", "vocabulary_gottingen.json")

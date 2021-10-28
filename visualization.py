@@ -4,21 +4,7 @@ import numpy as np
 import os
 
 from tqdm import tqdm
-
-COLORS = {
-    "arytenoid-muscle": "blueviolet",
-    "epiglottis": "turquoise",
-    # "hyoid-bone": "slategray",
-    "lower-incisor": "cyan",
-    "lower-lip": "lime",
-    "pharynx": "goldenrod",
-    "soft-palate": "dodgerblue",
-    "thyroid-cartilage": "saddlebrown",
-    "tongue": "darkorange",
-    "upper-incisor": "yellow",
-    "upper-lip": "magenta",
-    "vocal-folds": "hotpink"
-}
+from vt_tracker.visualization import COLORS
 
 CLOSED = [
     "hyoid-bone",
@@ -29,6 +15,8 @@ CLOSED = [
 def plot_complete_vocal_tract(pred_curves, true_curves, save_dir, frame, phoneme):
     plt.figure(figsize=(10, 10))
 
+    lw = 3
+    alpha = 0.5
     for articulator, pred_curve in pred_curves.items():
         plt.plot(*zip(*pred_curve), c=COLORS[articulator], linewidth=lw)
 

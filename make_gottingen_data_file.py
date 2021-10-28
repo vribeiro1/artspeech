@@ -11,25 +11,37 @@ from glob import glob
 from sklearn.model_selection import KFold
 from tgt.io3 import read_textgrid
 from tqdm import tqdm
+from vt_tracker import (
+    ARYTENOID_MUSCLE,
+    EPIGLOTTIS,
+    LOWER_INCISOR,
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    THYROID_CARTILAGE,
+    TONGUE,
+    UPPER_INCISOR,
+    UPPER_LIP,
+    VOCAL_FOLDS
+)
 
 from video import Video
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-ARTICULATORS = [
-    "arytenoid-muscle",
-    "epiglottis",
-    "hyoid-bone",
-    "lower-incisor",
-    "lower-lip",
-    "pharynx",
-    "soft-palate",
-    "thyroid-cartilage",
-    "tongue",
-    "upper-incisor",
-    "upper-lip",
-    "vocal-folds"
-]
+ARTICULATORS = sorted([
+    ARYTENOID_MUSCLE,
+    EPIGLOTTIS,
+    LOWER_INCISOR,
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    THYROID_CARTILAGE,
+    TONGUE,
+    UPPER_INCISOR,
+    UPPER_LIP,
+    VOCAL_FOLDS
+])
 
 def rm_basedir(filepath, basedir):
     dir_to_remove = os.path.dirname(basedir) + os.sep

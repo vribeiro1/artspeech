@@ -16,7 +16,8 @@ RES = 136
 # PIXEL_SPACING = 1.62
 PIXEL_SPACING = 1.4117647409439
 
-def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_out, reconstruct_snail=False):
+
+def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_out):
     for j, (out, target, phoneme) in enumerate(zip(outputs, targets, phonemes)):
         for i_art, art in enumerate(sorted(articulators)):
             pred_art_arr = out[i_art].numpy()
@@ -94,7 +95,7 @@ def tract_variables(outputs, targets, phonemes, articulators, save_to=None):
 
 
 def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, device=None,
-             regularize_out=False, reconstruct_snail=False):
+             regularize_out=False):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -148,8 +149,7 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
                 phonemes,
                 saves_i_dir,
                 articulators,
-                regularize_out,
-                reconstruct_snail
+                regularize_out
             )
 
     mean_loss = np.mean(losses)
