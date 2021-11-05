@@ -1,3 +1,6 @@
+import pdb
+
+import funcy
 import numpy as np
 import pydicom
 import torch
@@ -38,13 +41,26 @@ class Video:
         return frame
 
     def get_audio_interval(self, start, end):
-        on_interval = filter(lambda d: start <= d[0] < end, self.audio)
-        audio_interval = torch.tensor([d[1] for d in on_interval])
+        on_interval = torch.tensor(
+            funcy.lfilter(lambda d: start <= d[0] < end, self.audio),
+            dtype=torch.float
+        )
 
-        return audio_interval
+        if len(on_interval) == 0:
+            return torch.tensor([], dtype=torch.float), torch.tensor([], dtype=torch.float)
+
+        time = on_interval[:, 0]
+        audio_interval = on_interval[:, 1]
+
+        return time, audio_interval
 
     def get_frames_interval(self, start, end, load_frames=False):
-        on_interval = filter(lambda d: start <= d[0] < end, self.frames_filepaths)
+        on_interval = funcy.lfilter(lambda d: start <= d[0] < end, self.frames_filepaths)
+
+        if len(on_interval) == 0:
+            return torch.tensor([], dtype=torch.float), []
+
+        time = torch.tensor([d[0] for d in on_interval], dtype=torch.float)
         frames_filepaths = [d[1] for d in on_interval]
 
         if load_frames:
@@ -52,10 +68,10 @@ class Video:
         else:
             frames = frames_filepaths
 
-        return frames
+        return time, frames
 
     def get_interval(self, start, end, load_frames=False):
-        audio_interval = self.get_audio_interval(start, end)
-        frames_interval = self.get_frames_interval(start, end, load_frames)
+        _, audio_interval = self.get_audio_interval(start, end)
+        _, frames_interval = self.get_frames_interval(start, end, load_frames)
 
         return audio_interval, frames_interval

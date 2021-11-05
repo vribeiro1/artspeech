@@ -152,7 +152,7 @@ def make_sentences_data(sequences, wav_suffix, textgrid_suffix, trs_suffix):
 
             [vocabulary.add(p["text"]) for p in phonemes]
 
-            frames = video.get_frames_interval(start_time, end_time)
+            _, frames = video.get_frames_interval(start_time, end_time)
             instance_numbers = funcy.lmap(get_instance_number_from_filepath, frames)
             contours = get_contours_for_frames(subject, sequence, instance_numbers)
 
