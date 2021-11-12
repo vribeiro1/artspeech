@@ -23,7 +23,7 @@ def assert_expression(expression, exception=AssertionError, message=""):
         raise exception(message)
 
 
-def npy_to_xarticul(array, filepath):
+def npy_to_xarticul(array, filepath=None):
     """
     Converts a numpy array of (x, y) coordinates into a file readable by Xarticul.
 
@@ -37,8 +37,11 @@ def npy_to_xarticul(array, filepath):
     pt_list.append("-1 -1")
 
     pt_string = "\n".join(pt_list)
-    with open(filepath, "w") as f:
-        f.write(pt_string)
+    if filepath is not None:
+        with open(filepath, "w") as f:
+            f.write(pt_string)
+
+    return pt_list
 
 
 def xarticul_to_npy(filepath):
