@@ -1,4 +1,7 @@
-import os
+"""
+The WaveGlow code inside this was extracted from NVIDIA's Waveglow repository, which is available
+at https://github.com/NVIDIA/waveglow.
+"""
 import torch
 
 from functools import lru_cache
