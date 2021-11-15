@@ -1,10 +1,7 @@
-import pdb
-
 import matplotlib.pyplot as plt
 import numpy as np
 import os
 import torch
-import torch.nn as nn
 
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
@@ -20,6 +17,7 @@ from articul_to_melspec import NVIDIA_TACOTRON2_WEIGHTS_FILEPATH
 from articul_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
 from articul_to_melspec.model import ArticulatorsEmbedding
 from articul_to_melspec.waveglow import melspec_to_audio
+from loss import Tacotron2Loss
 from helpers import set_seeds
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -45,16 +43,17 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
 
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for _, sentences, len_sentences, targets, len_targets in progress_bar:
+    for _, sentences, len_sentences, targets, gate_targets, len_targets in progress_bar:
         sentences = sentences.to(device)
         len_sentences = len_sentences.to(device)
         targets = targets.to(device)
+        gate_targets = gate_targets.to(device)
         len_targets = len_targets.to(device)
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
             outputs = model(sentences, len_sentences, targets, len_targets)
-            loss = criterion(outputs, targets)
+            loss = criterion(outputs, (targets, gate_targets))
 
             if training:
                 loss.backward()
@@ -84,23 +83,26 @@ def run_test(model, dataloader, criterion, device=None, save_to=None, sampling_r
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Running test")
 
-    for sentences_names, sentences, len_sentences, targets, _ in progress_bar:
+    for sentences_names, sentences, len_sentences, targets, gate_targets, len_targets in progress_bar:
         sentences = sentences.to(device)
         len_sentences = len_sentences.to(device)
         targets = targets.to(device)
+        gate_targets = gate_targets.to(device)
 
         with torch.set_grad_enabled(False):
-            outputs = model.infer(sentences, len_sentences)
-            loss = criterion(outputs, targets)
+            outputs = model(sentences, len_sentences, targets, len_targets)
+            loss = criterion(outputs, (targets, gate_targets))
+
+        mel_specs, mel_specs_postnet, gate_outputs, attn_weights = outputs
 
         losses.append(loss.item())
         progress_bar.set_postfix(loss=np.mean(losses))
 
         target_audios = melspec_to_audio(targets)
-        output_audios = melspec_to_audio(outputs)
+        output_audios = melspec_to_audio(mel_specs_postnet)
 
         for sentence_name, target_spec, target_audio, output_spec, output_audio in zip(
-            sentences_names, targets, target_audios, outputs, output_audios
+            sentences_names, targets, target_audios, mel_specs_postnet, output_audios
         ):
             target_spec = target_spec.cpu().detach().numpy()
             spec_save_filepath = os.path.join(save_to, f"{sentence_name}_ground_truth.pt")
@@ -184,13 +186,13 @@ def main(
     tacotron2_state_dict = torch.load(NVIDIA_TACOTRON2_WEIGHTS_FILEPATH, map_location=device)
     model.load_state_dict(tacotron2_state_dict)
 
-    model.embedding = ArticulatorsEmbedding(n_curves=len(articulators))
+    model.embedding = ArticulatorsEmbedding(n_curves=len(articulators), n_samples=50)
     if state_dict_fpath is not None:
         state_dict = torch.load(state_dict_fpath, map_location=device)
         model.load_state_dict(state_dict)
     model.to(device)
 
-    loss_fn = nn.L1Loss()
+    loss_fn = Tacotron2Loss()
     optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
 
@@ -266,7 +268,7 @@ def main(
     )
 
     best_model = Tacotron2()
-    best_model.embedding = ArticulatorsEmbedding(n_curves=len(articulators))
+    best_model.embedding = ArticulatorsEmbedding(n_curves=len(articulators), n_samples=50)
 
     state_dict = torch.load(best_model_path, map_location=device)
     best_model.load_state_dict(state_dict)

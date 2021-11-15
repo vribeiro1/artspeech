@@ -14,7 +14,6 @@ from torch.utils.data import Dataset
 from torchaudio.transforms import MelSpectrogram
 from tqdm import tqdm
 
-from articul_to_melspec.waveglow.tacotron2.audio_processing import dynamic_range_compression
 from video import Video
 
 DataItem = namedtuple("DataItem", [
@@ -25,26 +24,56 @@ DataItem = namedtuple("DataItem", [
 ])
 
 
+def dynamic_range_compression(x, C=1, clip_val=1e-5):
+    """
+    Tacotron2's dynamic range compression.
+
+    Args:
+    C: compression factor
+    """
+    return torch.log(torch.clamp(x, min=clip_val) * C)
+
+
+def dynamic_range_decompression(x, C=1):
+    """
+    Tacontron2's dynamic range decompression.
+
+    Args:
+    C: compression factor used to compress
+    """
+    return torch.exp(x) / C
+
+
 def pad_sequence_collate_fn(batch):
+    batch_size = len(batch)
     sentence_names = [item[0] for item in batch]
 
     sentence_articulators = [item[1] for item in batch]
     len_sentences = torch.tensor(funcy.lmap(len, sentence_articulators), dtype=torch.int)
+    len_sentences_sorted, sentences_sorted_indices = len_sentences.sort(descending=True)
     padded_sentence_articulators = pad_sequence(sentence_articulators, batch_first=True)
+    padded_sentence_articulators_sorted = padded_sentence_articulators[sentences_sorted_indices]
 
     targets = [item[2].T for item in batch]
     len_targets = torch.tensor(funcy.lmap(len, targets), dtype=torch.int)
+    len_targets_sorted = len_targets[sentences_sorted_indices]
     padded_targets = pad_sequence(targets, batch_first=True)
-    padded_targets = padded_targets.permute(0, 2, 1)
+    padded_targets_sorted = padded_targets[sentences_sorted_indices]
+    padded_targets_sorted = padded_targets_sorted.permute(0, 2, 1)
 
-    return sentence_names, padded_sentence_articulators, len_sentences, padded_targets, len_targets
+    padded_gate = torch.zeros(size=(batch_size, len_targets.max()), dtype=torch.float)
+    for i, len_target in enumerate(len_targets_sorted):
+        padded_gate[i][:len_target] = 1.
+
+    return sentence_names, padded_sentence_articulators_sorted, len_sentences_sorted, padded_targets_sorted, padded_gate, len_targets_sorted
 
 
 class ArticulToMelSpecDataset(Dataset):
     RES = 136.
     def __init__(
         self, datadir, sequences, articulators, fps_art=55, fps_spec=86, sync_shift=0,
-        sample_rate=16e3, n_fft=2048, hop_length=None, n_mels=80
+        sample_rate=16e3, n_fft=1024, win_length=1024, hop_length=256, n_mels=80,
+        f_min=0.0, f_max=None
     ):
         super(ArticulToMelSpecDataset, self).__init__()
 
@@ -57,7 +86,10 @@ class ArticulToMelSpecDataset(Dataset):
         self.mel_spectogram = MelSpectrogram(
             sample_rate=sample_rate,
             n_fft=n_fft,
+            win_length=win_length,
             hop_length=hop_length,
+            f_min=f_min,
+            f_max=f_max,
             n_mels=n_mels,
             normalized=True
         )
