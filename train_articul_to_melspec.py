@@ -10,15 +10,13 @@ from tensorboardX import SummaryWriter
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from torchaudio.models import Tacotron2
 from tqdm import tqdm
 
-from articul_to_melspec import NVIDIA_TACOTRON2_WEIGHTS_FILEPATH
 from articul_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
-from articul_to_melspec.model import ArticulatorsEmbedding
+from articul_to_melspec.model import ArticulatoryTacotron2
 from articul_to_melspec.waveglow import melspec_to_audio
 from loss import Tacotron2Loss
-from helpers import set_seeds
+from helpers import set_seeds, sequences_from_dict
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -128,19 +126,25 @@ def run_test(model, dataloader, criterion, device=None, save_to=None, sampling_r
             ax = plt.imshow(target_spec, origin="lower", aspect="auto", cmap="coolwarm")
             plt.colorbar(ax)
 
-            plt.title("Target MelSpectogram")
-            plt.xlabel("Frame")
-            plt.ylabel("Frequenct bin")
+            plt.title("Target MelSpectogram", fontsize=26)
+            plt.xlabel("Frame", fontsize=26)
+            plt.ylabel("Frequenct bin", fontsize=26)
             plt.grid()
+
+            plt.xticks(fontsize=18)
+            plt.yticks(fontsize=18)
 
             plt.subplot(2, 1, 2)
             ax = plt.imshow(output_spec, origin="lower", aspect="auto", cmap="coolwarm")
             plt.colorbar(ax)
 
-            plt.title("Predicted MelSpectogram")
-            plt.xlabel("Frame")
-            plt.ylabel("Frequenct bin")
+            plt.title("Predicted MelSpectogram", fontsize=26)
+            plt.xlabel("Frame", fontsize=26)
+            plt.ylabel("Frequenct bin", fontsize=26)
             plt.grid()
+
+            plt.xticks(fontsize=18)
+            plt.yticks(fontsize=18)
 
             plt.tight_layout()
             fig_save_filepath = os.path.join(save_to, f"{sentence_name}.jpg")
@@ -152,22 +156,6 @@ def run_test(model, dataloader, criterion, device=None, save_to=None, sampling_r
     }
 
     return info
-
-
-def sequences_from_dict(datadir, sequences_dict):
-    sequences = []
-    for subj, seqs in sequences_dict.items():
-        use_seqs = seqs
-        if len(seqs) == 0:
-            # Use all sequences
-            use_seqs = filter(
-                lambda s: os.path.isdir(os.path.join(datadir, subj, s)),
-                os.listdir(os.path.join(datadir, subj))
-            )
-
-        sequences.extend([(subj, seq) for seq in use_seqs])
-
-    return sequences
 
 
 @ex.automain
@@ -182,11 +170,7 @@ def main(
     best_model_path = os.path.join(fs_observer.dir, "best_model.pt")
     last_model_path = os.path.join(fs_observer.dir, "last_model.pt")
 
-    model = Tacotron2()
-    tacotron2_state_dict = torch.load(NVIDIA_TACOTRON2_WEIGHTS_FILEPATH, map_location=device)
-    model.load_state_dict(tacotron2_state_dict)
-
-    model.embedding = ArticulatorsEmbedding(n_curves=len(articulators), n_samples=50)
+    model = ArticulatoryTacotron2(n_articulators=len(articulators), n_samples=50)
     if state_dict_fpath is not None:
         state_dict = torch.load(state_dict_fpath, map_location=device)
         model.load_state_dict(state_dict)
@@ -198,6 +182,7 @@ def main(
 
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = ArticulToMelSpecDataset(datadir, train_sequences, articulators)
+    assert len(train_dataset) % batch_size > 1
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -208,6 +193,7 @@ def main(
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = ArticulToMelSpecDataset(datadir, valid_sequences, articulators)
+    assert len(valid_dataset) % batch_size > 1
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=batch_size,
@@ -261,15 +247,13 @@ def main(
     test_dataset = ArticulToMelSpecDataset(datadir, test_sequences, articulators)
     test_dataloader = DataLoader(
         test_dataset,
-        batch_size=batch_size,
+        batch_size=batch_size if len(test_sequences) % batch_size != 1 else batch_size - 1,
         shuffle=False,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )
 
-    best_model = Tacotron2()
-    best_model.embedding = ArticulatorsEmbedding(n_curves=len(articulators), n_samples=50)
-
+    best_model = ArticulatoryTacotron2(n_articulators=len(articulators), n_samples=50)
     state_dict = torch.load(best_model_path, map_location=device)
     best_model.load_state_dict(state_dict)
     best_model.to(device)
