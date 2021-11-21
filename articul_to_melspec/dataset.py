@@ -121,9 +121,14 @@ class ArticulToMelSpecDataset(Dataset):
 
             textgrid_filepath = os.path.join(seq_dir, f"vol_{subject}_{sequence}.textgrid")
             wav_filepath = os.path.join(seq_dir, f"vol_{subject}_{sequence}.wav")
-            frames_filepaths = sorted(glob(os.path.join(seq_dir, "dicoms", "*.dcm")))[sync_shift:]
 
-            video = Video(frames_filepaths, wav_filepath, framerate=framerate)
+            articul = articulators[0]
+            articul_filepaths = sorted(glob(os.path.join(seq_dir, "inference_contours", f"*_{articul}.npy")))
+            frames_references = funcy.lmap(
+                lambda fp: os.path.basename(fp).split("_")[0],
+                articul_filepaths
+            )
+            video = Video(frames_references, wav_filepath, framerate=framerate)
 
             textgrid = read_textgrid(textgrid_filepath)
             sentence_tier = textgrid.get_tier_by_name("SentenceTier")
@@ -134,9 +139,7 @@ class ArticulToMelSpecDataset(Dataset):
                 )
 
                 articul_filepaths = []
-                for filepath in frames_interval:
-                    filename, _ = os.path.basename(filepath).split(".")
-
+                for filename in frames_interval:
                     articul_filepaths.append({
                         articulator: os.path.join(
                             seq_dir,
