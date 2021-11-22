@@ -63,7 +63,7 @@ def pad_sequence_collate_fn(batch):
 
     padded_gate = torch.zeros(size=(batch_size, len_targets.max()), dtype=torch.float)
     for i, len_target in enumerate(len_targets_sorted):
-        padded_gate[i][:len_target] = 1.
+        padded_gate[i][len_target - 1:] = 1.
 
     return sentence_names, padded_sentence_articulators_sorted, len_sentences_sorted, padded_targets_sorted, padded_gate, len_targets_sorted
 
