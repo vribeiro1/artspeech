@@ -4,7 +4,6 @@ import torch
 import yaml
 
 from torch.utils.data import DataLoader
-from torchaudio.models import Tacotron2
 
 from articul_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
 from articul_to_melspec.evaluation import run_inference
