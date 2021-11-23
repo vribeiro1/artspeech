@@ -6,7 +6,7 @@ import torch
 
 from functools import lru_cache
 
-from articul_to_melspec import WAVEGLOW_WEIGHTS_FILEPATH
+from articul_to_melspec import NVIDIA_WAVEGLOW_WEIGHTS_FILEPATH
 from articul_to_melspec.waveglow.denoiser import Denoiser
 from articul_to_melspec.waveglow.glow import WaveGlow
 
@@ -30,7 +30,7 @@ def load_waveglow():
         WN_config=WN_config
     )
 
-    state_dict = torch.load(WAVEGLOW_WEIGHTS_FILEPATH, map_location=torch.device("cpu"))
+    state_dict = torch.load(NVIDIA_WAVEGLOW_WEIGHTS_FILEPATH, map_location=torch.device("cpu"))
     waveglow.load_state_dict(state_dict)
 
     waveglow = waveglow.remove_weightnorm(waveglow)
