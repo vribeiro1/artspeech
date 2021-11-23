@@ -1,5 +1,6 @@
 import funcy
 import numpy as np
+import os
 import random
 import torch
 
@@ -57,3 +58,19 @@ def xarticul_to_npy(filepath):
 
     data = funcy.lmap(lambda x: funcy.lmap(float, x), map(str.split, lines))
     return np.array(data)
+
+
+def sequences_from_dict(datadir, sequences_dict):
+    sequences = []
+    for subj, seqs in sequences_dict.items():
+        use_seqs = seqs
+        if len(seqs) == 0:
+            # Use all sequences
+            use_seqs = filter(
+                lambda s: os.path.isdir(os.path.join(datadir, subj, s)),
+                os.listdir(os.path.join(datadir, subj))
+            )
+
+        sequences.extend([(subj, seq) for seq in use_seqs])
+
+    return sequences

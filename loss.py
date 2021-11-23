@@ -51,3 +51,26 @@ def pearsons_correlation(outputs, targets):
     y_corr = torch.sum(vy_outputs * vy_targets, dim=1) / (torch.sqrt(torch.sum(vy_outputs ** 2, dim=1)) * torch.sqrt(torch.sum(vy_targets ** 2, dim=1)) + eps)
 
     return x_corr, y_corr
+
+
+class Tacotron2Loss(nn.Module):
+    def __init__(self):
+        super(Tacotron2Loss, self).__init__()
+
+        self.mel_loss_fn = nn.MSELoss()
+        self.gate_loss_fn = nn.BCEWithLogitsLoss()
+
+    def forward(self, outputs, targets):
+        mel_spec_targets, gate_targets = targets
+        mel_spec_targets.requires_grad = False
+        gate_targets.requires_grad = False
+        gate_targets = gate_targets.view(-1, 1)
+
+        mel_specs, mel_specs_postnet, gate_outputs, _ = outputs
+        gate_outputs = gate_outputs.view(-1, 1)
+
+        mel_loss = self.mel_loss_fn(mel_specs, mel_spec_targets)
+        mel_loss_postnet = self.mel_loss_fn(mel_specs_postnet, mel_spec_targets)
+        gate_loss = self.gate_loss_fn(gate_outputs, gate_targets)
+
+        return mel_loss + mel_loss_postnet + gate_loss
