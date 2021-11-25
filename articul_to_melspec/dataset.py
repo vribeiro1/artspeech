@@ -1,12 +1,18 @@
-import pdb
+from gevent import monkey
+monkey.patch_all()
 
 import funcy
+import gevent
+import logging
 import numpy as np
 import os
+import sys
 import torch
 import torch.nn.functional as F
+import re
 
 from collections import namedtuple
+from gevent.pool import Pool
 from glob import glob
 from tgt.io import read_textgrid
 from torch.nn.utils.rnn import pad_sequence
@@ -16,11 +22,13 @@ from tqdm import tqdm
 
 from video import Video
 
+MAX_GREENLETS = 5
+
 DataItem = namedtuple("DataItem", [
     "sentence_name",
     "n_frames",
     "audio",
-    "articul_filepaths"
+    "articulators_filepaths"
 ])
 
 
@@ -73,15 +81,15 @@ class ArticulToMelSpecDataset(Dataset):
     def __init__(
         self, datadir, sequences, articulators, fps_art=55, fps_spec=86, sync_shift=0,
         sample_rate=16e3, n_fft=1024, win_length=1024, hop_length=256, n_mels=80,
-        f_min=0.0, f_max=None
+        f_min=0.0, f_max=None, n_greenlets=MAX_GREENLETS
     ):
         super(ArticulToMelSpecDataset, self).__init__()
 
         self.datadir = datadir
-        self.data = self._collect_data(datadir, sequences, articulators, sync_shift, fps_art)
+        self.data = self._collect_data(datadir, sequences, sync_shift, fps_art)
 
         self.interp_factor = fps_spec / fps_art
-        self.n_articulators = len(articulators)
+        self.articulators = articulators
 
         self.mel_spectogram = MelSpectrogram(
             sample_rate=sample_rate,
@@ -94,27 +102,42 @@ class ArticulToMelSpecDataset(Dataset):
             normalized=True
         )
 
+        if n_greenlets > MAX_GREENLETS:
+            logging.warning(
+                f"Number of loading processes set to a value greater than the maximum allowed."
+                "Clipping to {MAX_LOAD_PROC}."
+            )
+        n_greenlets = n_greenlets or MAX_GREENLETS
+        self.n_greenlets = min(n_greenlets, MAX_GREENLETS)
 
-    @staticmethod
-    def load_target_array(filepath):
+    def load_frame_articulators(self, filepath):
         """
         Loads the target array with the proper orientation (right to left).
 
         Args:
         filepath (str): Path to the npy array.
         """
-        target_array = np.load(filepath) / ArticulToMelSpecDataset.RES
+        frame_articulators = torch.zeros(size=(0, 2, 50))
+        target_dict = np.load(filepath, allow_pickle=True).item()
 
-        # All the countors should be oriented from right to left. If it is the opposite,
-        # we flip the array.
-        if target_array[0][0] < target_array[-1][0]:
-            target_array = np.flip(target_array, axis=0)
+        for articulator in self.articulators:
+            articulator_array = target_dict[articulator] / ArticulToMelSpecDataset.RES
 
-        return target_array.copy()
+            # All the countors should be oriented from right to left. If it is the opposite,
+            # we flip the array.
+            if articulator_array[0][0] < articulator_array[-1][0]:
+                articulator_array = np.flip(articulator_array, axis=0)
+            articulator_array = torch.tensor(articulator_array.copy(), dtype=torch.float).T
 
+            frame_articulators = torch.cat([
+                frame_articulators,
+                articulator_array.unsqueeze(dim=0)
+            ])
+
+        return frame_articulators
 
     @staticmethod
-    def _collect_data(datadir, sequences, articulators, sync_shift, framerate):
+    def _collect_data(datadir, sequences, sync_shift, framerate):
         data = []
         for subject, sequence in tqdm(sequences, desc="Collecting data"):
             seq_dir = os.path.join(datadir, subject, sequence)
@@ -122,45 +145,40 @@ class ArticulToMelSpecDataset(Dataset):
             textgrid_filepath = os.path.join(seq_dir, f"vol_{subject}_{sequence}.textgrid")
             wav_filepath = os.path.join(seq_dir, f"vol_{subject}_{sequence}.wav")
 
-            articul = articulators[0]
-            articul_filepaths = sorted(glob(os.path.join(seq_dir, "inference_contours", f"*_{articul}.npy")))
-            frames_references = funcy.lmap(
-                lambda fp: os.path.basename(fp).split("_")[0],
-                articul_filepaths
-            )
-            video = Video(frames_references, wav_filepath, framerate=framerate)
+            articul_filepaths = sorted(filter(
+                lambda fp: re.match(r"^[0-9]{4}.npy", os.path.basename(fp)) is not None,
+                glob(os.path.join(seq_dir, "inference_contours", f"*.npy"))
+            ))
+            video = Video(articul_filepaths[sync_shift:], wav_filepath, framerate=framerate)
 
             textgrid = read_textgrid(textgrid_filepath)
             sentence_tier = textgrid.get_tier_by_name("SentenceTier")
             for i, sentence in enumerate(sentence_tier):
-                audio_interval, frames_interval = video.get_interval(
+                audio_interval, articulators_filepaths = video.get_interval(
                     sentence.start_time,
                     sentence.end_time
                 )
-
-                articul_filepaths = []
-                for filename in frames_interval:
-                    articul_filepaths.append({
-                        articulator: os.path.join(
-                            seq_dir,
-                            "inference_contours",
-                            f"{filename}_{articulator}.npy"
-                        ) for articulator in sorted(articulators)
-                    })
 
                 wav_filename, _  = os.path.basename(wav_filepath).split(".")
                 sentence_name = f"{wav_filename}_{i}"
 
                 data_item = DataItem(
                     sentence_name=sentence_name,
-                    n_frames=len(frames_interval),
+                    n_frames=len(articul_filepaths),
                     audio=audio_interval,
-                    articul_filepaths=articul_filepaths
+                    articulators_filepaths=articulators_filepaths
                 )
 
                 data.append(data_item)
 
         return data
+
+    def load_with_greenlets(self, articulators_filepaths):
+        pool = Pool(self.n_greenlets)
+        tasks = [pool.spawn(self.load_frame_articulators, fp) for fp in articulators_filepaths]
+        gevent.joinall(tasks)
+
+        return [task.value for task in tasks]
 
     def __len__(self):
         return len(self.data)
@@ -168,21 +186,11 @@ class ArticulToMelSpecDataset(Dataset):
     def __getitem__(self, index):
         data_item = self.data[index]
 
-        sentence_articulators = torch.zeros(size=(0, self.n_articulators, 2, 50))
-        for frame_articulators_fps in data_item.articul_filepaths:
-            frame_articulators = torch.zeros(size=(0, 2, 50))
-
-            for _, filepath in sorted(frame_articulators_fps.items(), key=lambda t: t[0]):
-                articul_arr = torch.tensor(self.load_target_array(filepath).T, dtype=torch.float)
-                frame_articulators = torch.cat([
-                    frame_articulators,
-                    articul_arr.unsqueeze(dim=0)
-                ])
-
-            sentence_articulators = torch.cat([
-                sentence_articulators,
-                frame_articulators.unsqueeze(dim=0)
-            ])
+        if self.n_greenlets == 0:
+            sentence_articulators = funcy.lmap(self.load_frame_articulators, data_item.articulators_filepaths)
+        else:
+            sentence_articulators = self.load_with_greenlets(data_item.articulators_filepaths)
+        sentence_articulators = torch.stack(sentence_articulators)
 
         melspec = self.mel_spectogram(data_item.audio)
         melspec = dynamic_range_compression(melspec)

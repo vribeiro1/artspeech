@@ -1,3 +1,4 @@
+import logging
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -42,32 +43,34 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
     for _, sentences, len_sentences, targets, gate_targets, len_targets in progress_bar:
-        sentences = sentences.to(device)
-        len_sentences = len_sentences.to(device)
-        targets = targets.to(device)
-        gate_targets = gate_targets.to(device)
-        len_targets = len_targets.to(device)
+        # sentences = sentences.to(device)
+        # len_sentences = len_sentences.to(device)
+        # targets = targets.to(device)
+        # gate_targets = gate_targets.to(device)
+        # len_targets = len_targets.to(device)
 
-        optimizer.zero_grad()
-        with torch.set_grad_enabled(training):
-            outputs = model(sentences, len_sentences, targets, len_targets)
-            loss = criterion(outputs, (targets, gate_targets))
+        # optimizer.zero_grad()
+        # with torch.set_grad_enabled(training):
+        #     outputs = model(sentences, len_sentences, targets, len_targets)
+        #     loss = criterion(outputs, (targets, gate_targets))
 
-            if training:
-                loss.backward()
-                optimizer.step()
+        #     if training:
+        #         loss.backward()
+        #         optimizer.step()
 
-        losses.append(loss.item())
-        progress_bar.set_postfix(loss=np.mean(losses))
+        # losses.append(loss.item())
+        # progress_bar.set_postfix(loss=np.mean(losses))
+        pass
 
-    mean_loss = np.mean(losses)
-    loss_tag = f"{phase}/loss"
-    if writer is not None:
-        writer.add_scalar(loss_tag, mean_loss, epoch)
+    # mean_loss = np.mean(losses)
+    # loss_tag = f"{phase}/loss"
+    # if writer is not None:
+    #     writer.add_scalar(loss_tag, mean_loss, epoch)
 
-    info = {
-        "loss": mean_loss
-    }
+    # info = {
+    #     "loss": mean_loss
+    # }
+    info = {"loss": 0.}
 
     return info
 
@@ -164,7 +167,9 @@ def main(
     train_seq_dict, valid_seq_dict, test_seq_dict,
     articulators, state_dict_fpath=None
 ):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
+    logging.info(f"Running on '{device.type}'")
 
     writer = SummaryWriter(os.path.join(fs_observer.dir, f"experiment"))
     best_model_path = os.path.join(fs_observer.dir, "best_model.pt")
@@ -182,7 +187,7 @@ def main(
 
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = ArticulToMelSpecDataset(datadir, train_sequences, articulators)
-    assert len(train_dataset) % batch_size > 1
+    # assert len(train_dataset) % batch_size > 1
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -193,7 +198,7 @@ def main(
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = ArticulToMelSpecDataset(datadir, valid_sequences, articulators)
-    assert len(valid_dataset) % batch_size > 1
+    # assert len(valid_dataset) % batch_size > 1
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=batch_size,

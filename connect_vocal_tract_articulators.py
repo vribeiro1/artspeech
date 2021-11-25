@@ -6,6 +6,7 @@ import numpy as np
 from copy import deepcopy
 from vt_tracker.metrics import distance_matrix, euclidean
 
+from dataset import ArtSpeechDataset
 from reconstruct_snail import reconstruct_snail_from_midline
 
 RES = 136
@@ -105,13 +106,13 @@ def load_articulator_arrays(articulators_filepaths):
     """
     # Load soft palate and reconstruct snail
     fp_soft_palate = articulators_filepaths["soft-palate"]
-    midline_soft_palate = np.load(fp_soft_palate)
+    midline_soft_palate = ArtSpeechDataset.load_target_array(fp_soft_palate)
     params_soft_palate = SNAIL_PARAMETERS["soft-palate"]
     snail_soft_palate = reconstruct_snail_from_midline(midline_soft_palate, **params_soft_palate)
 
     # Load epiglottis and reconstruct snail
     fp_epiglottis = articulators_filepaths["epiglottis"]
-    midline_epiglottis = np.load(fp_epiglottis)
+    midline_epiglottis = ArtSpeechDataset.load_target_array(fp_epiglottis)
     params_epiglottis = SNAIL_PARAMETERS["epiglottis"]
     snail_epiglottis = reconstruct_snail_from_midline(midline_epiglottis, **params_epiglottis)
 
@@ -119,7 +120,7 @@ def load_articulator_arrays(articulators_filepaths):
     articulators_arrays = {}
     for articulator, fp_articulator in articulators_filepaths.items():
         if articulator not in SNAIL_PARAMETERS:
-            articulators_arrays[articulator] = np.load(fp_articulator)
+            articulators_arrays[articulator] = ArtSpeechDataset.load_target_array(fp_articulator)
 
     articulators_arrays["soft-palate"] = snail_soft_palate
     articulators_arrays["epiglottis"] = snail_epiglottis
