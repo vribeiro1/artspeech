@@ -2,11 +2,9 @@ from gevent import monkey
 monkey.patch_all()
 
 import funcy
-import gevent
 import logging
 import numpy as np
 import os
-import sys
 import torch
 import torch.nn.functional as F
 import re
@@ -175,10 +173,9 @@ class ArticulToMelSpecDataset(Dataset):
 
     def load_with_greenlets(self, articulators_filepaths):
         pool = Pool(self.n_greenlets)
-        tasks = [pool.spawn(self.load_frame_articulators, fp) for fp in articulators_filepaths]
-        gevent.joinall(tasks)
+        sentence_articulators = pool.map(self.load_frame_articulators, articulators_filepaths)
 
-        return [task.value for task in tasks]
+        return sentence_articulators
 
     def __len__(self):
         return len(self.data)

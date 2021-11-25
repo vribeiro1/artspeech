@@ -43,34 +43,32 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
     for _, sentences, len_sentences, targets, gate_targets, len_targets in progress_bar:
-        # sentences = sentences.to(device)
-        # len_sentences = len_sentences.to(device)
-        # targets = targets.to(device)
-        # gate_targets = gate_targets.to(device)
-        # len_targets = len_targets.to(device)
+        sentences = sentences.to(device)
+        len_sentences = len_sentences.to(device)
+        targets = targets.to(device)
+        gate_targets = gate_targets.to(device)
+        len_targets = len_targets.to(device)
 
-        # optimizer.zero_grad()
-        # with torch.set_grad_enabled(training):
-        #     outputs = model(sentences, len_sentences, targets, len_targets)
-        #     loss = criterion(outputs, (targets, gate_targets))
+        optimizer.zero_grad()
+        with torch.set_grad_enabled(training):
+            outputs = model(sentences, len_sentences, targets, len_targets)
+            loss = criterion(outputs, (targets, gate_targets))
 
-        #     if training:
-        #         loss.backward()
-        #         optimizer.step()
+            if training:
+                loss.backward()
+                optimizer.step()
 
-        # losses.append(loss.item())
-        # progress_bar.set_postfix(loss=np.mean(losses))
-        pass
+        losses.append(loss.item())
+        progress_bar.set_postfix(loss=np.mean(losses))
 
-    # mean_loss = np.mean(losses)
-    # loss_tag = f"{phase}/loss"
-    # if writer is not None:
-    #     writer.add_scalar(loss_tag, mean_loss, epoch)
+    mean_loss = np.mean(losses)
+    loss_tag = f"{phase}/loss"
+    if writer is not None:
+        writer.add_scalar(loss_tag, mean_loss, epoch)
 
-    # info = {
-    #     "loss": mean_loss
-    # }
-    info = {"loss": 0.}
+    info = {
+        "loss": mean_loss
+    }
 
     return info
 
