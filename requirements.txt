@@ -1,5 +1,4 @@
 funcy
-gevent
 librosa
 matplotlib
 numpy==1.20

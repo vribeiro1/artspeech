@@ -165,8 +165,7 @@ def main(
     train_seq_dict, valid_seq_dict, test_seq_dict,
     articulators, state_dict_fpath=None
 ):
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
 
     writer = SummaryWriter(os.path.join(fs_observer.dir, f"experiment"))
@@ -185,7 +184,7 @@ def main(
 
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = ArticulToMelSpecDataset(datadir, train_sequences, articulators)
-    # assert len(train_dataset) % batch_size > 1
+    assert len(train_dataset) % batch_size > 1
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch_size,
@@ -196,7 +195,7 @@ def main(
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = ArticulToMelSpecDataset(datadir, valid_sequences, articulators)
-    # assert len(valid_dataset) % batch_size > 1
+    assert len(valid_dataset) % batch_size > 1
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=batch_size,

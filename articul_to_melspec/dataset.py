@@ -1,8 +1,4 @@
-from gevent import monkey
-monkey.patch_all()
-
 import funcy
-import logging
 import numpy as np
 import os
 import torch
@@ -10,7 +6,6 @@ import torch.nn.functional as F
 import re
 
 from collections import namedtuple
-from gevent.pool import Pool
 from glob import glob
 from tgt.io import read_textgrid
 from torch.nn.utils.rnn import pad_sequence
@@ -19,8 +14,6 @@ from torchaudio.transforms import MelSpectrogram
 from tqdm import tqdm
 
 from video import Video
-
-MAX_GREENLETS = 5
 
 DataItem = namedtuple("DataItem", [
     "sentence_name",
@@ -79,7 +72,7 @@ class ArticulToMelSpecDataset(Dataset):
     def __init__(
         self, datadir, sequences, articulators, fps_art=55, fps_spec=86, sync_shift=0,
         sample_rate=16e3, n_fft=1024, win_length=1024, hop_length=256, n_mels=80,
-        f_min=0.0, f_max=None, n_greenlets=MAX_GREENLETS
+        f_min=0.0, f_max=None
     ):
         super(ArticulToMelSpecDataset, self).__init__()
 
@@ -99,14 +92,6 @@ class ArticulToMelSpecDataset(Dataset):
             n_mels=n_mels,
             normalized=True
         )
-
-        if n_greenlets > MAX_GREENLETS:
-            logging.warning(
-                f"Number of loading processes set to a value greater than the maximum allowed."
-                "Clipping to {MAX_LOAD_PROC}."
-            )
-        n_greenlets = n_greenlets or MAX_GREENLETS
-        self.n_greenlets = min(n_greenlets, MAX_GREENLETS)
 
     def load_frame_articulators(self, filepath):
         """
@@ -171,22 +156,16 @@ class ArticulToMelSpecDataset(Dataset):
 
         return data
 
-    def load_with_greenlets(self, articulators_filepaths):
-        pool = Pool(self.n_greenlets)
-        sentence_articulators = pool.map(self.load_frame_articulators, articulators_filepaths)
-
-        return sentence_articulators
-
     def __len__(self):
         return len(self.data)
 
     def __getitem__(self, index):
         data_item = self.data[index]
 
-        if self.n_greenlets == 0:
-            sentence_articulators = funcy.lmap(self.load_frame_articulators, data_item.articulators_filepaths)
-        else:
-            sentence_articulators = self.load_with_greenlets(data_item.articulators_filepaths)
+        sentence_articulators = funcy.lmap(
+            self.load_frame_articulators,
+            data_item.articulators_filepaths
+        )
         sentence_articulators = torch.stack(sentence_articulators)
 
         melspec = self.mel_spectogram(data_item.audio)
