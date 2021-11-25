@@ -1,7 +1,8 @@
 funcy
+gevent
 librosa
 matplotlib
-numpy
+numpy==1.20
 opencv-python
 pandas
 pydicom
