@@ -163,7 +163,7 @@ def run_test(model, dataloader, criterion, device=None, save_to=None, sampling_r
 def main(
     _run, datadir, batch_size, n_epochs, patience, learning_rate, weight_decay,
     train_seq_dict, valid_seq_dict, test_seq_dict,
-    articulators, state_dict_fpath=None
+    articulators, num_workers=4, state_dict_fpath=None
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
@@ -189,6 +189,7 @@ def main(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
+        num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )
@@ -200,6 +201,7 @@ def main(
         valid_dataset,
         batch_size=batch_size,
         shuffle=False,
+        num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )
@@ -251,6 +253,7 @@ def main(
         test_dataset,
         batch_size=batch_size if len(test_sequences) % batch_size != 1 else batch_size - 1,
         shuffle=False,
+        num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )

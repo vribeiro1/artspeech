@@ -1,4 +1,7 @@
+import pdb
+
 import funcy
+from funcy.seqs import first
 import numpy as np
 import os
 import torch
@@ -14,6 +17,9 @@ from torchaudio.transforms import MelSpectrogram
 from tqdm import tqdm
 
 from video import Video
+
+Interval = namedtuple("Interval", ("start_time", "end_time"))
+IntervalTier = namedtuple("IntervalTier", ("start_time", "end_time", "name", "objects"))
 
 DataItem = namedtuple("DataItem", [
     "sentence_name",
@@ -69,6 +75,8 @@ def pad_sequence_collate_fn(batch):
 
 class ArticulToMelSpecDataset(Dataset):
     RES = 136.
+    MAX_LENGTH_SEC = 5
+    OVERLAP_LEGTH_SEC = 0.5
     def __init__(
         self, datadir, sequences, articulators, fps_art=55, fps_spec=86, sync_shift=0,
         sample_rate=16e3, n_fft=1024, win_length=1024, hop_length=256, n_mels=80,
@@ -120,6 +128,45 @@ class ArticulToMelSpecDataset(Dataset):
         return frame_articulators
 
     @staticmethod
+    def trim_interval(interval):
+        interval_length = interval.end_time - interval.start_time
+        if interval_length > ArticulToMelSpecDataset.MAX_LENGTH_SEC:
+            midpoint = interval.start_time + (interval.end_time - interval.start_time) / 2
+
+            first_half_start = interval.start_time
+            first_half_end = midpoint + ArticulToMelSpecDataset.OVERLAP_LEGTH_SEC
+            first_half = Interval(start_time=first_half_start, end_time=first_half_end)
+
+            second_half_start = midpoint - ArticulToMelSpecDataset.OVERLAP_LEGTH_SEC
+            second_half_end = interval.end_time
+            second_half = Interval(start_time=second_half_start, end_time=second_half_end)
+
+            first_half = ArticulToMelSpecDataset.trim_interval(first_half)
+            second_half = ArticulToMelSpecDataset.trim_interval(second_half)
+            trimmed_intervals = (
+                [interval for interval in first_half] +
+                [interval for interval in second_half]
+            )
+
+            return trimmed_intervals
+        else:
+            return [Interval(start_time=interval.start_time, end_time=interval.end_time)]
+
+    @staticmethod
+    def trim_sentence_tier(sentence_tier):
+        trimmed_intervals = []
+        for interval in sentence_tier:
+            trimmed_intervals.extend(ArticulToMelSpecDataset.trim_interval(interval))
+
+        return IntervalTier(
+            start_time=sentence_tier.start_time,
+            end_time=sentence_tier.end_time,
+            name=sentence_tier.name,
+            objects=trimmed_intervals
+        )
+
+
+    @staticmethod
     def _collect_data(datadir, sequences, sync_shift, framerate):
         data = []
         for subject, sequence in tqdm(sequences, desc="Collecting data"):
@@ -136,7 +183,9 @@ class ArticulToMelSpecDataset(Dataset):
 
             textgrid = read_textgrid(textgrid_filepath)
             sentence_tier = textgrid.get_tier_by_name("SentenceTier")
-            for i, sentence in enumerate(sentence_tier):
+            trimmed_sentence_tier = ArticulToMelSpecDataset.trim_sentence_tier(sentence_tier)
+
+            for i, sentence in enumerate(trimmed_sentence_tier.objects):
                 audio_interval, articulators_filepaths = video.get_interval(
                     sentence.start_time,
                     sentence.end_time
@@ -147,7 +196,7 @@ class ArticulToMelSpecDataset(Dataset):
 
                 data_item = DataItem(
                     sentence_name=sentence_name,
-                    n_frames=len(articul_filepaths),
+                    n_frames=len(articulators_filepaths),
                     audio=audio_interval,
                     articulators_filepaths=articulators_filepaths
                 )
