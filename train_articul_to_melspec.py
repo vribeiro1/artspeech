@@ -6,7 +6,6 @@ import torch
 
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
-from scipy.io import wavfile
 from tensorboardX import SummaryWriter
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
@@ -15,7 +14,6 @@ from tqdm import tqdm
 
 from articul_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
 from articul_to_melspec.model import ArticulatoryTacotron2
-from articul_to_melspec.waveglow import melspec_to_audio
 from loss import Tacotron2Loss
 from helpers import set_seeds, sequences_from_dict
 
@@ -97,29 +95,14 @@ def run_test(model, dataloader, criterion, device=None, save_to=None, sampling_r
         losses.append(loss.item())
         progress_bar.set_postfix(loss=np.mean(losses))
 
-        target_audios = melspec_to_audio(targets)
-        output_audios = melspec_to_audio(mel_specs_postnet)
-
-        for sentence_name, target_spec, target_audio, output_spec, output_audio in zip(
-            sentences_names, targets, target_audios, mel_specs_postnet, output_audios
-        ):
+        for sentence_name, target_spec, output_spec in zip(sentences_names, targets, mel_specs_postnet):
             target_spec = target_spec.cpu().detach().numpy()
             spec_save_filepath = os.path.join(save_to, f"{sentence_name}_ground_truth.pt")
             torch.save(target_spec, spec_save_filepath)
 
-            target_audio = target_audio.cpu().numpy()
-            target_audio = target_audio.astype("int16")
-            audio_save_filepath = os.path.join(save_to, f"{sentence_name}_ground_truth.wav")
-            wavfile.write(audio_save_filepath, sampling_rate, target_audio)
-
             output_spec = output_spec.cpu().detach().numpy()
             spec_save_filepath = os.path.join(save_to, f"{sentence_name}.pt")
             torch.save(output_spec, spec_save_filepath)
-
-            output_audio = output_audio.cpu().numpy()
-            output_audio = output_audio.astype("int16")
-            audio_save_filepath = os.path.join(save_to, f"{sentence_name}.wav")
-            wavfile.write(audio_save_filepath, sampling_rate, output_audio)
 
             plt.figure(figsize=(20, 20))
 
@@ -251,7 +234,7 @@ def main(
     test_dataset = ArticulToMelSpecDataset(datadir, test_sequences, articulators)
     test_dataloader = DataLoader(
         test_dataset,
-        batch_size=batch_size if len(test_sequences) % batch_size != 1 else batch_size - 1,
+        batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
         worker_init_fn=set_seeds,

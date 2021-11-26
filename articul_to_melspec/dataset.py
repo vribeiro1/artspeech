@@ -1,7 +1,6 @@
 import pdb
 
 import funcy
-from funcy.seqs import first
 import numpy as np
 import os
 import torch
@@ -88,7 +87,7 @@ class ArticulToMelSpecDataset(Dataset):
         self.data = self._collect_data(datadir, sequences, sync_shift, fps_art)
 
         self.interp_factor = fps_spec / fps_art
-        self.articulators = articulators
+        self.articulators = sorted(articulators)
 
         self.mel_spectogram = MelSpectrogram(
             sample_rate=sample_rate,
