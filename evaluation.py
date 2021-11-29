@@ -25,13 +25,13 @@ def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_o
 
             if regularize_out:
                 resX, resY = regularize_Bsplines(pred_art_arr.transpose(1, 0), 3)
-                pred_art_arr = np.array([resX, resY])
+                pred_art_arr = np.array([resX, resY]).T
 
-            pred_npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}.npy")
+            pred_npy_filepath = os.path.join(save_to, f"{j}_{art}.npy")
             with open(pred_npy_filepath, "wb") as f:
                 np.save(f, pred_art_arr)
 
-            true_npy_filepath = os.path.join(save_to, "contours", f"{j}_{art}_true.npy")
+            true_npy_filepath = os.path.join(save_to, f"{j}_{art}_true.npy")
             with open(true_npy_filepath, "wb") as f:
                 np.save(f, true_art_arr)
 
@@ -147,7 +147,7 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
                 outputs.detach().cpu(),
                 targets.detach().cpu(),
                 phonemes,
-                saves_i_dir,
+                os.path.join(saves_i_dir, "contours"),
                 articulators,
                 regularize_out
             )
