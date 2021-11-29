@@ -26,9 +26,9 @@ def run_inference(model, dataloader, device=None, save_to=None, sampling_rate=22
             melspecs, len_melspecs, attn_weights = model.infer(sentences, len_sentences)
 
             for (
-                sentence_name, melspec, len_melspec, target, len_target
+                sentence_name, melspec, len_melspec, target, len_target, attn_weights_
             ) in zip(
-                sentences_names, melspecs, len_melspecs, targets, len_targets
+                sentences_names, melspecs, len_melspecs, targets, len_targets, attn_weights
             ):
                 output_melspec = melspec[:, :len_melspec]
                 target_melspec = target[:, :len_target]
@@ -49,6 +49,28 @@ def run_inference(model, dataloader, device=None, save_to=None, sampling_rate=22
 
                 output_melspec = output_melspec.cpu().detach().numpy()
                 target_melspec = target_melspec.cpu().detach().numpy()
+                attn_weights_ = attn_weights_.cpu().detach().numpy()
+
+                plt.figure(figsize=(10, 10))
+
+                plt.imshow(attn_weights_.T, origin="lower", aspect="auto")
+
+                plt.title("Attention weights", fontsize=22)
+                plt.xlabel("Spectogram Frames", fontsize=22)
+                plt.ylabel("VT shape frames", fontsize=22)
+
+                plt.xticks(fontsize=16)
+                plt.yticks(fontsize=16)
+
+                plt.grid(which="major")
+                plt.grid(which="minor", linestyle="--", alpha=0.4)
+                plt.minorticks_on()
+
+                plt.tight_layout()
+                if save_to is not None:
+                    fig_save_filepath = os.path.join(save_to, f"{sentence_name}_attn_weights.jpg")
+                    plt.savefig(fig_save_filepath)
+                plt.close()
 
                 plt.figure(figsize=(20, 10))
 
