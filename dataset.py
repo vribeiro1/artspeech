@@ -6,7 +6,7 @@ import numpy as np
 import os
 import torch
 
-from functools import reduce
+from functools import lru_cache, reduce
 from torch.utils.data import Dataset
 
 from bs_regularization import regularize_Bsplines
@@ -185,6 +185,8 @@ class TailClipper:
 
 
 class ArtSpeechDataset(Dataset):
+    RES = 136
+    N_SAMPLES = 50
     def __init__(
         self, datadir, filepath, vocabulary, articulators, n_samples=50, size=136,
         lazy_load=False, p_aug=0., clip_tails=False
@@ -239,12 +241,15 @@ class ArtSpeechDataset(Dataset):
         return frame_keys
 
     @staticmethod
+    @lru_cache()
     def load_target_array(filepath):
         """
         Loads the target array with the proper orientation (right to left)
         """
-
         target_array = np.load(filepath)
+        n_rows, n_cols = target_array.shape
+        if n_rows == 2:
+            target_array = target_array.T
 
         # All the countors should be oriented from right to left. If it is the opposite,
         # we flip the array.
@@ -252,6 +257,50 @@ class ArtSpeechDataset(Dataset):
             target_array = np.flip(target_array, axis=0)
 
         return target_array.copy()
+
+    @staticmethod
+    def load_frame_targets(datadir, frame_targets_filepaths, articulators, clip_tails=False):
+        # References for tail clipping
+        if clip_tails:
+            lower_incisor_fp = os.path.join(datadir, frame_targets_filepaths["lower-incisor"])
+            lower_incisor = ArtSpeechDataset.load_target_array(lower_incisor_fp)
+
+            upper_incisor_fp = os.path.join(datadir, frame_targets_filepaths["upper-incisor"])
+            upper_incisor = ArtSpeechDataset.load_target_array(upper_incisor_fp)
+
+            epiglottis_fp = os.path.join(datadir, frame_targets_filepaths["epiglottis"])
+            epiglottis = ArtSpeechDataset.load_target_array(epiglottis_fp)
+        else:
+            lower_incisor = upper_incisor = epiglottis = None
+
+        frame_targets = torch.zeros(size=(0, 2, ArtSpeechDataset.N_SAMPLES))
+        for art, contour_fp in sorted(frame_targets_filepaths.items(), key=lambda t: t[0]):
+            if art not in articulators:
+                continue
+
+            abs_contour_fp = os.path.join(datadir, contour_fp)
+            contour_arr = ArtSpeechDataset.load_target_array(abs_contour_fp)
+
+            if clip_tails:
+                tail_clip_method = getattr(
+                    TailClipper, f"clip_{art.replace('-', '_')}_tails", None
+                )
+
+                if tail_clip_method:
+                    contour_arr = tail_clip_method(
+                        contour_arr,
+                        lower_incisor=lower_incisor,
+                        upper_incisor=upper_incisor,
+                        epiglottis=epiglottis
+                    )
+
+            contour = torch.from_numpy(contour_arr) / ArtSpeechDataset.RES  # torch.Size([self.n_samples, 2])
+            contour = contour.transpose(1, 0)  # torch.Size([2, self.n_samples])
+            contour = contour.unsqueeze(dim=0)  # torch.Size([1, 2, self.n_samples]
+
+            frame_targets = torch.cat([frame_targets, contour])
+
+        return frame_targets
 
     def _exclude_missing_data(self, item):
         """
@@ -300,45 +349,12 @@ class ArtSpeechDataset(Dataset):
             for frame_key in phoneme_frame_keys:
                 frame_contours_filepaths = contours_filepaths[frame_key]
 
-                # References for tail clipping
-                if self.clip_tails:
-                    lower_incisor_fp = os.path.join(self.datadir, frame_contours_filepaths["lower-incisor"])
-                    lower_incisor = self.load_target_array(lower_incisor_fp)
-
-                    upper_incisor_fp = os.path.join(self.datadir, frame_contours_filepaths["upper-incisor"])
-                    upper_incisor = self.load_target_array(upper_incisor_fp)
-
-                    epiglottis_fp = os.path.join(self.datadir, frame_contours_filepaths["epiglottis"])
-                    epiglottis = self.load_target_array(epiglottis_fp)
-                else:
-                    lower_incisor = upper_incisor = epiglottis = None
-
-                frame_targets = torch.zeros(size=(0, 2, self.n_samples))
-                for art, contour_fp in sorted(frame_contours_filepaths.items(), key=lambda t: t[0]):
-                    if art not in self.articulators:
-                        continue
-
-                    abs_contour_fp = os.path.join(self.datadir, contour_fp)
-                    contour_arr = self.load_target_array(abs_contour_fp)
-
-                    if self.clip_tails:
-                        tail_clip_method = getattr(
-                            TailClipper, f"clip_{art.replace('-', '_')}_tails", None
-                        )
-
-                        if tail_clip_method:
-                            contour_arr = tail_clip_method(
-                                contour_arr,
-                                lower_incisor=lower_incisor,
-                                upper_incisor=upper_incisor,
-                                epiglottis=epiglottis
-                            )
-
-                    contour = torch.from_numpy(contour_arr) / self.size  # torch.Size([self.n_samples, 2])
-                    contour = contour.transpose(1, 0)  # torch.Size([2, self.n_samples])
-                    contour = contour.unsqueeze(dim=0)  # torch.Size([1, 2, self.n_samples]
-
-                    frame_targets = torch.cat([frame_targets, contour])
+                frame_targets = self.load_frame_targets(
+                    self.datadir,
+                    frame_contours_filepaths,
+                    self.articulators,
+                    self.clip_tails
+                )
 
                 frame_targets = frame_targets.unsqueeze(dim=0)
                 sentence_targets = torch.cat([sentence_targets, frame_targets])
