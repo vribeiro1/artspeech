@@ -71,7 +71,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
     return info
 
 
-def run_test(model, dataloader, criterion, device=None, save_to=None, sampling_rate=22050):
+def run_test(model, dataloader, criterion, device=None, save_to=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 

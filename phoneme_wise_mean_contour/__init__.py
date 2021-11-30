@@ -82,7 +82,7 @@ def train(dataset, save_to=None):
     return df
 
 
-def test(dataset, df, save_to, subsample_size=1000):
+def test(dataset, df, save_to):
     if isinstance(df, str):
         df = pd.read_csv(df)
 
@@ -94,7 +94,7 @@ def test(dataset, df, save_to, subsample_size=1000):
     losses = []
     x_corrs = [[] for _ in dataset.articulators]
     y_corrs = [[] for _ in dataset.articulators]
-    for i, (_, sentence_targets, sentence_tokens) in enumerate(tqdm(dataset, "test")):
+    for i_sentence, (_, sentence_targets, sentence_tokens) in enumerate(tqdm(dataset, "test")):
         tokens_pos = calculate_tokens_positions_in_sequence(sentence_tokens)
         tokens_seqs_len = calculate_tokens_sequences_len(sentence_tokens)
         tokens_seqs_len = functools.reduce(lambda l1, l2: l1 + l2, [[token_seq_len for _ in range(token_seq_len[1])] for token_seq_len in tokens_seqs_len])
@@ -128,11 +128,11 @@ def test(dataset, df, save_to, subsample_size=1000):
         x_corr = x_corr.mean(dim=-1)[0]
         y_corr = y_corr.mean(dim=-1)[0]
 
-        for i, _ in enumerate(dataset.articulators):
-            x_corrs[i].append(x_corr[i].item())
-            y_corrs[i].append(y_corr[i].item())
+        for i_art, _ in enumerate(dataset.articulators):
+            x_corrs[i_art].append(x_corr[i_art].item())
+            y_corrs[i_art].append(y_corr[i_art].item())
 
-        saves_i_dir = os.path.join(save_to, str(i))
+        saves_i_dir = os.path.join(save_to, str(i_sentence))
         contours_i_dir = os.path.join(saves_i_dir, "contours")
         if not os.path.exists(contours_i_dir):
             os.makedirs(contours_i_dir)
