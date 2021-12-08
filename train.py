@@ -1,6 +1,7 @@
 import pdb
 
 import json
+import logging
 import numpy as np
 import os
 import torch
@@ -13,7 +14,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from dataset import ArtSpeechDataset
+from dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from evaluation import run_test
 from helpers import set_seeds
 from loss import EuclideanDistanceLoss, pearsons_correlation
@@ -44,13 +45,13 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulator
     x_corrs = [[] for _ in articulators]
     y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for i, (sentence, targets, _) in enumerate(progress_bar):
+    for i, (sentence, targets, lengths, _) in enumerate(progress_bar):
         sentence = sentence.to(device)
         targets = targets.to(device)
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
-            outputs = model(sentence)
+            outputs = model(sentence, lengths)
             loss = criterion(outputs, targets)
 
             if training:
@@ -93,12 +94,17 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulator
 
 
 @ex.automain
-def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_filepath, valid_filepath, test_filepath, vocab_filepath, articulators, p_aug=0., state_dict_fpath=None):
+def main(
+    _run, datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
+    train_filepath, valid_filepath, test_filepath, vocab_filepath, articulators,
+    p_aug=0., state_dict_fpath=None
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logging.info(f"Running on '{device.type}'")
 
     writer = SummaryWriter(os.path.join(fs_observer.dir, f"experiment"))
-    best_model_path = os.path.join(fs_observer.dir, "best_model.pth")
-    last_model_path = os.path.join(fs_observer.dir, "last_model.pth")
+    best_model_path = os.path.join(fs_observer.dir, "best_model.pt")
+    last_model_path = os.path.join(fs_observer.dir, "last_model.pt")
 
     outputs_dir = os.path.join(fs_observer.dir, "outputs")
     if not os.path.exists(outputs_dir):
@@ -134,9 +140,10 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
     )
     train_dataloader = DataLoader(
         train_dataset,
-        batch_size=1,
+        batch_size=batch_size,
         shuffle=True,
-        worker_init_fn=set_seeds
+        worker_init_fn=set_seeds,
+        collate_fn=pad_sequence_collate_fn
     )
 
     valid_dataset = ArtSpeechDataset(
@@ -149,9 +156,10 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
     )
     valid_dataloader = DataLoader(
         valid_dataset,
-        batch_size=1,
+        batch_size=batch_size,
         shuffle=False,
-        worker_init_fn=set_seeds
+        worker_init_fn=set_seeds,
+        collate_fn=pad_sequence_collate_fn
     )
 
     info = {}
@@ -203,18 +211,18 @@ def main(_run, datadir, n_epochs, patience, learning_rate, weight_decay, train_f
         test_filepath,
         vocabulary,
         articulators,
-        lazy_load=True,
         clip_tails=True
     )
     test_dataloader = DataLoader(
         test_dataset,
-        batch_size=1,
+        batch_size=batch_size,
         shuffle=False,
-        worker_init_fn=set_seeds
+        worker_init_fn=set_seeds,
+        collate_fn=pad_sequence_collate_fn
     )
 
     best_model = ArtSpeech(len(vocabulary), n_articulators, gru_dropout=0.2)
-    state_dict = torch.load(best_model_path, map_location=device)
+    state_dict = torch.load(state_dict_fpath, map_location=device)
     best_model.load_state_dict(state_dict)
     best_model.to(device)
 

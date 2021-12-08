@@ -25,8 +25,7 @@ from vt_tracker import (
     UPPER_LIP,
     VOCAL_FOLDS
 )
-from vt_tracker.helpers import uint16_to_uint8
-from vt_tracker.visualization import COLORS
+from vt_tracker.visualization import COLORS, uint16_to_uint8
 
 from dataset import ArtSpeechDataset, TailClipper
 from video import Video

@@ -17,23 +17,28 @@ RES = 136
 PIXEL_SPACING = 1.4117647409439
 
 
-def save_outputs(outputs, targets, phonemes, save_to, articulators, regularize_out):
-    for j, (out, target, phoneme) in enumerate(zip(outputs, targets, phonemes)):
-        for i_art, art in enumerate(sorted(articulators)):
-            pred_art_arr = out[i_art].numpy()
-            true_art_arr = target[i_art].numpy()
+def save_outputs(outputs, targets, lengths, phonemes, save_to, articulators, regularize_out, offset=0):
+    for i_sentence, (sentence_outs, sentence_targets, length, sentence_phonemes) in enumerate(zip(outputs, targets, lengths, phonemes)):
+        saves_i_dir = os.path.join(save_to, str(i_sentence + offset))
+        if not os.path.exists(os.path.join(saves_i_dir, "contours")):
+            os.makedirs(os.path.join(saves_i_dir, "contours"))
 
-            if regularize_out:
-                resX, resY = regularize_Bsplines(pred_art_arr.transpose(1, 0), 3)
-                pred_art_arr = np.array([resX, resY]).T
+        for i_frame, (out, target, phoneme) in enumerate(zip(sentence_outs[:length], sentence_targets[:length], sentence_phonemes)):
+            for i_art, art in enumerate(sorted(articulators)):
+                pred_art_arr = out[i_art].numpy()
+                true_art_arr = target[i_art].numpy()
 
-            pred_npy_filepath = os.path.join(save_to, f"{j}_{art}.npy")
-            with open(pred_npy_filepath, "wb") as f:
-                np.save(f, pred_art_arr)
+                if regularize_out:
+                    resX, resY = regularize_Bsplines(pred_art_arr.transpose(1, 0), 3)
+                    pred_art_arr = np.array([resX, resY]).T
 
-            true_npy_filepath = os.path.join(save_to, f"{j}_{art}_true.npy")
-            with open(true_npy_filepath, "wb") as f:
-                np.save(f, true_art_arr)
+                pred_npy_filepath = os.path.join(saves_i_dir, "contours", f"{i_frame}_{art}.npy")
+                with open(pred_npy_filepath, "wb") as f:
+                    np.save(f, pred_art_arr)
+
+                true_npy_filepath = os.path.join(saves_i_dir, "contours", f"{i_frame}_{art}_true.npy")
+                with open(true_npy_filepath, "wb") as f:
+                    np.save(f, true_art_arr)
 
 
 def prepare_for_serialization(TVs_out):
@@ -50,32 +55,34 @@ def prepare_for_serialization(TVs_out):
     return TVs_out_serializable
 
 
-def tract_variables(outputs, targets, phonemes, articulators, save_to=None):
-    TVs_data = []
-    for j, (out, target, phoneme) in enumerate(zip(outputs, targets, phonemes)):
-        pred_input_dict = {
-            art: tensor.T for art, tensor in zip(articulators, out)
-        }
-        pred_TVs = calculate_vocal_tract_variables(pred_input_dict)
+def tract_variables(outputs, targets, lengths, phonemes, articulators, save_to, offset=0):
+    for i_sentence, (sentence_outs, sentence_targets, length, sentence_phonemes) in enumerate(zip(outputs, targets, lengths, phonemes)):
+        saves_i_dir = os.path.join(save_to, str(i_sentence + offset))
+        if not os.path.exists(saves_i_dir):
+            os.makedirs(saves_i_dir)
 
-        target_input_dict = {
-            art: tensor.T for art, tensor in zip(articulators, target)
-        }
-        target_TVs = calculate_vocal_tract_variables(target_input_dict)
+        TVs_data = []
+        for i_frame, (out, target, phoneme) in enumerate(zip(sentence_outs[:length], sentence_targets[:length], sentence_phonemes)):
+            pred_input_dict = {
+                art: tensor.T for art, tensor in zip(articulators, out)
+            }
+            pred_TVs = calculate_vocal_tract_variables(pred_input_dict)
 
-        phone, = phoneme
-        TVs_data.append(
-            {
-                "frame": j,
-                "phoneme": phone,
+            target_input_dict = {
+                art: tensor.T for art, tensor in zip(articulators, target)
+            }
+            target_TVs = calculate_vocal_tract_variables(target_input_dict)
+
+            TVs_data.append({
+                "frame": i_frame,
+                "phoneme": phoneme,
                 "tract_variables": {
                     "target": target_TVs,
                     "predicted": pred_TVs
                 }
-            }
-        )
+            })
 
-    if save_to is not None:
+
         serializable_data = [
             {
                 "frame": item["frame"],
@@ -87,11 +94,9 @@ def tract_variables(outputs, targets, phonemes, articulators, save_to=None):
             } for item in TVs_data
         ]
 
-        json_filepath = os.path.join(save_to, "tract_variables_data.json")
+        json_filepath = os.path.join(saves_i_dir, "tract_variables_data.json")
         with open(json_filepath, "w") as f:
             json.dump(serializable_data, f)
-
-    return TVs_data
 
 
 def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, device=None,
@@ -109,16 +114,12 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
     x_corrs = [[] for _ in articulators]
     y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - inference")
-    for i, (sentence, targets, phonemes) in enumerate(progress_bar):
-        saves_i_dir = os.path.join(epoch_outputs_dir, str(i))
-        if not os.path.exists(os.path.join(saves_i_dir, "contours")):
-            os.makedirs(os.path.join(saves_i_dir, "contours"))
-
+    for i_batch, (sentence, targets, lengths, phonemes) in enumerate(progress_bar):
         sentence = sentence.to(device)
         targets = targets.to(device)
 
         with torch.set_grad_enabled(False):
-            outputs = model(sentence)
+            outputs = model(sentence, lengths)
             loss = criterion(outputs, targets)
 
             x_corr, y_corr = pearsons_correlation(outputs, targets)
@@ -132,24 +133,25 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
             losses.append(loss.item())
             progress_bar.set_postfix(loss=np.mean(losses))
 
-            outputs = outputs.squeeze(dim=0)
-            targets = targets.squeeze(dim=0)
-
             tract_variables(
                 outputs.detach().cpu(),
                 targets.detach().cpu(),
+                lengths,
                 phonemes,
                 articulators,
-                saves_i_dir
+                epoch_outputs_dir,
+                i_batch * dataloader.batch_size,
             )
 
             save_outputs(
                 outputs.detach().cpu(),
                 targets.detach().cpu(),
+                lengths,
                 phonemes,
-                os.path.join(saves_i_dir, "contours"),
+                epoch_outputs_dir,
                 articulators,
-                regularize_out
+                regularize_out,
+                i_batch * dataloader.batch_size,
             )
 
     mean_loss = np.mean(losses)

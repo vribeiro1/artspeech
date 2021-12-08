@@ -20,5 +20,4 @@ config/*
 !config/*.yaml.example
 
 data
-
-results
+results*

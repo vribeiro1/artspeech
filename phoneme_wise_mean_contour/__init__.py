@@ -143,7 +143,7 @@ def test(dataset, df, save_to):
         tract_variables(
             sentence_outputs,
             sentence_targets,
-            [(token,) for token in sentence_tokens],
+            sentence_tokens,
             dataset.articulators,
             saves_i_dir
         )
@@ -151,7 +151,7 @@ def test(dataset, df, save_to):
         save_outputs(
             sentence_outputs,
             sentence_targets,
-            [(token,) for token in sentence_tokens],
+            sentence_tokens,
             contours_i_dir,
             dataset.articulators,
             regularize_out=True

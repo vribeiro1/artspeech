@@ -8,6 +8,8 @@ import torch
 
 from functools import lru_cache, reduce
 from torch.utils.data import Dataset
+from torch.nn.utils.rnn import pad_sequence
+from tqdm import tqdm
 
 from bs_regularization import regularize_Bsplines
 
@@ -58,6 +60,7 @@ def break_sequence(sequence, break_points):
 
 class TailClipper:
     PIXEL_SPACING = 1.4117647409439
+    RES = 136
 
     @classmethod
     def clip_tongue_tails(cls, tongue, lower_incisor, epiglottis, reg_out=True, **kwargs):
@@ -86,7 +89,7 @@ class TailClipper:
         tongue_1st_half = tongue_cp[:25]
         tongue_2nd_half = tongue_cp[25:]
 
-        keep_indices = np.where(tongue_1st_half[:, 1] < reference[1] + (10 / cls.PIXEL_SPACING))
+        keep_indices = np.where(tongue_1st_half[:, 1] < reference[1] + (10 / cls.PIXEL_SPACING / cls.RES))
 
         tailless_tongue = np.concatenate([
             tongue_1st_half[keep_indices],
@@ -110,7 +113,7 @@ class TailClipper:
         llip_1st_half = llip_cp[:25]
         llip_2nd_half = llip_cp[25:]
 
-        keep_indices = np.where(llip_2nd_half[:, 1] < reference[1] + (5 / cls.PIXEL_SPACING))
+        keep_indices = np.where(llip_2nd_half[:, 1] < reference[1] + (5 / cls.PIXEL_SPACING / cls.RES))
 
         tailless_llip = np.concatenate([
             llip_1st_half,
@@ -182,6 +185,22 @@ class TailClipper:
             tailless_ulip = np.array([reg_x, reg_y]).T
 
         return tailless_ulip
+
+
+def pad_sequence_collate_fn(batch):
+    sentence_numerized = [item[0] for item in batch]
+    len_sentences = torch.tensor(funcy.lmap(len, sentence_numerized), dtype=torch.int)
+    len_sentences_sorted, sentences_sorted_indices = len_sentences.sort(descending=True)
+    padded_sentence_numerized = pad_sequence(sentence_numerized, batch_first=True)
+    padded_sentence_numerized = padded_sentence_numerized[sentences_sorted_indices]
+
+    sentence_targets = [item[1] for item in batch]
+    padded_sentence_targets = pad_sequence(sentence_targets, batch_first=True)
+    padded_sentence_targets = padded_sentence_targets[sentences_sorted_indices]
+
+    phonemes = [batch[i][2] for i in sentences_sorted_indices]
+
+    return padded_sentence_numerized, padded_sentence_targets, len_sentences_sorted, phonemes
 
 
 class ArtSpeechDataset(Dataset):
@@ -256,7 +275,7 @@ class ArtSpeechDataset(Dataset):
         if target_array[0][0] < target_array[-1][0]:
             target_array = np.flip(target_array, axis=0)
 
-        return target_array.copy()
+        return target_array.copy() / ArtSpeechDataset.RES
 
     @staticmethod
     def load_frame_targets(datadir, frame_targets_filepaths, articulators, clip_tails=False):
@@ -294,7 +313,7 @@ class ArtSpeechDataset(Dataset):
                         epiglottis=epiglottis
                     )
 
-            contour = torch.from_numpy(contour_arr) / ArtSpeechDataset.RES  # torch.Size([self.n_samples, 2])
+            contour = torch.from_numpy(contour_arr)  # torch.Size([self.n_samples, 2])
             contour = contour.transpose(1, 0)  # torch.Size([2, self.n_samples])
             contour = contour.unsqueeze(dim=0)  # torch.Size([1, 2, self.n_samples]
 
@@ -320,7 +339,7 @@ class ArtSpeechDataset(Dataset):
         return not any(frame_is_missing)
 
     def _collect_data(self, data):
-        dataset = funcy.lmap(self._collect_sentence, data)
+        dataset = funcy.lmap(self._collect_sentence, tqdm(data, desc="Collecting data"))
         return dataset
 
     def _collect_sentence(self, item):
@@ -434,9 +453,5 @@ class ArtSpeechDataset(Dataset):
             sentence_targets = sentence_targets - subtract_array
             sentence_targets[:, :, 0, :] = sentence_targets[:, :, 0, :] + 0.3
             sentence_targets[:, :, 1, :] = sentence_targets[:, :, 1, :] + 0.3
-
-        # sentence_targets_mean = sentence_targets.mean(dim=(1, 3))
-        # sentence_targets_mean = sentence_targets_mean.unsqueeze(dim=1).unsqueeze(dim=-1)
-        # sentence_targets = sentence_targets - sentence_targets_mean + 0.5
 
         return sentence_numerized, sentence_targets, phonemes
