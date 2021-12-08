@@ -222,7 +222,7 @@ def main(
     )
 
     best_model = ArtSpeech(len(vocabulary), n_articulators, gru_dropout=0.2)
-    state_dict = torch.load(state_dict_fpath, map_location=device)
+    state_dict = torch.load(best_model_path, map_location=device)
     best_model.load_state_dict(state_dict)
     best_model.to(device)
 
