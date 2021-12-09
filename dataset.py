@@ -261,7 +261,7 @@ class ArtSpeechDataset(Dataset):
 
     @staticmethod
     @lru_cache()
-    def load_target_array(filepath):
+    def load_target_array(filepath, norm=True):
         """
         Loads the target array with the proper orientation (right to left)
         """
@@ -275,7 +275,10 @@ class ArtSpeechDataset(Dataset):
         if target_array[0][0] < target_array[-1][0]:
             target_array = np.flip(target_array, axis=0)
 
-        return target_array.copy() / ArtSpeechDataset.RES
+        if norm:
+            target_array = target_array.copy() / ArtSpeechDataset.RES
+
+        return target_array
 
     @staticmethod
     def load_frame_targets(datadir, frame_targets_filepaths, articulators, clip_tails=False):

@@ -2,6 +2,8 @@ import pdb
 
 import funcy
 import numpy as np
+import torch
+import torch.nn.functional as F
 
 from copy import deepcopy
 from vt_tracker.metrics import distance_matrix, euclidean
@@ -106,13 +108,13 @@ def load_articulator_arrays(articulators_filepaths):
     """
     # Load soft palate and reconstruct snail
     fp_soft_palate = articulators_filepaths["soft-palate"]
-    midline_soft_palate = ArtSpeechDataset.load_target_array(fp_soft_palate)
+    midline_soft_palate = ArtSpeechDataset.load_target_array(fp_soft_palate, norm=False)
     params_soft_palate = SNAIL_PARAMETERS["soft-palate"]
     snail_soft_palate = reconstruct_snail_from_midline(midline_soft_palate, **params_soft_palate)
 
     # Load epiglottis and reconstruct snail
     fp_epiglottis = articulators_filepaths["epiglottis"]
-    midline_epiglottis = ArtSpeechDataset.load_target_array(fp_epiglottis)
+    midline_epiglottis = ArtSpeechDataset.load_target_array(fp_epiglottis, norm=False)
     params_epiglottis = SNAIL_PARAMETERS["epiglottis"]
     snail_epiglottis = reconstruct_snail_from_midline(midline_epiglottis, **params_epiglottis)
 
@@ -120,7 +122,7 @@ def load_articulator_arrays(articulators_filepaths):
     articulators_arrays = {}
     for articulator, fp_articulator in articulators_filepaths.items():
         if articulator not in SNAIL_PARAMETERS:
-            articulators_arrays[articulator] = ArtSpeechDataset.load_target_array(fp_articulator)
+            articulators_arrays[articulator] = ArtSpeechDataset.load_target_array(fp_articulator, norm=False)
 
     articulators_arrays["soft-palate"] = snail_soft_palate
     articulators_arrays["epiglottis"] = snail_epiglottis
@@ -136,7 +138,7 @@ def find_lip_end(lip_array):
     lip_array_1 = lip_array[1:]
 
     offsets = list(enumerate(zip(lip_array_0, lip_array_1)))
-    decreasing_absissas = filter(lambda t: t[1][0][0] < t[1][1][0], offsets)
+    decreasing_absissas = funcy.lfilter(lambda t: t[1][0][0] < t[1][1][0], offsets)
     idx, (_, _) = min(decreasing_absissas, key=lambda t: t[0])
 
     return idx
@@ -193,6 +195,14 @@ def connect_articulators(articulators_dict, eps=0.004):
     ])
 
     internal_wall = upsample_curve(internal_wall, approx_n_samples=300)
+    internal_wall_tensor = torch.from_numpy(internal_wall).T.unsqueeze(dim=0)
+    internal_wall_tensor = F.interpolate(
+        internal_wall_tensor,
+        size=100,
+        mode="linear",
+        align_corners=True
+    )
+    internal_wall = internal_wall_tensor.squeeze(dim=0).T.numpy()
 
     # External vocal tract wall
 
@@ -232,5 +242,13 @@ def connect_articulators(articulators_dict, eps=0.004):
     ])
 
     external_wall = upsample_curve(external_wall, approx_n_samples=300)
+    external_wall_tensor = torch.from_numpy(external_wall).T.unsqueeze(dim=0)
+    external_wall_tensor = F.interpolate(
+        external_wall_tensor,
+        size=100,
+        mode="linear",
+        align_corners=True
+    )
+    external_wall = external_wall_tensor.squeeze(dim=0).T.numpy()
 
     return internal_wall, external_wall
