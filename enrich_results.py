@@ -82,7 +82,7 @@ def distances_per_articulator(inferences_dir, distance_fn):
     sentences = os.listdir(inferences_dir)
 
     distances = torch.zeros(size=(0, len(ARTICULATORS)))
-    for sentence in tqdm(sorted(sentences)):
+    for sentence in tqdm(sorted(sentences), desc=f"Calculating distances with {distance_fn.__name__}"):
         saved_outputs_dir = os.path.join(inferences_dir, sentence, "contours")
 
         zipped = []

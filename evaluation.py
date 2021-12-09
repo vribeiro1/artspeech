@@ -30,7 +30,7 @@ def save_outputs(outputs, targets, lengths, phonemes, save_to, articulators, reg
 
                 if regularize_out:
                     resX, resY = regularize_Bsplines(pred_art_arr.transpose(1, 0), 3)
-                    pred_art_arr = np.array([resX, resY]).T
+                    pred_art_arr = np.array([resX, resY])
 
                 pred_npy_filepath = os.path.join(saves_i_dir, "contours", f"{i_frame}_{art}.npy")
                 with open(pred_npy_filepath, "wb") as f:

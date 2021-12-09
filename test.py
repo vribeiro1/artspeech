@@ -8,7 +8,7 @@ import yaml
 
 from torch.utils.data import DataLoader
 
-from dataset import ArtSpeechDataset
+from dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from evaluation import run_test
 from helpers import set_seeds
 from loss import EuclideanDistanceLoss
@@ -35,9 +35,10 @@ def main(cfg):
     )
     test_dataloader = DataLoader(
         test_dataset,
-        batch_size=1,
+        batch_size=cfg["batch_size"],
         shuffle=False,
-        worker_init_fn=set_seeds
+        worker_init_fn=set_seeds,
+        collate_fn=pad_sequence_collate_fn
     )
 
     best_model = ArtSpeech(len(vocabulary), n_articulators)
