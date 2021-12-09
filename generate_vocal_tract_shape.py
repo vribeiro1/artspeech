@@ -15,7 +15,8 @@ from tgt import read_textgrid
 from torch.utils.data import DataLoader
 
 from bs_regularization import regularize_Bsplines
-from helpers import set_seeds
+from connect_vocal_tract_articulators import connect_articulators
+from helpers import npy_to_xarticul, set_seeds
 from model import ArtSpeech
 from vt_tracker.visualization import COLORS
 
@@ -118,13 +119,35 @@ def save_vocal_tract_shape(outputs, phonemes, save_to, regularize_outputs=True):
         plt.imshow(frame)
         plt.axis("off")
 
-        jpg_filepath = os.path.join(save_to, f"{i_frame}.jpg")
+        jpg_filepath = os.path.join(save_to, f"{'%04d' % i_frame}.jpg")
         plt.savefig(jpg_filepath, format="jpg")
 
-        pdf_filepath = os.path.join(save_to, f"{i_frame}.pdf")
+        pdf_filepath = os.path.join(save_to, f"{'%04d' % i_frame}.pdf")
         plt.savefig(pdf_filepath, format="pdf")
 
         plt.close()
+
+
+def save_contours(outputs, save_to, regularize_outputs=True):
+    filepaths = []
+    np_outputs = outputs.detach().cpu().numpy()
+    for i_frame, frame_outputs in enumerate(np_outputs):
+        articul_dicts = {}
+        for i_articul, articul_arr in enumerate(frame_outputs):
+            articulator = list(COLORS.keys())[i_articul]
+
+            if regularize_outputs:
+                reg_X, reg_Y = regularize_Bsplines(articul_arr.T, 3)
+                articul_arr = np.array([reg_X, reg_Y])
+
+            filepath = os.path.join(save_to, f"{i_frame}_{articulator}.npy")
+            np.save(filepath, articul_arr)
+
+            articul_dicts[articulator] = filepath
+
+        filepaths.append(articul_dicts)
+
+    return filepaths
 
 
 if __name__ == "__main__":
@@ -167,7 +190,9 @@ if __name__ == "__main__":
 
     for i, (inputs, phonemes) in enumerate(dataloader):
         inputs = inputs.to(device)
-        outputs = model(inputs)
+        _, seq_len = inputs.shape
+        lengths = torch.tensor([seq_len], dtype=torch.long).cpu()
+        outputs = model(inputs, lengths)
 
         save_sentence_dir = os.path.join(args.save_to, str(i))
         if not os.path.exists(save_sentence_dir):
@@ -179,3 +204,31 @@ if __name__ == "__main__":
 
         save_vocal_tract_shape(outputs.squeeze(dim=0), phonemes, save_sentence_dir)
         make_vocal_tract_shape_video(outputs.squeeze(dim=0), phonemes, save_sentence_dir)
+
+        xarticul_dir = os.path.join(save_sentence_dir, "xarticul")
+        if not os.path.exists(xarticul_dir):
+            os.makedirs(xarticul_dir)
+
+        articulators_dicts = save_contours(outputs.squeeze(dim=0), save_contours_dir)
+        for i_frame, articuls_dict in enumerate(articulators_dicts):
+            internal_wall, external_wall = connect_articulators(articuls_dict)
+
+            xarticul_int = npy_to_xarticul(internal_wall)
+            xarticul_ext = npy_to_xarticul(external_wall)
+
+            plt.figure(figsize=(10, 10))
+
+            plt.plot(*zip(*internal_wall), lw=3, color="red")
+            plt.plot(*zip(*external_wall), lw=3, color="blue")
+
+            plt.ylim([1., 0.])
+            plt.xlim([0., 1.])
+            plt.axis("off")
+
+            plt.savefig(os.path.join(save_sentence_dir, f"{'%04d' % i_frame}_shape.jpg"))
+            plt.close()
+
+            xarticul_array = xarticul_int + xarticul_ext
+            xarticul_filepath = os.path.join(xarticul_dir, f"{'%04d' % i_frame}.txt")
+            with open(xarticul_filepath, "w") as f:
+                f.write("\n".join(xarticul_array))
