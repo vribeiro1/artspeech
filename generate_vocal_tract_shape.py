@@ -16,6 +16,7 @@ from torch.utils.data import DataLoader
 
 from bs_regularization import regularize_Bsplines
 from connect_vocal_tract_articulators import connect_articulators
+from dataset import TailClipper
 from helpers import npy_to_xarticul, set_seeds
 from model import ArtSpeech
 from vt_tracker.visualization import COLORS
@@ -213,8 +214,8 @@ if __name__ == "__main__":
         for i_frame, articuls_dict in enumerate(articulators_dicts):
             internal_wall, external_wall = connect_articulators(articuls_dict)
 
-            xarticul_int = npy_to_xarticul(internal_wall)
-            xarticul_ext = npy_to_xarticul(external_wall)
+            xarticul_int = npy_to_xarticul(internal_wall * TailClipper.RES)
+            xarticul_ext = npy_to_xarticul(external_wall * TailClipper.RES)
 
             plt.figure(figsize=(10, 10))
 
