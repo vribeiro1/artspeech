@@ -17,7 +17,8 @@ from tqdm import tqdm
 from dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from evaluation import run_test
 from helpers import set_seeds
-from loss import EuclideanDistanceLoss, pearsons_correlation
+from loss import EuclideanDistanceLoss
+from metrics import pearsons_correlation
 from model import ArtSpeech
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -175,7 +176,7 @@ def main(
             dataloader=train_dataloader,
             optimizer=optimizer,
             criterion=loss_fn,
-            articulators=articulators,
+            articulators=train_dataset.articulators,
             writer=writer,
             device=device
         )
@@ -187,7 +188,7 @@ def main(
             dataloader=valid_dataloader,
             optimizer=optimizer,
             criterion=loss_fn,
-            articulators=articulators,
+            articulators=valid_dataset.articulators,
             writer=writer,
             device=device
         )
@@ -236,7 +237,7 @@ def main(
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
-        articulators=articulators,
+        articulators=test_dataset.articulators,
         device=device,
         regularize_out=True
     )
@@ -244,3 +245,18 @@ def main(
     test_results_filepath = os.path.join(fs_observer.dir, "test_results.json")
     with open(test_results_filepath, "w") as f:
         json.dump(test_results, f)
+
+    results_item = {
+        "exp": _run.id,
+        "loss": test_results["loss"],
+    }
+
+    for articulator in test_dataset.articulators:
+        results_item[f"p2cp_{articulator}"] = test_results[articulator]["p2cp"]
+        results_item[f"med_{articulator}"] = test_results[articulator]["med"]
+        results_item[f"x_corr_{articulator}"] = test_results[articulator]["x_corr"]
+        results_item[f"y_corr_{articulator}"] = test_results[articulator]["y_corr"]
+
+    df = pd.DataFrame([results_item])
+    df_filepath = os.path.join(fs_observer.dir, "test_results.csv")
+    df.to_csv(df_filepath, index=False)

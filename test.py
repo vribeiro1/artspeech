@@ -67,6 +67,21 @@ def main(cfg):
     with open(test_results_filepath, "w") as f:
         json.dump(test_results, f)
 
+    results_item = {
+        "exp": None,
+        "loss": test_results["loss"],
+    }
+
+    for articulator in test_dataset.articulators:
+        results_item[f"p2cp_{articulator}"] = test_results[articulator]["p2cp"]
+        results_item[f"med_{articulator}"] = test_results[articulator]["med"]
+        results_item[f"x_corr_{articulator}"] = test_results[articulator]["x_corr"]
+        results_item[f"y_corr_{articulator}"] = test_results[articulator]["y_corr"]
+
+    df = pd.DataFrame([results_item])
+    df_filepath = os.path.join(fs_observer.dir, "test_results.csv")
+    df.to_csv(df_filepath, index=False)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
