@@ -11,7 +11,8 @@ import torch.nn.functional as F
 from tqdm import tqdm
 
 from evaluation import save_outputs, tract_variables
-from loss import EuclideanDistanceLoss, pearsons_correlation
+from loss import EuclideanDistanceLoss
+from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
 
 
 def calculate_tokens_sequences_len(tokens):
@@ -92,6 +93,8 @@ def test(dataset, df, save_to):
     criterion = EuclideanDistanceLoss()
 
     losses = []
+    euclidean_per_articulator = [[] for _ in dataset.articulators]
+    p2cp_per_articulator = [[] for _ in dataset.articulators]
     x_corrs = [[] for _ in dataset.articulators]
     y_corrs = [[] for _ in dataset.articulators]
     for i_sentence, (_, sentence_targets, sentence_tokens) in enumerate(tqdm(dataset, "test")):
@@ -121,40 +124,45 @@ def test(dataset, df, save_to):
         sentence_outputs = sentence_outputs.unsqueeze(dim=0)
         sentence_targets = sentence_targets.unsqueeze(dim=0)
 
-        loss = criterion(sentence_outputs.unsqueeze(dim=0), sentence_targets.unsqueeze(dim=0))
-        losses.append(loss.item())
+        loss = criterion(sentence_outputs, sentence_targets)
+        p2cp = p2cp_distance(sentence_outputs, sentence_targets).mean(dim=1)  # (bs, n_articulators)
+        euclidean = euclidean_distance(sentence_outputs, sentence_targets).mean(dim=1)  # (bs, n_articulators)
 
         x_corr, y_corr = pearsons_correlation(sentence_outputs, sentence_targets)
         x_corr = x_corr.mean(dim=-1)[0]
         y_corr = y_corr.mean(dim=-1)[0]
 
+        losses.append(loss.item())
         for i_art, _ in enumerate(dataset.articulators):
             x_corrs[i_art].append(x_corr[i_art].item())
             y_corrs[i_art].append(y_corr[i_art].item())
 
-        saves_i_dir = os.path.join(save_to, str(i_sentence))
-        contours_i_dir = os.path.join(saves_i_dir, "contours")
-        if not os.path.exists(contours_i_dir):
-            os.makedirs(contours_i_dir)
+            p2cp_per_articulator[i_art].extend([dist.item() for dist in p2cp[:, i_art]])
+            euclidean_per_articulator[i_art].extend([dist.item() for dist in euclidean[:, i_art]])
 
-        sentence_outputs = sentence_outputs.squeeze(dim=0)
-        sentence_targets = sentence_targets.squeeze(dim=0)
+        saves_i_dir = os.path.join(save_to, str(i_sentence))
+        if not os.path.exists(saves_i_dir):
+            os.makedirs(saves_i_dir)
 
         tract_variables(
             sentence_outputs,
             sentence_targets,
-            sentence_tokens,
+            [len(sentence_tokens)],
+            [sentence_tokens],
             dataset.articulators,
-            saves_i_dir
+            saves_i_dir,
+            offset=i_sentence
         )
 
         save_outputs(
             sentence_outputs,
             sentence_targets,
-            sentence_tokens,
-            contours_i_dir,
+            [len(sentence_tokens)],
+            [sentence_tokens],
             dataset.articulators,
-            regularize_out=True
+            saves_i_dir,
+            regularize_out=True,
+            offset=i_sentence
         )
 
     mean_loss = np.mean(losses)

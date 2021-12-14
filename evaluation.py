@@ -1,15 +1,14 @@
 import pdb
 
-import json
-import matplotlib.pyplot as plt
 import numpy as np
 import os
+import pandas as pd
 import torch
 
 from tqdm import tqdm
 
 from bs_regularization import regularize_Bsplines
-from loss import pearsons_correlation
+from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
 from tract_variables import calculate_vocal_tract_variables
 
 RES = 136
@@ -17,13 +16,25 @@ RES = 136
 PIXEL_SPACING = 1.4117647409439
 
 
-def save_outputs(outputs, targets, lengths, phonemes, save_to, articulators, regularize_out, offset=0):
+def save_outputs(outputs, targets, lengths, phonemes, articulators, save_to, regularize_out, offset=0):
+    """
+    Args:
+    outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
+    targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
+    lengths (List): List with the length of each sentence in the batch.
+    phonemes (List): List with the sequence of phonemes for each sentence in the batch.
+    articulators (List[str]): List of articulators.
+    save_to (str): Path to the directory to save the results.
+    regularize_out (bool): If should apply bspline regularization or not.
+    offset (int): Offset from previous processed batch.
+    """
     for i_sentence, (sentence_outs, sentence_targets, length, sentence_phonemes) in enumerate(zip(outputs, targets, lengths, phonemes)):
-        saves_i_dir = os.path.join(save_to, str(i_sentence + offset))
+        sentence_id = str(i_sentence + offset)
+        saves_i_dir = os.path.join(save_to, sentence_id)
         if not os.path.exists(os.path.join(saves_i_dir, "contours")):
             os.makedirs(os.path.join(saves_i_dir, "contours"))
 
-        for i_frame, (out, target, phoneme) in enumerate(zip(sentence_outs[:length], sentence_targets[:length], sentence_phonemes)):
+        for i_frame, (out, target, _) in enumerate(zip(sentence_outs[:length], sentence_targets[:length], sentence_phonemes)):
             for i_art, art in enumerate(sorted(articulators)):
                 pred_art_arr = out[i_art].numpy()
                 true_art_arr = target[i_art].numpy()
@@ -41,23 +52,20 @@ def save_outputs(outputs, targets, lengths, phonemes, save_to, articulators, reg
                     np.save(f, true_art_arr)
 
 
-def prepare_for_serialization(TVs_out):
-    TVs_out_serializable = {}
-    for TV, TV_dict in TVs_out.items():
-        TV_dict_serializable = {
-            "value": TV_dict["value"],
-            "poc_1": TV_dict["poc_1"].tolist(),
-            "poc_2": TV_dict["poc_2"].tolist()
-        } if TV_dict is not None else None
-
-        TVs_out_serializable[TV] = TV_dict_serializable
-
-    return TVs_out_serializable
-
-
 def tract_variables(outputs, targets, lengths, phonemes, articulators, save_to, offset=0):
+    """
+    Args:
+    outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
+    targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
+    lengths (List): List with the length of each sentence in the batch.
+    phonemes (List): List with the sequence of phonemes for each sentence in the batch.
+    articulators (List[str]): List of articulators.
+    save_to (str): Path to the directory to save the results.
+    offset (int): Offset from previous processed batch.
+    """
     for i_sentence, (sentence_outs, sentence_targets, length, sentence_phonemes) in enumerate(zip(outputs, targets, lengths, phonemes)):
-        saves_i_dir = os.path.join(save_to, str(i_sentence + offset))
+        sentence_id = str(i_sentence + offset)
+        saves_i_dir = os.path.join(save_to, sentence_id)
         if not os.path.exists(saves_i_dir):
             os.makedirs(saves_i_dir)
 
@@ -73,34 +81,45 @@ def tract_variables(outputs, targets, lengths, phonemes, articulators, save_to, 
             }
             target_TVs = calculate_vocal_tract_variables(target_input_dict)
 
-            TVs_data.append({
+            item = {
+                "sentence": sentence_id,
                 "frame": i_frame,
-                "phoneme": phoneme,
-                "tract_variables": {
-                    "target": target_TVs,
-                    "predicted": pred_TVs
-                }
-            })
+                "phoneme": phoneme
+            }
+
+            for TV, TV_dict in target_TVs.items():
+                if TV_dict is None:
+                    continue
+
+                item.update({
+                    f"{TV}_target": TV_dict["value"],
+                    f"{TV}_target_poc_1_x": TV_dict["poc_1"][0].item(),
+                    f"{TV}_target_poc_1_y": TV_dict["poc_1"][1].item(),
+                    f"{TV}_target_poc_2_x": TV_dict["poc_2"][0].item(),
+                    f"{TV}_target_poc_2_y": TV_dict["poc_2"][1].item()
+                })
+
+            for TV, TV_dict in pred_TVs.items():
+                if TV_dict is None:
+                    continue
+
+                item.update({
+                    f"{TV}_pred": TV_dict["value"],
+                    f"{TV}_pred_poc_1_x": TV_dict["poc_1"][0].item(),
+                    f"{TV}_pred_poc_1_y": TV_dict["poc_1"][1].item(),
+                    f"{TV}_pred_poc_2_x": TV_dict["poc_2"][0].item(),
+                    f"{TV}_pred_poc_2_y": TV_dict["poc_2"][1].item()
+                })
+
+            TVs_data.append(item)
+
+        filepath = os.path.join(saves_i_dir, "tract_variables.csv")
+        df = pd.DataFrame(TVs_data)
+        df.to_csv(filepath, index=False)
 
 
-        serializable_data = [
-            {
-                "frame": item["frame"],
-                "phoneme": item["phoneme"],
-                "tract_variables": {
-                    "target": prepare_for_serialization(item["tract_variables"]["target"]),
-                    "predicted": prepare_for_serialization(item["tract_variables"]["predicted"])
-                }
-            } for item in TVs_data
-        ]
-
-        json_filepath = os.path.join(saves_i_dir, "tract_variables_data.json")
-        with open(json_filepath, "w") as f:
-            json.dump(serializable_data, f)
-
-
-def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, device=None,
-             regularize_out=False):
+def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
+             device=None, regularize_out=False):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -111,6 +130,8 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
     model.eval()
 
     losses = []
+    euclidean_per_articulator = [[] for _ in articulators]
+    p2cp_per_articulator = [[] for _ in articulators]
     x_corrs = [[] for _ in articulators]
     y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - inference")
@@ -122,20 +143,33 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
             outputs = model(sentence, lengths)
             loss = criterion(outputs, targets)
 
-            x_corr, y_corr = pearsons_correlation(outputs, targets)
-            x_corr = x_corr.mean(dim=-1)[0]
-            y_corr = y_corr.mean(dim=-1)[0]
+            outputs = outputs.detach().cpu()
+            targets = targets.detach().cpu()
 
-            for i, _ in enumerate(articulators):
-                x_corrs[i].append(x_corr[i].item())
-                y_corrs[i].append(y_corr[i].item())
+            for sentence_outputs, sentence_targets, length in zip(outputs, targets, lengths):
+                sentence_outputs = sentence_outputs[:length].unsqueeze(dim=0)
+                sentence_targets = sentence_targets[:length].unsqueeze(dim=0)
+
+                p2cp = p2cp_distance(sentence_outputs, sentence_targets).mean(dim=1)  # (bs, n_articulators)
+                euclidean = euclidean_distance(sentence_outputs, sentence_targets).mean(dim=1)  # (bs, n_articulators)
+
+                x_corr, y_corr = pearsons_correlation(sentence_outputs, sentence_targets)
+                x_corr = x_corr.mean(dim=-1)[0]
+                y_corr = y_corr.mean(dim=-1)[0]
+
+                for i, _ in enumerate(articulators):
+                    x_corrs[i].append(x_corr[i].item())
+                    y_corrs[i].append(y_corr[i].item())
+
+                    p2cp_per_articulator[i].extend([dist.item() for dist in p2cp[:, i]])
+                    euclidean_per_articulator[i].extend([dist.item() for dist in euclidean[:, i]])
 
             losses.append(loss.item())
             progress_bar.set_postfix(loss=np.mean(losses))
 
             tract_variables(
-                outputs.detach().cpu(),
-                targets.detach().cpu(),
+                outputs,
+                targets,
                 lengths,
                 phonemes,
                 articulators,
@@ -144,12 +178,12 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
             )
 
             save_outputs(
-                outputs.detach().cpu(),
-                targets.detach().cpu(),
+                outputs,
+                targets,
                 lengths,
                 phonemes,
-                epoch_outputs_dir,
                 articulators,
+                epoch_outputs_dir,
                 regularize_out,
                 i_batch * dataloader.batch_size,
             )
@@ -163,7 +197,9 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators, dev
     info.update({
         art: {
             "x_corr": np.mean(x_corrs[i_art]),
-            "y_corr": np.mean(y_corrs[i_art])
+            "y_corr": np.mean(y_corrs[i_art]),
+            "p2cp": np.mean(p2cp_per_articulator[i_art]),
+            "med": np.mean(euclidean_per_articulator[i_art])
         }
         for i_art, art in enumerate(articulators)
     })
