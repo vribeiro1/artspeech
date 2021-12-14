@@ -15,6 +15,7 @@ from torch.utils.data import Dataset
 from torchaudio.transforms import MelSpectrogram
 from tqdm import tqdm
 
+from settings import DatasetConfig
 from video import Video
 
 Interval = namedtuple("Interval", ("start_time", "end_time"))
@@ -73,7 +74,6 @@ def pad_sequence_collate_fn(batch):
 
 
 class ArticulToMelSpecDataset(Dataset):
-    RES = 136.
     MAX_LENGTH_SEC = 5
     OVERLAP_LEGTH_SEC = 0.5
     def __init__(
@@ -111,7 +111,7 @@ class ArticulToMelSpecDataset(Dataset):
         target_dict = np.load(filepath, allow_pickle=True).item()
 
         for articulator in self.articulators:
-            articulator_array = target_dict[articulator] / ArticulToMelSpecDataset.RES
+            articulator_array = target_dict[articulator] / DatasetConfig.RES
 
             # All the countors should be oriented from right to left. If it is the opposite,
             # we flip the array.

@@ -10,11 +10,9 @@ from vt_tracker.metrics import distance_matrix, euclidean
 
 from dataset import ArtSpeechDataset
 from reconstruct_snail import reconstruct_snail_from_midline
+from settings import DatasetConfig
 
-RES = 136
-PIXEL_SPACING = 1.4117647409439
-
-mm_to_percent = lambda v_mm: v_mm / (RES * PIXEL_SPACING)
+mm_to_percent = lambda v_mm: v_mm / (DatasetConfig.RES * DatasetConfig.PIXEL_SPACING)
 SNAIL_PARAMETERS = {
     "soft-palate": {
         "width_int": mm_to_percent(1.5),

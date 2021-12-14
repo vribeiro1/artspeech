@@ -12,6 +12,7 @@ from torch.nn.utils.rnn import pad_sequence
 from tqdm import tqdm
 
 from bs_regularization import regularize_Bsplines
+from settings import DatasetConfig
 
 
 def get_token_intervals(token_sequence, break_token):
@@ -59,9 +60,6 @@ def break_sequence(sequence, break_points):
 
 
 class TailClipper:
-    PIXEL_SPACING = 1.4117647409439
-    RES = 136
-
     @classmethod
     def clip_tongue_tails(cls, tongue, lower_incisor, epiglottis, reg_out=True, **kwargs):
         # Remove the front tail of the tongue using the lower incisor as the reference
@@ -89,7 +87,7 @@ class TailClipper:
         tongue_1st_half = tongue_cp[:25]
         tongue_2nd_half = tongue_cp[25:]
 
-        keep_indices = np.where(tongue_1st_half[:, 1] < reference[1] + (10 / cls.PIXEL_SPACING / cls.RES))
+        keep_indices = np.where(tongue_1st_half[:, 1] < reference[1] + (10 / DatasetConfig.PIXEL_SPACING / DatasetConfig.RES))
 
         tailless_tongue = np.concatenate([
             tongue_1st_half[keep_indices],
@@ -113,7 +111,7 @@ class TailClipper:
         llip_1st_half = llip_cp[:25]
         llip_2nd_half = llip_cp[25:]
 
-        keep_indices = np.where(llip_2nd_half[:, 1] < reference[1] + (5 / cls.PIXEL_SPACING / cls.RES))
+        keep_indices = np.where(llip_2nd_half[:, 1] < reference[1] + (5 / DatasetConfig.PIXEL_SPACING / DatasetConfig.RES))
 
         tailless_llip = np.concatenate([
             llip_1st_half,
@@ -204,7 +202,6 @@ def pad_sequence_collate_fn(batch):
 
 
 class ArtSpeechDataset(Dataset):
-    RES = 136
     N_SAMPLES = 50
     def __init__(
         self, datadir, filepath, vocabulary, articulators, n_samples=50, size=136,
@@ -276,7 +273,7 @@ class ArtSpeechDataset(Dataset):
             target_array = np.flip(target_array, axis=0)
 
         if norm:
-            target_array = target_array.copy() / ArtSpeechDataset.RES
+            target_array = target_array.copy() / DatasetConfig.RES
 
         return target_array
 

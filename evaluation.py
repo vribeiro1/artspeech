@@ -11,10 +11,6 @@ from bs_regularization import regularize_Bsplines
 from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
 from tract_variables import calculate_vocal_tract_variables
 
-RES = 136
-# PIXEL_SPACING = 1.62
-PIXEL_SPACING = 1.4117647409439
-
 
 def save_outputs(outputs, targets, lengths, phonemes, articulators, save_to, regularize_out, offset=0):
     """
