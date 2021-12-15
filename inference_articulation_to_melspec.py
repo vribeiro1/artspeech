@@ -5,9 +5,9 @@ import yaml
 
 from torch.utils.data import DataLoader
 
-from articul_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
-from articul_to_melspec.evaluation import run_inference
-from articul_to_melspec.model import ArticulatoryTacotron2
+from articulation_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
+from articulation_to_melspec.evaluation import run_inference
+from articulation_to_melspec.model import ArticulatoryTacotron2
 from helpers import set_seeds, sequences_from_dict
 
 

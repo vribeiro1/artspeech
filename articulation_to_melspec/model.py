@@ -6,7 +6,7 @@ import torch.nn.functional as F
 
 from torchaudio.models import Tacotron2
 
-from articul_to_melspec import NVIDIA_TACOTRON2_WEIGHTS_FILEPATH
+from articulation_to_melspec import NVIDIA_TACOTRON2_WEIGHTS_FILEPATH
 
 
 class ArticulatorsEmbedding(nn.Module):

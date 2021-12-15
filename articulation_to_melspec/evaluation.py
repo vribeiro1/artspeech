@@ -7,7 +7,7 @@ import torch
 from scipy.io import wavfile
 from tqdm import tqdm
 
-from articul_to_melspec.waveglow import melspec_to_audio
+from articulation_to_melspec.waveglow import melspec_to_audio
 
 
 def run_inference(model, dataloader, device=None, save_to=None, sampling_rate=22050):

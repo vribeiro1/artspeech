@@ -6,9 +6,9 @@ import torch
 
 from functools import lru_cache
 
-from articul_to_melspec import NVIDIA_WAVEGLOW_WEIGHTS_FILEPATH
-from articul_to_melspec.waveglow.denoiser import Denoiser
-from articul_to_melspec.waveglow.glow import WaveGlow
+from articulation_to_melspec import NVIDIA_WAVEGLOW_WEIGHTS_FILEPATH
+from articulation_to_melspec.waveglow.denoiser import Denoiser
+from articulation_to_melspec.waveglow.glow import WaveGlow
 
 MAX_WAV_VALUE = 32768.0
 

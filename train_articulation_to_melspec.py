@@ -12,8 +12,8 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from articul_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
-from articul_to_melspec.model import ArticulatoryTacotron2
+from articulation_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
+from articulation_to_melspec.model import ArticulatoryTacotron2
 from loss import Tacotron2Loss
 from helpers import set_seeds, sequences_from_dict
 

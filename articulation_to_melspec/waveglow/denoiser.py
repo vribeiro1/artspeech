@@ -1,7 +1,7 @@
 import sys
 import torch
 
-from articul_to_melspec.waveglow.stft import STFT
+from articulation_to_melspec.waveglow.stft import STFT
 
 
 class Denoiser(torch.nn.Module):
