@@ -17,7 +17,7 @@ from torch.utils.data import DataLoader
 from bs_regularization import regularize_Bsplines
 from connect_vocal_tract_articulators import connect_articulators
 from helpers import npy_to_xarticul, set_seeds
-from model import ArtSpeech
+from phoneme_to_articulation.model import ArtSpeech
 from settings import DatasetConfig
 from vt_tracker.visualization import COLORS
 

@@ -3,16 +3,17 @@ import pdb
 import argparse
 import json
 import os
+import pandas as pd
 import torch
 import yaml
 
 from torch.utils.data import DataLoader
 
-from dataset import ArtSpeechDataset, pad_sequence_collate_fn
-from evaluation import run_test
 from helpers import set_seeds
 from loss import EuclideanDistanceLoss
-from model import ArtSpeech
+from phoneme_to_articulation.dataset import ArtSpeechDataset, pad_sequence_collate_fn
+from phoneme_to_articulation.evaluation import run_test
+from phoneme_to_articulation.model import ArtSpeech
 
 
 def main(cfg):
@@ -79,7 +80,7 @@ def main(cfg):
         results_item[f"y_corr_{articulator}"] = test_results[articulator]["y_corr"]
 
     df = pd.DataFrame([results_item])
-    df_filepath = os.path.join(fs_observer.dir, "test_results.csv")
+    df_filepath = os.path.join(cfg["save_to"], "test_results.csv")
     df.to_csv(df_filepath, index=False)
 
 

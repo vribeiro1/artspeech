@@ -27,7 +27,7 @@ from vt_tracker import (
 )
 from vt_tracker.visualization import COLORS, uint16_to_uint8
 
-from dataset import ArtSpeechDataset, TailClipper
+from phoneme_to_articulation.dataset import ArtSpeechDataset, TailClipper
 from video import Video
 
 ARTICULATORS = sorted([

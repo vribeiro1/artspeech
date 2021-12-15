@@ -4,6 +4,7 @@ import json
 import logging
 import numpy as np
 import os
+import pandas as pd
 import torch
 
 from sacred import Experiment
@@ -14,12 +15,12 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from dataset import ArtSpeechDataset, pad_sequence_collate_fn
-from evaluation import run_test
 from helpers import set_seeds
 from loss import EuclideanDistanceLoss
 from metrics import pearsons_correlation
-from model import ArtSpeech
+from phoneme_to_articulation.dataset import ArtSpeechDataset, pad_sequence_collate_fn
+from phoneme_to_articulation.evaluation import run_test
+from phoneme_to_articulation.model import ArtSpeech
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
