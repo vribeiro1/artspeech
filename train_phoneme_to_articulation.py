@@ -99,7 +99,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulator
 def main(
     _run, datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
     train_filepath, valid_filepath, test_filepath, vocab_filepath, articulators,
-    p_aug=0., state_dict_fpath=None
+    p_aug=0., clip_tails=True, state_dict_fpath=None
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
@@ -138,7 +138,7 @@ def main(
         vocabulary,
         articulators,
         p_aug=p_aug,
-        clip_tails=True
+        clip_tails=clip_tails
     )
     train_dataloader = DataLoader(
         train_dataset,
@@ -154,7 +154,7 @@ def main(
         vocabulary,
         articulators,
         p_aug=p_aug,
-        clip_tails=True
+        clip_tails=clip_tails
     )
     valid_dataloader = DataLoader(
         valid_dataset,
@@ -213,7 +213,7 @@ def main(
         test_filepath,
         vocabulary,
         articulators,
-        clip_tails=True
+        clip_tails=clip_tails
     )
     test_dataloader = DataLoader(
         test_dataset,

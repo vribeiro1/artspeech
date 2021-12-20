@@ -242,7 +242,7 @@ class ArtSpeechDataset(Dataset):
         if clip_tails and not all(map(lambda art: art in articulators, tail_clip_refs)):
             raise ValueError(
                 f"clip_tails == True requires that all the references are available."
-                "References are {tail_clip_refs}"
+                f"References are {tail_clip_refs}"
             )
 
         self.clip_tails = clip_tails
