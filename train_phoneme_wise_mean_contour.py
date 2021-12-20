@@ -71,7 +71,7 @@ def main(
         json.dump(test_results, f)
 
     results_item = {
-        "exp": _run.id,
+        "exp": _run._id,
         "loss": test_results["loss"],
     }
 
