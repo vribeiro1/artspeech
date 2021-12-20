@@ -29,7 +29,7 @@ VALID = "validation"
 TEST = "test"
 
 ex = Experiment()
-fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "results"))
+fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "phoneme_to_articulation", "results"))
 ex.observers.append(fs_observer)
 
 
