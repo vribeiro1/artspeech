@@ -24,7 +24,7 @@ VALID = "validation"
 TEST = "test"
 
 ex = Experiment()
-fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "articul_to_melspec", "results"))
+fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "articulation_to_melspec", "results"))
 ex.observers.append(fs_observer)
 
 
@@ -155,7 +155,7 @@ def main(
     best_model_path = os.path.join(fs_observer.dir, "best_model.pt")
     last_model_path = os.path.join(fs_observer.dir, "last_model.pt")
 
-    model = ArticulatoryTacotron2(n_articulators=len(articulators), n_samples=50)
+    model = ArticulatoryTacotron2(n_articulators=len(articulators), n_samples=50, pretrained=True)
     if state_dict_fpath is not None:
         state_dict = torch.load(state_dict_fpath, map_location=device)
         model.load_state_dict(state_dict)
