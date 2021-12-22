@@ -97,7 +97,7 @@ def test(dataset, df, save_to):
     p2cp_per_articulator = [[] for _ in dataset.articulators]
     x_corrs = [[] for _ in dataset.articulators]
     y_corrs = [[] for _ in dataset.articulators]
-    for i_sentence, (_, sentence_targets, sentence_tokens) in enumerate(tqdm(dataset, "test")):
+    for i_sentence, (_, _, sentence_targets, sentence_tokens) in enumerate(tqdm(dataset, "test")):
         tokens_pos = calculate_tokens_positions_in_sequence(sentence_tokens)
         tokens_seqs_len = calculate_tokens_sequences_len(sentence_tokens)
         tokens_seqs_len = functools.reduce(lambda l1, l2: l1 + l2, [[token_seq_len for _ in range(token_seq_len[1])] for token_seq_len in tokens_seqs_len])

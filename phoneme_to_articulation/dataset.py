@@ -186,19 +186,21 @@ class TailClipper:
 
 
 def pad_sequence_collate_fn(batch):
-    sentence_numerized = [item[0] for item in batch]
+    sentences_ids = [item[0] for item in batch]
+
+    sentence_numerized = [item[1] for item in batch]
     len_sentences = torch.tensor(funcy.lmap(len, sentence_numerized), dtype=torch.int)
     len_sentences_sorted, sentences_sorted_indices = len_sentences.sort(descending=True)
     padded_sentence_numerized = pad_sequence(sentence_numerized, batch_first=True)
     padded_sentence_numerized = padded_sentence_numerized[sentences_sorted_indices]
 
-    sentence_targets = [item[1] for item in batch]
+    sentence_targets = [item[2] for item in batch]
     padded_sentence_targets = pad_sequence(sentence_targets, batch_first=True)
     padded_sentence_targets = padded_sentence_targets[sentences_sorted_indices]
 
-    phonemes = [batch[i][2] for i in sentences_sorted_indices]
+    phonemes = [batch[i][3] for i in sentences_sorted_indices]
 
-    return padded_sentence_numerized, padded_sentence_targets, len_sentences_sorted, phonemes
+    return sentences_ids, padded_sentence_numerized, padded_sentence_targets, len_sentences_sorted, phonemes
 
 
 class ArtSpeechDataset(Dataset):
@@ -351,6 +353,11 @@ class ArtSpeechDataset(Dataset):
         last_phoneme = phonemes[-1]
         sentence_end = last_phoneme["end_time"]
 
+        frames_filepaths = item["frames_filepaths"]
+        first_frame_filepath = frames_filepaths[0]
+        _, subject, sequence, _, _ = first_frame_filepath.split("/")
+        sentence_id = f"{subject}_{sequence}_{'%0.4f' % item['start_time']}"
+
         contours_filepaths = item["contours_filepaths"]
         frame_keys = list(contours_filepaths.keys())
 
@@ -382,7 +389,7 @@ class ArtSpeechDataset(Dataset):
             self.vocabulary[token] for token in sentence_tokens
         ], dtype=torch.long)
 
-        return sentence_numerized, sentence_targets, sentence_tokens
+        return sentence_id, sentence_numerized, sentence_targets, sentence_tokens
 
     def augment(self, sentence_numerized, sentence_targets, phonemes):
         # Get silence intervals in the original sentence
@@ -438,7 +445,7 @@ class ArtSpeechDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, item):
-        sentence_numerized, sentence_targets, phonemes = self.load_fn(self.data[item])
+        sentence_id, sentence_numerized, sentence_targets, phonemes = self.load_fn(self.data[item])
 
         if np.random.rand() < self.p_aug:
             sentence_numerized, sentence_targets, phonemes = self.augment(
@@ -454,4 +461,4 @@ class ArtSpeechDataset(Dataset):
             sentence_targets[:, :, 0, :] = sentence_targets[:, :, 0, :] + 0.3
             sentence_targets[:, :, 1, :] = sentence_targets[:, :, 1, :] + 0.3
 
-        return sentence_numerized, sentence_targets, phonemes
+        return sentence_id, sentence_numerized, sentence_targets, phonemes

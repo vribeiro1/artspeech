@@ -12,9 +12,10 @@ from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
 from tract_variables import calculate_vocal_tract_variables
 
 
-def save_outputs(outputs, targets, lengths, phonemes, articulators, save_to, regularize_out, offset=0):
+def save_outputs(sentences_ids, outputs, targets, lengths, phonemes, articulators, save_to, regularize_out):
     """
     Args:
+    sentences_ids (str): Unique id of each sentence to save the results.
     outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
     targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
     lengths (List): List with the length of each sentence in the batch.
@@ -22,10 +23,12 @@ def save_outputs(outputs, targets, lengths, phonemes, articulators, save_to, reg
     articulators (List[str]): List of articulators.
     save_to (str): Path to the directory to save the results.
     regularize_out (bool): If should apply bspline regularization or not.
-    offset (int): Offset from previous processed batch.
     """
-    for i_sentence, (sentence_outs, sentence_targets, length, sentence_phonemes) in enumerate(zip(outputs, targets, lengths, phonemes)):
-        sentence_id = str(i_sentence + offset)
+    for i_sentence, (
+        sentence_id, sentence_outs, sentence_targets, length, sentence_phonemes
+    ) in enumerate(zip(
+        sentences_ids, outputs, targets, lengths, phonemes
+    )):
         saves_i_dir = os.path.join(save_to, sentence_id)
         if not os.path.exists(os.path.join(saves_i_dir, "contours")):
             os.makedirs(os.path.join(saves_i_dir, "contours"))
@@ -39,28 +42,31 @@ def save_outputs(outputs, targets, lengths, phonemes, articulators, save_to, reg
                     resX, resY = regularize_Bsplines(pred_art_arr.transpose(1, 0), 3)
                     pred_art_arr = np.array([resX, resY])
 
-                pred_npy_filepath = os.path.join(saves_i_dir, "contours", f"{i_frame}_{art}.npy")
+                pred_npy_filepath = os.path.join(saves_i_dir, "contours", f"{'%04d' % i_frame}_{art}.npy")
                 with open(pred_npy_filepath, "wb") as f:
                     np.save(f, pred_art_arr)
 
-                true_npy_filepath = os.path.join(saves_i_dir, "contours", f"{i_frame}_{art}_true.npy")
+                true_npy_filepath = os.path.join(saves_i_dir, "contours", f"{'%04d' % i_frame}_{art}_true.npy")
                 with open(true_npy_filepath, "wb") as f:
                     np.save(f, true_art_arr)
 
 
-def tract_variables(outputs, targets, lengths, phonemes, articulators, save_to, offset=0):
+def tract_variables(sentences_ids, outputs, targets, lengths, phonemes, articulators, save_to):
     """
     Args:
+    sentences_ids (str): Unique id of each sentence to save the results.
     outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
     targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
     lengths (List): List with the length of each sentence in the batch.
     phonemes (List): List with the sequence of phonemes for each sentence in the batch.
     articulators (List[str]): List of articulators.
     save_to (str): Path to the directory to save the results.
-    offset (int): Offset from previous processed batch.
     """
-    for i_sentence, (sentence_outs, sentence_targets, length, sentence_phonemes) in enumerate(zip(outputs, targets, lengths, phonemes)):
-        sentence_id = str(i_sentence + offset)
+    for i_sentence, (
+        sentence_id, sentence_outs, sentence_targets, length, sentence_phonemes
+    ) in enumerate(zip(
+        sentences_ids, outputs, targets, lengths, phonemes
+    )):
         saves_i_dir = os.path.join(save_to, sentence_id)
         if not os.path.exists(saves_i_dir):
             os.makedirs(saves_i_dir)
@@ -79,7 +85,7 @@ def tract_variables(outputs, targets, lengths, phonemes, articulators, save_to, 
 
             item = {
                 "sentence": sentence_id,
-                "frame": i_frame,
+                "frame": '%04d' % i_frame,
                 "phoneme": phoneme
             }
 
@@ -131,12 +137,12 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
     x_corrs = [[] for _ in articulators]
     y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - inference")
-    for i_batch, (sentence, targets, lengths, phonemes) in enumerate(progress_bar):
-        sentence = sentence.to(device)
+    for i_batch, (sentences_ids, sentences, targets, lengths, phonemes) in enumerate(progress_bar):
+        sentences = sentences.to(device)
         targets = targets.to(device)
 
         with torch.set_grad_enabled(False):
-            outputs = model(sentence, lengths)
+            outputs = model(sentences, lengths)
             loss = criterion(outputs, targets)
 
             outputs = outputs.detach().cpu()
@@ -163,25 +169,25 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
             losses.append(loss.item())
             progress_bar.set_postfix(loss=np.mean(losses))
 
-            tract_variables(
-                outputs,
-                targets,
-                lengths,
-                phonemes,
-                articulators,
-                epoch_outputs_dir,
-                i_batch * dataloader.batch_size,
-            )
+            # tract_variables(
+            #     sentences_ids,
+            #     outputs,
+            #     targets,
+            #     lengths,
+            #     phonemes,
+            #     articulators,
+            #     epoch_outputs_dir
+            # )
 
             save_outputs(
+                sentences_ids,
                 outputs,
                 targets,
                 lengths,
                 phonemes,
                 articulators,
                 epoch_outputs_dir,
-                regularize_out,
-                i_batch * dataloader.batch_size,
+                regularize_out
             )
 
     mean_loss = np.mean(losses)

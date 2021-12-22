@@ -47,7 +47,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulator
     x_corrs = [[] for _ in articulators]
     y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for i, (sentence, targets, lengths, _) in enumerate(progress_bar):
+    for i, (_, sentence, targets, lengths, _) in enumerate(progress_bar):
         sentence = sentence.to(device)
         targets = targets.to(device)
 
