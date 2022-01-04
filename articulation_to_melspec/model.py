@@ -4,9 +4,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+from glow_tts.models import FlowGenerator
 from torchaudio.models import Tacotron2
 
-from articulation_to_melspec import NVIDIA_TACOTRON2_WEIGHTS_FILEPATH
+from articulation_to_melspec import NVIDIA_TACOTRON2_WEIGHTS_FILEPATH, GLOW_TTS_WEIGHTS_FILEPATH
 
 
 class ArticulatorsEmbedding(nn.Module):
@@ -146,3 +147,19 @@ class ArticulatoryTacotron2(Tacotron2):
         alignments = alignments.unfold(1, n_batch, n_batch).transpose(0, 2)
 
         return mel_outputs_postnet, mel_specgram_lengths, alignments
+
+
+class GlowATS(FlowGenerator):
+    def __init__(self, n_articulators, *args, n_samples=50, pretrained=False, **kwargs):
+        super(GlowATS, self).__init__(*args, **kwargs)
+
+        if pretrained:
+            self._load_pretrained_weigths()
+
+        self.encoder.emb = ArticulatorsEmbedding(n_curves=n_articulators, n_samples=n_samples, embed_size=192)
+
+    def _load_pretrained_weigths(self):
+        glow_tts_state_dict = torch.load(
+            GLOW_TTS_WEIGHTS_FILEPATH, map_location=torch.device("cpu")
+        )
+        self.load_state_dict(glow_tts_state_dict)
