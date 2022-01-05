@@ -1,5 +1,14 @@
 import torch
 
+from vt_tracker import (
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    TONGUE,
+    UPPER_LIP,
+    UPPER_INCISOR,
+)
+
 
 ART_SLICES = {
     "tongue-tip": (30, 45),
@@ -77,10 +86,10 @@ def calculate_vocal_tract_variables(inputs_dict):
     VEL - Velum
     GLO - Glottis
     """
-    LA, LA_llip, LA_ulip = _calculate_LA(inputs_dict["lower-lip"], inputs_dict["upper-lip"])
-    TTCD, TTCD_tongue, TTDC_uincisor = _calculate_TTCD(inputs_dict["tongue"], inputs_dict["upper-incisor"])
-    TBCD, TBCD_tongue, TBCD_palate = _calculate_TBCD(inputs_dict["tongue"], inputs_dict["upper-incisor"], inputs_dict["soft-palate"])
-    VEL, VEL_velum, VEL_pharynx = _calculate_VEL(inputs_dict["soft-palate"], inputs_dict["pharynx"])
+    LA, LA_llip, LA_ulip = _calculate_LA(inputs_dict[LOWER_LIP], inputs_dict[UPPER_LIP])
+    TTCD, TTCD_tongue, TTDC_uincisor = _calculate_TTCD(inputs_dict[TONGUE], inputs_dict[UPPER_INCISOR])
+    TBCD, TBCD_tongue, TBCD_palate = _calculate_TBCD(inputs_dict[TONGUE], inputs_dict[UPPER_INCISOR], inputs_dict[SOFT_PALATE])
+    VEL, VEL_velum, VEL_pharynx = _calculate_VEL(inputs_dict[SOFT_PALATE], inputs_dict[PHARYNX])
 
     # PoC stands for Place of Constriction. For each TV, there are two PoCs,
     # from which the TV is measured.

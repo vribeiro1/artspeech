@@ -6,10 +6,27 @@ import pandas as pd
 import torch
 
 from tqdm import tqdm
+from vt_tracker import (
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    TONGUE,
+    UPPER_LIP,
+    UPPER_INCISOR,
+)
 
 from bs_regularization import regularize_Bsplines
 from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
 from tract_variables import calculate_vocal_tract_variables
+
+required_articulators_for_TVs = [
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    TONGUE,
+    UPPER_LIP,
+    UPPER_INCISOR,
+]
 
 
 def save_outputs(sentences_ids, outputs, targets, lengths, phonemes, articulators, save_to, regularize_out):
@@ -169,15 +186,18 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
             losses.append(loss.item())
             progress_bar.set_postfix(loss=np.mean(losses))
 
-            # tract_variables(
-            #     sentences_ids,
-            #     outputs,
-            #     targets,
-            #     lengths,
-            #     phonemes,
-            #     articulators,
-            #     epoch_outputs_dir
-            # )
+            # Only calculate the tract variables if all of the required articulators are included
+            # in the test
+            if [articulator in articulators for articulator in required_articulators_for_TVs]:
+                tract_variables(
+                    sentences_ids,
+                    outputs,
+                    targets,
+                    lengths,
+                    phonemes,
+                    articulators,
+                    epoch_outputs_dir
+                )
 
             save_outputs(
                 sentences_ids,
