@@ -155,7 +155,7 @@ class TailClipper:
         ulip_1st_half = ulip_cp[:25]
         ulip_2nd_half = ulip_cp[25:]
 
-        keep_indices = np.where(ulip_2nd_half[:, 1] > reference[1] - (10 / cls.PIXEL_SPACING))
+        keep_indices = np.where(ulip_2nd_half[:, 1] > reference[1] - (10 / DatasetConfig.PIXEL_SPACING))
 
         tailless_ulip = np.concatenate([
             ulip_1st_half,
@@ -171,7 +171,7 @@ class TailClipper:
         ulip_1st_half = ulip_cp[:25]
         ulip_2nd_half = ulip_cp[25:]
 
-        keep_indices = np.where(ulip_1st_half[:, 1] > reference[1] - (5 / cls.PIXEL_SPACING))
+        keep_indices = np.where(ulip_1st_half[:, 1] > reference[1] - (5 / DatasetConfig.PIXEL_SPACING))
 
         tailless_ulip = np.concatenate([
             ulip_1st_half[keep_indices],

@@ -9,7 +9,7 @@ class ArticulatorPredictor(nn.Module):
     def __init__(self, in_features, n_samples):
         super(ArticulatorPredictor, self).__init__()
         self.linear = nn.Sequential(
-            nn.LayerNorm([128]),
+            nn.LayerNorm([in_features]),
             nn.Linear(in_features, 256),
             nn.ReLU(),
             nn.LayerNorm([256]),
@@ -34,6 +34,22 @@ class ArticulatorPredictor(nn.Module):
         return out
 
 
+class Decoder(nn.Module):
+    def __init__(self, n_articulators, hidden_size, n_samples):
+        super(Decoder, self).__init__()
+
+        self.predictors = nn.ModuleList([
+            ArticulatorPredictor(hidden_size, n_samples) for i in range(n_articulators)
+        ])
+
+    def forward(self, x):
+        out = torch.stack([
+            predictor(x) for predictor in self.predictors
+        ], dim=2)
+
+        return torch.sigmoid(out)
+
+
 class ArtSpeech(nn.Module):
     def __init__(
         self, vocab_size, n_articulators, embed_dim=64, hidden_size=128, n_samples=50, gru_dropout=0.
@@ -47,9 +63,7 @@ class ArtSpeech(nn.Module):
             nn.ReLU()
         )
 
-        self.predictors = nn.ModuleList([
-            ArticulatorPredictor(hidden_size, n_samples) for i in range(n_articulators)
-        ])
+        self.decoder = Decoder(n_articulators, hidden_size, n_samples)
 
     def forward(self, x, lengths):
         """
@@ -63,8 +77,6 @@ class ArtSpeech(nn.Module):
         rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
 
         linear_out = self.linear(rnn_out)  # torch.Size([bs, seq_len, embed_dim])
-        out = torch.stack([
-            predictor(linear_out) for predictor in self.predictors
-        ], dim=2)
+        out = self.decoder(linear_out)
 
-        return torch.sigmoid(out)
+        return out
