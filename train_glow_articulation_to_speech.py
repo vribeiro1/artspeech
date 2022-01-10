@@ -13,9 +13,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from articulation_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
+from articulation_to_melspec.evaluation import run_glow_tts_inference
 from articulation_to_melspec.model import GlowATS
 from loss import Tacotron2Loss
 from helpers import set_seeds, sequences_from_dict
+from articulation_to_melspec.evaluation import run_glow_tts_inference
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -172,6 +174,23 @@ def main(
             device=device
         )
 
+        info_valid = run_epoch(
+            phase=VALID,
+            epoch=epoch,
+            model=model,
+            dataloader=valid_dataloader,
+            optimizer=optimizer,
+            writer=writer,
+            device=device
+        )
+
+        if info_valid["loss"] < best_metric:
+            best_metric = info_valid["loss"]
+            torch.save(model.state_dict(), best_model_path)
+            epochs_since_best = 0
+        else:
+            epochs_since_best += 1
+
         torch.save(model.state_dict(), last_model_path)
 
         if epochs_since_best > patience:
@@ -186,4 +205,15 @@ def main(
         num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
+    )
+
+    test_outputs_dir = os.path.join(fs_observer.dir, "test_outputs")
+    if not os.path.exists(test_outputs_dir):
+        os.makedirs(test_outputs_dir)
+
+    run_inference(
+        model=model,
+        dataloader=test_dataloader,
+        device=device,
+        save_to=test_outputs_dir
     )
