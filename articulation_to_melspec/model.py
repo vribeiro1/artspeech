@@ -7,7 +7,11 @@ import torch.nn.functional as F
 from glow_tts.models import FlowGenerator
 from torchaudio.models import Tacotron2
 
-from articulation_to_melspec import NVIDIA_TACOTRON2_WEIGHTS_FILEPATH, GLOW_TTS_WEIGHTS_FILEPATH
+from articulation_to_melspec import (
+    NVIDIA_TACOTRON2_WEIGHTS_FILEPATH,
+    GLOW_TTS_WEIGHTS_FILEPATH,
+    GLOW_ATS_EMBEDDING_WEIGHTS_FILEPATH
+)
 
 
 class ArticulatorsEmbedding(nn.Module):
@@ -150,16 +154,36 @@ class ArticulatoryTacotron2(Tacotron2):
 
 
 class GlowATS(FlowGenerator):
-    def __init__(self, n_articulators, *args, n_samples=50, pretrained=False, **kwargs):
+    def __init__(self, n_articulators, *args, n_samples=50, pretrained=False, pretrained_encoder=False, **kwargs):
+        """
+        Glow Articulatory-to-Speech. A modified version of Glow-TTS to handle articulatory data
+        instead of text.
+
+        Args:
+        n_articulators (int): Number of articulators involved.
+        n_samples (int): Number of samples in each articulator curve.
+        pretrained (bool): Use Glow-TTS pretraining.
+        pretrained_encoder (bool): Use articulatory autoencoder pretraining.
+        """
         super(GlowATS, self).__init__(*args, **kwargs)
 
         if pretrained:
-            self._load_pretrained_weigths()
+            self._load_pretrained_glow_tts()
 
         self.encoder.emb = ArticulatorsEmbedding(n_curves=n_articulators, n_samples=n_samples, embed_size=192)
 
-    def _load_pretrained_weigths(self):
+        if pretrained_encoder:
+            self._load_pretrained_encoder()
+
+    def _load_pretrained_glow_tts(self):
         glow_tts_state_dict = torch.load(
             GLOW_TTS_WEIGHTS_FILEPATH, map_location=torch.device("cpu")
         )
         self.load_state_dict(glow_tts_state_dict)
+
+    def _load_pretrained_encoder(self):
+        embedding_state_dict = torch.load(
+            GLOW_ATS_EMBEDDING_WEIGHTS_FILEPATH, map_location=torch.device("cpu")
+        )
+
+        self.encoder.emb.load_state_dict(embedding_state_dict)
