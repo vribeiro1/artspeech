@@ -6,17 +6,19 @@ import funcy
 import json
 import matplotlib.pyplot as plt
 import numpy as np
+import pandas as pd
 import os
 import torch
 
+from functools import partial
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from tgt import read_textgrid
-from torch.utils.data import DataLoader
 
 from bs_regularization import regularize_Bsplines
 from connect_vocal_tract_articulators import connect_articulators
-from helpers import npy_to_xarticul, set_seeds
+from helpers import npy_to_xarticul
+from phoneme_wise_mean_contour import forward_mean_contour
 from phoneme_to_articulation.model import ArtSpeech
 from settings import DatasetConfig
 from vt_tracker.visualization import COLORS
@@ -155,6 +157,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--textgrid", dest="textgrid_filepath", required=True)
     parser.add_argument("--encoding", dest="textgrid_encoding", default="utf-8")
+    parser.add_argument("--method", dest="method", default="neural-network")
     parser.add_argument("--state-dict", dest="state_dict_filepath", required=True)
     parser.add_argument("--save-to", dest="save_to", required=True)
     args = parser.parse_args()
@@ -177,23 +180,31 @@ if __name__ == "__main__":
         for sentence_tokens in phonetic_sequences
     ]
 
-    dataloader = DataLoader(
-        list(zip(sentences_numerized, phonetic_sequences)),
-        batch_size=1,
-        shuffle=False,
-        worker_init_fn=set_seeds
-    )
+    if args.method == "neural-network":
+        model = ArtSpeech(len(vocabulary), 11)
+        state_dict = torch.load(args.state_dict_filepath, map_location=device)
+        model.load_state_dict(state_dict)
+        model.to(device)
+    elif args.method == "mean-contour":
+        articulators = sorted(COLORS.keys())
 
-    model = ArtSpeech(len(vocabulary), 11)
-    state_dict = torch.load(args.state_dict_filepath, map_location=device)
-    model.load_state_dict(state_dict)
-    model.to(device)
+        df = pd.read_csv(args.state_dict_filepath)
+        for articulator in articulators:
+            df[articulator] = df[articulator].apply(eval)
 
-    for i, (inputs, phonemes) in enumerate(dataloader):
-        inputs = inputs.to(device)
+        model = partial(forward_mean_contour, df=df, articulators=articulators)
+    else:
+        raise Exception(f"Unavailable method '{args.method}'")
+
+    for i, (inputs, phonemes) in enumerate(zip(sentences_numerized, phonetic_sequences)):
+        inputs = inputs.unsqueeze(dim=0).to(device)
         _, seq_len = inputs.shape
         lengths = torch.tensor([seq_len], dtype=torch.long).cpu()
-        outputs = model(inputs, lengths)
+
+        if args.method == "neural-network":
+            outputs = model(inputs, lengths)
+        elif args.method == "mean-contour":
+            outputs = model(phonemes)
 
         save_sentence_dir = os.path.join(args.save_to, str(i))
         if not os.path.exists(save_sentence_dir):

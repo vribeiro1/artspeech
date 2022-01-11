@@ -83,6 +83,43 @@ def train(dataset, save_to=None):
     return df
 
 
+def forward_mean_contour(sentence_tokens, df, articulators, n_samples=50):
+    n_articulators = len(articulators)
+    tokens_pos = calculate_tokens_positions_in_sequence(sentence_tokens)
+    tokens_seqs_len = calculate_tokens_sequences_len(sentence_tokens)
+    tokens_seqs_len = functools.reduce(
+        lambda l1, l2: l1 + l2,
+        [
+            [token_seq_len for _ in range(token_seq_len[1])]
+            for token_seq_len in tokens_seqs_len
+        ]
+    )
+    tokens_rel_pos = [
+        (token, pos, seq_len, pos / seq_len)
+        for (token, pos), (token, seq_len) in zip(tokens_pos, tokens_seqs_len)
+    ]
+
+    sentence_outputs = torch.zeros(0, n_articulators, 2, n_samples)
+    for token, _, _, rel_pos in tokens_rel_pos:
+        df_token_wise = df[df.token == token]
+
+        weights = (df_token_wise.rel_pos - rel_pos).abs().to_numpy()
+        n_weights, = weights.shape
+        softmin_weights = F.softmin(torch.from_numpy(weights), dim=0).view(n_weights, 1, 1, 1)
+
+        token_wise_articulators = [torch.stack([
+            torch.tensor((row[articulator])) for articulator in articulators
+        ]) for _, row in df_token_wise.iterrows()]
+
+        token_wise_articulators = torch.stack(token_wise_articulators)
+        weighted_mean_token_wise_articulators = (softmin_weights * token_wise_articulators).sum(dim=0)
+        weighted_mean_token_wise_articulators = weighted_mean_token_wise_articulators.unsqueeze(dim=0)
+
+        sentence_outputs = torch.cat([sentence_outputs, weighted_mean_token_wise_articulators])
+
+    return sentence_outputs
+
+
 def test(dataset, df, save_to):
     if isinstance(df, str):
         df = pd.read_csv(df)
@@ -98,29 +135,7 @@ def test(dataset, df, save_to):
     x_corrs = [[] for _ in dataset.articulators]
     y_corrs = [[] for _ in dataset.articulators]
     for i_sentence, (_, _, sentence_targets, sentence_tokens) in enumerate(tqdm(dataset, "test")):
-        tokens_pos = calculate_tokens_positions_in_sequence(sentence_tokens)
-        tokens_seqs_len = calculate_tokens_sequences_len(sentence_tokens)
-        tokens_seqs_len = functools.reduce(lambda l1, l2: l1 + l2, [[token_seq_len for _ in range(token_seq_len[1])] for token_seq_len in tokens_seqs_len])
-        tokens_rel_pos = [(token, pos, seq_len, pos / seq_len) for (token, pos), (token, seq_len)  in zip(tokens_pos, tokens_seqs_len)]
-
-        sentence_outputs = torch.zeros(0, n_articulators, 2, n_samples)
-        for (token, _, _, rel_pos), _ in zip(tokens_rel_pos, sentence_targets):
-            df_token_wise = df[df.token == token]
-
-            weights = (df_token_wise.rel_pos - rel_pos).abs().to_numpy()
-            n_weights, = weights.shape
-            softmin_weights = F.softmin(torch.from_numpy(weights), dim=0).view(n_weights, 1, 1, 1)
-
-            token_wise_articulators = [torch.stack([
-                torch.tensor(row[articulator]) for articulator in dataset.articulators
-            ]) for _, row in df_token_wise.iterrows()]
-
-            token_wise_articulators = torch.stack(token_wise_articulators)
-            weighted_mean_token_wise_articulators = (softmin_weights * token_wise_articulators).sum(dim=0)
-            weighted_mean_token_wise_articulators = weighted_mean_token_wise_articulators.unsqueeze(dim=0)
-
-            sentence_outputs = torch.cat([sentence_outputs, weighted_mean_token_wise_articulators])
-
+        sentence_outputs = forward_mean_contour(sentence_tokens, df, dataset.articulators)
         sentence_outputs = sentence_outputs.unsqueeze(dim=0)
         sentence_targets = sentence_targets.unsqueeze(dim=0)
 
