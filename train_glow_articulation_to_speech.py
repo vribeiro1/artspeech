@@ -17,7 +17,6 @@ from articulation_to_melspec.evaluation import run_glow_tts_inference
 from articulation_to_melspec.model import GlowATS
 from loss import Tacotron2Loss
 from helpers import set_seeds, sequences_from_dict
-from articulation_to_melspec.evaluation import run_glow_tts_inference
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -211,7 +210,7 @@ def main(
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
-    run_inference(
+    run_glow_tts_inference(
         model=model,
         dataloader=test_dataloader,
         device=device,

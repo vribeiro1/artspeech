@@ -10,7 +10,7 @@ from torchaudio.models import Tacotron2
 from articulation_to_melspec import (
     NVIDIA_TACOTRON2_WEIGHTS_FILEPATH,
     GLOW_TTS_WEIGHTS_FILEPATH,
-    GLOW_ATS_EMBEDDING_WEIGHTS_FILEPATH
+    ARTICULATORS_EMBEDDING_WEIGHTS_FILEPATH
 )
 
 
@@ -183,7 +183,7 @@ class GlowATS(FlowGenerator):
 
     def _load_pretrained_encoder(self):
         embedding_state_dict = torch.load(
-            GLOW_ATS_EMBEDDING_WEIGHTS_FILEPATH, map_location=torch.device("cpu")
+            ARTICULATORS_EMBEDDING_WEIGHTS_FILEPATH, map_location=torch.device("cpu")
         )
 
         self.encoder.emb.load_state_dict(embedding_state_dict)
