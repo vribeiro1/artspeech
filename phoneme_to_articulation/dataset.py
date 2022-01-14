@@ -13,6 +13,11 @@ from tqdm import tqdm
 
 from bs_regularization import regularize_Bsplines
 from settings import DatasetConfig
+from vt_tracker import (
+    EPIGLOTTIS,
+    LOWER_INCISOR,
+    UPPER_INCISOR
+)
 
 
 def get_token_intervals(token_sequence, break_token):
@@ -234,13 +239,14 @@ class ArtSpeechDataset(Dataset):
         self.size = size
         self.p_aug = p_aug
 
-        if "upper-incisor" in self.articulators:
-            self.upper_incisor_index = self.articulators.index("upper-incisor")
+        self.upper_incisor_index = None
+        if UPPER_INCISOR in self.articulators:
+            self.upper_incisor_index = self.articulators.index(UPPER_INCISOR)
 
         with open(filepath) as f:
             data = funcy.lfilter(self._exclude_missing_data, json.load(f))
 
-        tail_clip_refs = ["lower-incisor", "upper-incisor", "epiglottis"]
+        tail_clip_refs = [LOWER_INCISOR, UPPER_INCISOR, EPIGLOTTIS]
         if clip_tails and not all(map(lambda art: art in articulators, tail_clip_refs)):
             raise ValueError(
                 f"clip_tails == True requires that all the references are available."
@@ -281,15 +287,18 @@ class ArtSpeechDataset(Dataset):
 
     @staticmethod
     def load_frame_targets(datadir, frame_targets_filepaths, articulators, clip_tails=False):
+        # The upper incisor is the reference for the coordinates system
+        coord_system_reference_fp = os.path.join(datadir, frame_targets_filepaths[UPPER_INCISOR])
+        coord_system_reference = ArtSpeechDataset.load_target_array(coord_system_reference_fp)
+
         # References for tail clipping
         if clip_tails:
-            lower_incisor_fp = os.path.join(datadir, frame_targets_filepaths["lower-incisor"])
+            lower_incisor_fp = os.path.join(datadir, frame_targets_filepaths[LOWER_INCISOR])
             lower_incisor = ArtSpeechDataset.load_target_array(lower_incisor_fp)
 
-            upper_incisor_fp = os.path.join(datadir, frame_targets_filepaths["upper-incisor"])
-            upper_incisor = ArtSpeechDataset.load_target_array(upper_incisor_fp)
+            upper_incisor = coord_system_reference
 
-            epiglottis_fp = os.path.join(datadir, frame_targets_filepaths["epiglottis"])
+            epiglottis_fp = os.path.join(datadir, frame_targets_filepaths[EPIGLOTTIS])
             epiglottis = ArtSpeechDataset.load_target_array(epiglottis_fp)
         else:
             lower_incisor = upper_incisor = epiglottis = None
@@ -321,7 +330,10 @@ class ArtSpeechDataset(Dataset):
 
             frame_targets = torch.cat([frame_targets, contour])
 
-        return frame_targets
+        coord_system_reference = torch.from_numpy(coord_system_reference)
+        coord_system_reference = coord_system_reference.T.unsqueeze(dim=0)
+
+        return frame_targets, coord_system_reference
 
     def _exclude_missing_data(self, item):
         """
@@ -366,6 +378,7 @@ class ArtSpeechDataset(Dataset):
 
         sentence_tokens = []
         sentence_targets = torch.zeros(size=(0, self.n_articulators, 2, self.n_samples))
+        sentence_references = torch.zeros(size=(0, 1, 2, self.n_samples))
         for phoneme in phonemes:
             phone_start = phoneme["start_time"]
             phone_end = phoneme["end_time"]
@@ -375,7 +388,7 @@ class ArtSpeechDataset(Dataset):
             for frame_key in phoneme_frame_keys:
                 frame_contours_filepaths = contours_filepaths[frame_key]
 
-                frame_targets = self.load_frame_targets(
+                frame_targets, reference = self.load_frame_targets(
                     self.datadir,
                     frame_contours_filepaths,
                     self.articulators,
@@ -385,11 +398,14 @@ class ArtSpeechDataset(Dataset):
                 frame_targets = frame_targets.unsqueeze(dim=0)
                 sentence_targets = torch.cat([sentence_targets, frame_targets])
 
+                reference = reference.unsqueeze(dim=0)
+                sentence_references = torch.cat([sentence_references, reference])
+
         sentence_numerized = torch.tensor([
             self.vocabulary[token] for token in sentence_tokens
         ], dtype=torch.long)
 
-        return sentence_id, sentence_numerized, sentence_targets, sentence_tokens
+        return sentence_id, sentence_numerized, sentence_targets, sentence_tokens, sentence_references
 
     def augment(self, sentence_numerized, sentence_targets, phonemes):
         # Get silence intervals in the original sentence
@@ -445,7 +461,7 @@ class ArtSpeechDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, item):
-        sentence_id, sentence_numerized, sentence_targets, phonemes = self.load_fn(self.data[item])
+        sentence_id, sentence_numerized, sentence_targets, phonemes, sentence_references = self.load_fn(self.data[item])
 
         if np.random.rand() < self.p_aug:
             sentence_numerized, sentence_targets, phonemes = self.augment(
@@ -453,12 +469,11 @@ class ArtSpeechDataset(Dataset):
             )
 
         # Centralize the targets using the upper incisor as the reference of the coordinates system
-        if "upper-incisor" in self.articulators:
-            upper_incisor_last_samples = sentence_targets[:, self.upper_incisor_index, :, -1]
-            subtract_array = upper_incisor_last_samples.unsqueeze(1).unsqueeze(-1)
+        upper_incisor_last_samples = sentence_references[:, 0, :, -1]
+        subtract_array = upper_incisor_last_samples.unsqueeze(1).unsqueeze(-1)
 
-            sentence_targets = sentence_targets - subtract_array
-            sentence_targets[:, :, 0, :] = sentence_targets[:, :, 0, :] + 0.3
-            sentence_targets[:, :, 1, :] = sentence_targets[:, :, 1, :] + 0.3
+        sentence_targets = sentence_targets - subtract_array
+        sentence_targets[:, :, 0, :] = sentence_targets[:, :, 0, :] + 0.3
+        sentence_targets[:, :, 1, :] = sentence_targets[:, :, 1, :] + 0.3
 
         return sentence_id, sentence_numerized, sentence_targets, phonemes

@@ -63,7 +63,9 @@ class ArtSpeech(nn.Module):
             nn.ReLU()
         )
 
-        self.decoder = Decoder(n_articulators, hidden_size, n_samples)
+        self.predictors = nn.ModuleList([
+            ArticulatorPredictor(hidden_size, n_samples) for i in range(n_articulators)
+        ])
 
     def forward(self, x, lengths):
         """
@@ -77,6 +79,8 @@ class ArtSpeech(nn.Module):
         rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
 
         linear_out = self.linear(rnn_out)  # torch.Size([bs, seq_len, embed_dim])
-        out = self.decoder(linear_out)
+        out = torch.stack([
+            predictor(linear_out) for predictor in self.predictors
+        ], dim=2)
 
-        return out
+        return torch.sigmoid(out)

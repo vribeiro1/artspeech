@@ -213,7 +213,8 @@ def main(
         test_filepath,
         vocabulary,
         articulators,
-        clip_tails=clip_tails
+        clip_tails=clip_tails,
+        lazy_load=True
     )
     test_dataloader = DataLoader(
         test_dataset,

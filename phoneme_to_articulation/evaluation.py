@@ -188,7 +188,7 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
 
             # Only calculate the tract variables if all of the required articulators are included
             # in the test
-            if [articulator in articulators for articulator in required_articulators_for_TVs]:
+            if all([articulator in articulators for articulator in required_articulators_for_TVs]):
                 tract_variables(
                     sentences_ids,
                     outputs,

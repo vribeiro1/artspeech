@@ -80,7 +80,7 @@ def run_tacotron2_inference(model, dataloader, device=None, save_to=None, sampli
                 plt.imshow(target_melspec, origin="lower", aspect="auto", cmap="coolwarm")
                 plt.title("Target Melspectogram", fontsize=26)
                 plt.xlabel("Frame", fontsize=26)
-                plt.ylabel("Frequenct bin", fontsize=26)
+                plt.ylabel("Frequency bin", fontsize=26)
                 plt.grid()
 
                 plt.xticks(fontsize=18)
@@ -91,7 +91,7 @@ def run_tacotron2_inference(model, dataloader, device=None, save_to=None, sampli
                 plt.imshow(output_melspec, origin="lower", aspect="auto", cmap="coolwarm")
                 plt.title("Predicted Melspectogram", fontsize=26)
                 plt.xlabel("Frame", fontsize=26)
-                plt.ylabel("Frequenct bin", fontsize=26)
+                plt.ylabel("Frequency bin", fontsize=26)
                 plt.grid()
 
                 plt.xticks(fontsize=18)
@@ -173,7 +173,7 @@ def run_glow_tts_inference(model, dataloader, device=None, save_to=None):
                 plt.imshow(target_melspec, origin="lower", aspect="auto", cmap="coolwarm")
                 plt.title("Target Melspectogram", fontsize=26)
                 plt.xlabel("Frame", fontsize=26)
-                plt.ylabel("Frequenct bin", fontsize=26)
+                plt.ylabel("Frequency bin", fontsize=26)
                 plt.grid()
 
                 plt.xticks(fontsize=18)
@@ -184,7 +184,7 @@ def run_glow_tts_inference(model, dataloader, device=None, save_to=None):
                 plt.imshow(melspec, origin="lower", aspect="auto", cmap="coolwarm")
                 plt.title("Predicted Melspectogram", fontsize=26)
                 plt.xlabel("Frame", fontsize=26)
-                plt.ylabel("Frequenct bin", fontsize=26)
+                plt.ylabel("Frequency bin", fontsize=26)
                 plt.grid()
 
                 plt.xticks(fontsize=18)
