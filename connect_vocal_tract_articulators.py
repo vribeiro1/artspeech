@@ -137,24 +137,29 @@ def find_lip_end(lip_array):
 
     offsets = list(enumerate(zip(lip_array_0, lip_array_1)))
     decreasing_absissas = funcy.lfilter(lambda t: t[1][0][0] < t[1][1][0], offsets)
-    idx, (_, _) = min(decreasing_absissas, key=lambda t: t[0])
+    if len(decreasing_absissas) > 0:
+        idx, (_, _) = min(decreasing_absissas, key=lambda t: t[0])
+    else:
+        idx = -1
 
     return idx
 
 
-def connect_articulators(articulators_dict, eps=0.004):
+def connect_articulators(articulators_dict, eps=0.004, load=True):
     """
     Connect the articulators to produce a single shape for the entire vocal tract.
 
     Args:
     articulators_dict (Dict): Dictionary containing the articulator name in the key and the filepath
     of the .npy file.
-
     eps (float): The maximum distance between two points that determine a contact.
         TODO: Put the eps in milimiters.
+    load (bool): If should load the articulators
     """
-
-    articulators_arrays = load_articulator_arrays(articulators_dict)
+    if load:
+        articulators_arrays = load_articulator_arrays(articulators_dict)
+    else:
+        articulators_arrays = articulators_dict
 
     # Internal vocal tract wall
 

@@ -133,8 +133,11 @@ def area_function(internal_wall, external_wall, alpha=np.pi, beta=2.):
     radius = xs_radius[:, 2]
     fx = alpha * radius ** beta
 
-    dists = [0.0] + [euclidean(p1, p2) for p1, p2 in zip(xs[:-1], xs [1:])]
-    dists = [d + sum(dists[:i]) for i, d in enumerate(dists)]
+    d = 0.0
+    dists = np.array([d])
+    for p1, p2 in zip(xs[:-1], xs[1:]):
+        d = euclidean(p1, p2) + d
+        dists = np.append(dists, d)
 
     return dists, fx
 
@@ -217,7 +220,4 @@ def intersect_semipolar_grid(internal_wall, external_wall, semipolar_grid):
             if not internal_contact:
                 internal_intersec.append(internal_line_string.coords[int(-1 * j_min)])
 
-    internal_intersec = torch.from_numpy(np.array(internal_intersec))
-    external_intersec = torch.from_numpy(np.array(external_intersec))
-
-    return internal_intersec, external_intersec
+    return np.array(internal_intersec), np.array(external_intersec)
