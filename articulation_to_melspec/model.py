@@ -18,14 +18,19 @@ class ArticulatorsEmbedding(nn.Module):
     def __init__(self, n_curves, n_samples, embed_size=512, w_init_gain="linear"):
         super(ArticulatorsEmbedding, self).__init__()
 
-        # Performs a 3D-convolution along the articulators, combining the x and y coordinates into
-        # a single channel.
-        kernel_size = torch.tensor([1, 3, 1])
+        # Performs a linear combination between the articulators' x and y coordinates.
+        self.linear1 = nn.Linear(2, 1)
+
+        # Performs a 3D-convolution along the articulators, combining the articulator curves
+        # into a single channel.
+        kernel_size = torch.tensor([1, n_curves])
         padding = torch.div(kernel_size - 1, 2, rounding_mode="trunc")
 
-        self.conv1 = nn.Conv3d(
-            in_channels=2,
-            out_channels=1,
+        in_channels = n_curves
+        out_channels = in_channels // 2 if in_channels % 2 == 0 else (in_channels + 1) // 2
+        self.conv1 = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
             kernel_size=kernel_size,
             stride=1,
             padding=padding,
@@ -38,14 +43,11 @@ class ArticulatorsEmbedding(nn.Module):
             gain=nn.init.calculate_gain(w_init_gain)
         )
 
-        # Performs a 3D-convolution along the articulators, combining the articulator curves
-        # into a single channel.
-        kernel_size = torch.tensor([1, n_curves])
-        padding = torch.div(kernel_size - 1, 2, rounding_mode="trunc")
-
+        in_channels = out_channels
+        out_channels = in_channels // 2 if in_channels % 2 == 0 else (in_channels + 1) // 2
         self.conv2 = nn.Conv2d(
-            in_channels=n_curves,
-            out_channels=1,
+            in_channels=in_channels,
+            out_channels=out_channels,
             kernel_size=kernel_size,
             stride=1,
             padding=padding,
@@ -58,9 +60,11 @@ class ArticulatorsEmbedding(nn.Module):
             gain=nn.init.calculate_gain(w_init_gain)
         )
 
-        self.conv2 = nn.Conv2d(
-            in_channels=n_curves,
-            out_channels=1,
+        in_channels = out_channels
+        out_channels = 1
+        self.conv3 = nn.Conv2d(
+            in_channels=in_channels,
+            out_channels=out_channels,
             kernel_size=kernel_size,
             stride=1,
             padding=padding,
@@ -69,26 +73,22 @@ class ArticulatorsEmbedding(nn.Module):
         )
 
         torch.nn.init.xavier_uniform_(
-            self.conv2.weight,
+            self.conv3.weight,
             gain=nn.init.calculate_gain(w_init_gain)
         )
 
         kernel_size = torch.tensor([5])
         padding = torch.div(kernel_size - 1, 2, rounding_mode="trunc")
 
-        self.conv3 = nn.Conv1d(
-            in_channels=n_samples,
-            out_channels=embed_size,
-            kernel_size=kernel_size,
-            stride=1,
-            padding=padding,
-            dilation=1,
-            bias=True
-        )
+        self.dropout = nn.Dropout(0.3)
 
-        torch.nn.init.xavier_uniform_(
-            self.conv2.weight,
-            gain=nn.init.calculate_gain(w_init_gain)
+        self.linear = nn.Sequential(
+            nn.LayerNorm([n_samples]),
+            nn.Linear(n_samples, 2 * n_samples),
+            nn.ReLU(),
+            nn.LayerNorm([2 * n_samples]),
+            nn.Linear(2 * n_samples, embed_size),
+            nn.ReLU()
         )
 
     def forward(self, x):
@@ -96,19 +96,23 @@ class ArticulatorsEmbedding(nn.Module):
         Args:
         x (torch.tensor): Tensor of shape (bs, seq_len, n_curves, 2, n_samples)
         """
-        x = x.permute(0, 3, 1, 4, 2)  # (bs, 2, seq_len, n_samples, n_curves)
+        x = x.permute(0, 1, 2, 4, 3)  # (bs, seq_len, n_curves, n_samples, 2)
 
-        conv1_out = F.relu(self.conv1(x))  # (bs, 1, seq_len, n_samples, n_curves)
-        conv1_out = conv1_out.squeeze(dim=1)  # (bs, seq_len, n_samples, n_curves)
+        linear1_out = F.relu(self.linear1(x))  # (bs, seq_len, n_curves, n_samples, 1)
+        linear1_out = linear1_out.squeeze(dim=-1)  # (bs, seq_len, n_curves, n_samples)
 
-        conv2_in = conv1_out.permute(0, 3, 1, 2)  # (bs, n_curves, seq_len, n_samples)
-        conv2_out = F.relu(self.conv2(conv2_in))  # (bs, 1, seq_len, n_samples)
-        conv2_out = conv2_out.squeeze(dim=1)  # (bs, seq_len, n_samples)
+        conv1_in = linear1_out.permute(0, 2, 1, 3)  # (bs, n_curves, seq_len, n_samples)
+        conv1_in = self.dropout(conv1_in)
+        conv1_out = F.relu(self.conv1(conv1_in))
 
-        conv3_in  = conv2_out.permute(0, 2, 1)  # (bs, n_samples, seq_len)
-        conv3_out = F.relu(self.conv3(conv3_in))  # (bs, embed_size, seq_len)
+        conv2_in = self.dropout(conv1_out)
+        conv2_out = F.relu(self.conv2(conv2_in))
 
-        outputs = conv3_out.permute(0, 2, 1)  # (bs, seq_len, embed_size)
+        conv3_in = self.dropout(conv2_out)
+        conv3_out = F.relu(self.conv3(conv3_in))  # (bs, 1, seq_len, n_samples)
+        conv3_out = conv3_out.squeeze(dim=1)  # (bs, seq_len, n_samples)
+
+        outputs = self.linear(conv3_out)
 
         return outputs
 
