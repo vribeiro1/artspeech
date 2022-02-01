@@ -10,14 +10,10 @@ from functools import lru_cache, reduce
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from tqdm import tqdm
+from vt_tools import EPIGLOTTIS, LOWER_INCISOR, UPPER_INCISOR
+from vt_tools.bs_regularization import regularize_Bsplines
 
-from bs_regularization import regularize_Bsplines
 from settings import DatasetConfig
-from vt_tracker import (
-    EPIGLOTTIS,
-    LOWER_INCISOR,
-    UPPER_INCISOR
-)
 
 
 def get_token_intervals(token_sequence, break_token):

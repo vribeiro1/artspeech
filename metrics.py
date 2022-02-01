@@ -1,6 +1,6 @@
 import torch
 
-from vt_tracker.metrics import p2cp_mean
+from vt_tools.metrics import p2cp_mean
 
 from loss import EuclideanDistanceLoss
 

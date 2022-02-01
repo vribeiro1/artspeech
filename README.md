@@ -11,22 +11,22 @@ Université de Lorraine
 
 <br>
 
-# VT Tracker Dependency
+# Vocal Tract Tools Dependency
 
-This repository requires vt_tracker, which can be found at <a href="https://gitlab.inria.fr/vsouzari/vt_tracker">Inria's Gitlab</a>. To install the library, follow the instructions bellow.
+This repository requires vt_tools, which can be found at <a href="https://gitlab.inria.fr/vsouzari/vt_tools">Inria's Gitlab</a>. To install the library, follow the instructions bellow.
 
 <ol>
 
 <li>Clone the repo</li>
 
 ```
->>> git clone git@gitlab.inria.fr:vsouzari/vt_tracker.git
+>>> git clone git@gitlab.inria.fr:vsouzari/vt_tools.git
 ```
 
 <li>Install the repo</li>
 
 ```
->>> pip3 install -e /path/to/vt_tracker
+>>> pip3 install -e /path/to/vt_tools
 ```
 
 </ol>

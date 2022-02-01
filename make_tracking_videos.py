@@ -12,7 +12,7 @@ from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from scipy.io import wavfile
 from tgt import read_textgrid
-from vt_tracker import (
+from vt_tools import (
     ARYTENOID_MUSCLE,
     EPIGLOTTIS,
     LOWER_INCISOR,
@@ -25,7 +25,8 @@ from vt_tracker import (
     UPPER_LIP,
     VOCAL_FOLDS
 )
-from vt_tracker.visualization import COLORS, uint16_to_uint8
+from vt_tools import COLORS
+from vt_tracker.visualization import uint16_to_uint8
 
 from phoneme_to_articulation.dataset import ArtSpeechDataset, TailClipper
 from video import Video

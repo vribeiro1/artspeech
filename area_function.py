@@ -6,7 +6,7 @@ import torch
 
 from numba import jit
 from shapely.geometry import LineString, Point
-from vt_tracker.metrics import euclidean, distance_matrix
+from vt_tools.metrics import euclidean, distance_matrix
 
 
 def rotate(point, ang_rad):

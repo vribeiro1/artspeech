@@ -6,10 +6,10 @@ import torch
 import torch.nn.functional as F
 
 from copy import deepcopy
-from vt_tracker.metrics import distance_matrix, euclidean
+from vt_tools.metrics import distance_matrix, euclidean
+from vt_tools.reconstruct_snail import reconstruct_snail_from_midline
 
 from phoneme_to_articulation.dataset import ArtSpeechDataset
-from reconstruct_snail import reconstruct_snail_from_midline
 from settings import DatasetConfig
 
 mm_to_percent = lambda v_mm: v_mm / (DatasetConfig.RES * DatasetConfig.PIXEL_SPACING)

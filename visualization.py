@@ -4,7 +4,7 @@ import numpy as np
 import os
 
 from tqdm import tqdm
-from vt_tracker.visualization import COLORS
+from vt_tools import COLORS
 
 CLOSED = [
     "hyoid-bone",

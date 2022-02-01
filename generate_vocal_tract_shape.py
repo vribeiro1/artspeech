@@ -14,14 +14,14 @@ from functools import partial
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from tgt import read_textgrid
+from vt_tools import COLORS
+from vt_tools.bs_regularization import regularize_Bsplines
 
-from bs_regularization import regularize_Bsplines
 from connect_vocal_tract_articulators import connect_articulators
 from helpers import npy_to_xarticul
 from phoneme_wise_mean_contour import forward_mean_contour
 from phoneme_to_articulation.model import ArtSpeech
 from settings import DatasetConfig
-from vt_tracker.visualization import COLORS
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 VOCABULARY_FILEPATH = os.path.join(BASE_DIR, "data", "vocabulary_gottingen.json")

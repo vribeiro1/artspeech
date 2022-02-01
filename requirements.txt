@@ -19,12 +19,12 @@ torchvision
 tqdm
 ujson
 
-# vt_tracker needs to be installed to allow the post processing of the probability map. It can be
-# done by installing directly from the repo or by cloning the repo and installing from local.
+# This repository depends on vt_tools, which holds general purpose code. It can be done by
+# installing directly from the repo or by cloning the repo and installing from local.
 
 # Install directly from the repo
-# git+https://gitlab.inria.fr/vsouzari/vt_tracker.git
+# git+https://gitlab.inria.fr/vsouzari/vt_tools.git
 
-# Clone the repo 'https://gitlab.inria.fr/vsouzari/vt_tracker.git' and install from local
--e ../vt_tracker
+# Clone the repo 'https://gitlab.inria.fr/vsouzari/vt_tools.git' and install from local
+-e ../vt_tools
 -e ../glow_tts

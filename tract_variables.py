@@ -1,6 +1,6 @@
 import torch
 
-from vt_tracker import (
+from vt_tools import (
     LOWER_LIP,
     PHARYNX,
     SOFT_PALATE,

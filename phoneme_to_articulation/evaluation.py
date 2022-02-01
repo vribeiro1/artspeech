@@ -6,7 +6,7 @@ import pandas as pd
 import torch
 
 from tqdm import tqdm
-from vt_tracker import (
+from vt_tools import (
     LOWER_LIP,
     PHARYNX,
     SOFT_PALATE,
@@ -14,8 +14,8 @@ from vt_tracker import (
     UPPER_LIP,
     UPPER_INCISOR,
 )
+from vt_tools.bs_regularization import regularize_Bsplines
 
-from bs_regularization import regularize_Bsplines
 from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
 from tract_variables import calculate_vocal_tract_variables
 

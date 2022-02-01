@@ -9,7 +9,7 @@ from glob import glob
 from sklearn.model_selection import KFold
 from tgt.io import read_textgrid
 from tqdm import tqdm
-from vt_tracker import (
+from vt_tools import (
     ARYTENOID_MUSCLE,
     EPIGLOTTIS,
     LOWER_INCISOR,
