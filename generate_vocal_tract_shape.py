@@ -17,7 +17,7 @@ from tgt import read_textgrid
 from vt_tools import COLORS
 from vt_tools.bs_regularization import regularize_Bsplines
 
-from connect_vocal_tract_articulators import connect_articulators
+from vt_shape_gen.vocal_tract_tube import generate_vocal_tract_tube
 from helpers import npy_to_xarticul
 from phoneme_wise_mean_contour import forward_mean_contour
 from phoneme_to_articulation.model import ArtSpeech
@@ -223,7 +223,7 @@ if __name__ == "__main__":
 
         articulators_dicts = save_contours(outputs.squeeze(dim=0), save_contours_dir)
         for i_frame, articuls_dict in enumerate(articulators_dicts):
-            internal_wall, external_wall = connect_articulators(articuls_dict)
+            internal_wall, external_wall = generate_vocal_tract_tube(articuls_dict)
 
             xarticul_int = npy_to_xarticul(internal_wall * DatasetConfig.RES)
             xarticul_ext = npy_to_xarticul(external_wall * DatasetConfig.RES)

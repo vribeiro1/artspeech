@@ -19,12 +19,15 @@ torchvision
 tqdm
 ujson
 
-# This repository depends on vt_tools, which holds general purpose code. It can be done by
-# installing directly from the repo or by cloning the repo and installing from local.
+# This repository depends on vt_tools, which holds general purpose code. Another requirement is
+# vt_shape_gen, which holds inference code for generating the shape of the vocal tract. It can be
+# one by installing directly from the repo or by cloning the repo and installing from local.
 
 # Install directly from the repo
 # git+https://gitlab.inria.fr/vsouzari/vt_tools.git
+# git+https://gitlab.inria.fr/vsouzari/vt_shape_gen.git
 
 # Clone the repo 'https://gitlab.inria.fr/vsouzari/vt_tools.git' and install from local
 -e ../vt_tools
+-e ../vt_shape_gen
 -e ../glow_tts

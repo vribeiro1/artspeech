@@ -267,7 +267,7 @@ class ArtSpeechDataset(Dataset):
         Loads the target array with the proper orientation (right to left)
         """
         target_array = np.load(filepath)
-        n_rows, n_cols = target_array.shape
+        n_rows, _ = target_array.shape
         if n_rows == 2:
             target_array = target_array.T
 
