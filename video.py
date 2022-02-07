@@ -9,12 +9,9 @@ from operator import itemgetter
 
 
 class Video:
-    def __init__(self, frames_filepaths, audio_filepath, framerate=50, stereo=False):
+    def __init__(self, frames_filepaths, audio_filepath, framerate=50):
         audio, self.sample_rate = torchaudio.load(audio_filepath)
-        if stereo:
-            raise NotImplementedError("Model not implemented for stereo audio.")
-        else:
-            audio = audio[0]
+        audio = torch.mean(audio, dim=0).squeeze(dim=0)
 
         self.num_samples, = audio.shape
         audio_duration = self.num_samples / self.sample_rate
