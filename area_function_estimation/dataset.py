@@ -9,7 +9,7 @@ from torch.utils.data import Dataset
 from tqdm import tqdm
 
 from helpers import sequences_from_dict
-from phoneme_to_articulation.dataset import TailClipper
+from phoneme_to_articulation.tail_clipper import TailClipper
 from settings import DatasetConfig
 from video import Video
 

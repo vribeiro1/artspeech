@@ -23,8 +23,7 @@ from tqdm import tqdm
 from area_function_estimation.dataset import AreaFunctionDataset2
 from area_function_estimation.evaluation import run_test
 from articulation_to_melspec.model import ArticulatorsEmbedding
-from helpers import set_seeds, sequences_from_dict
-from phoneme_to_articulation.dataset import TailClipper
+from helpers import set_seeds
 from settings import DatasetConfig
 from video import Video
 
