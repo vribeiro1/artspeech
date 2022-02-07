@@ -11,9 +11,9 @@ from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from tqdm import tqdm
 from vt_tools import EPIGLOTTIS, LOWER_INCISOR, UPPER_INCISOR
-from vt_tools.bs_regularization import regularize_Bsplines
 
 from settings import DatasetConfig
+from phoneme_to_articulation.tail_clipper import TailClipper
 
 
 def get_token_intervals(token_sequence, break_token):
@@ -58,132 +58,6 @@ def break_sequence(sequence, break_points):
     segments.append(sequence[break_point:])
 
     return segments
-
-
-class TailClipper:
-    @classmethod
-    def clip_tongue_tails(cls, tongue, lower_incisor, epiglottis, reg_out=True, **kwargs):
-        # Remove the front tail of the tongue using the lower incisor as the reference
-        ref_idx = lower_incisor[:, 1].argmax()
-        reference = lower_incisor[ref_idx]
-
-        tongue_cp = tongue.copy()
-
-        tongue_1st_half = tongue_cp[:25]
-        tongue_2nd_half = tongue_cp[25:]
-
-        keep_indices = np.where(tongue_2nd_half[:, 1] < reference[1])
-
-        tailless_tongue = np.concatenate([
-            tongue_1st_half,
-            tongue_2nd_half[keep_indices]
-        ])
-
-        # Remove the back tail of the tongue using the epiglottis as the reference
-        ref_idx = epiglottis[:, 1].argmin()
-        reference = epiglottis[ref_idx]
-
-        tongue_cp = tailless_tongue.copy()
-
-        tongue_1st_half = tongue_cp[:25]
-        tongue_2nd_half = tongue_cp[25:]
-
-        keep_indices = np.where(tongue_1st_half[:, 1] < reference[1] + (10 / DatasetConfig.PIXEL_SPACING / DatasetConfig.RES))
-
-        tailless_tongue = np.concatenate([
-            tongue_1st_half[keep_indices],
-            tongue_2nd_half
-        ])
-
-        if reg_out:
-            reg_x, reg_y = regularize_Bsplines(tailless_tongue, 3)
-            tailless_tongue = np.array([reg_x, reg_y]).T
-
-        return tailless_tongue
-
-    @classmethod
-    def clip_lower_lip_tails(cls, lower_lip, lower_incisor, reg_out=True, **kwargs):
-        # Remove the front tail of the lower lip using the lower incisor as the reference
-        ref_idx = lower_incisor[:, 1].argmax()
-        reference = lower_incisor[ref_idx]
-
-        llip_cp = lower_lip.copy()
-
-        llip_1st_half = llip_cp[:25]
-        llip_2nd_half = llip_cp[25:]
-
-        keep_indices = np.where(llip_2nd_half[:, 1] < reference[1] + (5 / DatasetConfig.PIXEL_SPACING / DatasetConfig.RES))
-
-        tailless_llip = np.concatenate([
-            llip_1st_half,
-            llip_2nd_half[keep_indices]
-        ])
-
-        if reg_out:
-            reg_x, reg_y = regularize_Bsplines(tailless_llip, 3)
-            tailless_llip = np.array([reg_x, reg_y]).T
-
-        # Remove the back tail of the lower lip using the lower incisor as the reference
-        ref_idx = lower_incisor[:, 1].argmax()
-        reference = lower_incisor[ref_idx]
-
-        llip_cp = tailless_llip.copy()
-
-        llip_1st_half = llip_cp[:25]
-        llip_2nd_half = llip_cp[25:]
-
-        keep_indices = np.where(llip_1st_half[:, 1] < reference[1])
-
-        tailless_llip = np.concatenate([
-            llip_1st_half[keep_indices],
-            llip_2nd_half
-        ])
-
-        if reg_out:
-            reg_x, reg_y = regularize_Bsplines(tailless_llip, 3)
-            tailless_llip = np.array([reg_x, reg_y]).T
-
-        return tailless_llip
-
-    @classmethod
-    def clip_upper_lip_tails(cls, upper_lip, upper_incisor, reg_out=True, **kwargs):
-        # Remove the front tail of the upper lip using the upper incisor as the reference
-        ref_idx = -1
-        reference = upper_incisor[ref_idx]
-
-        ulip_cp = upper_lip.copy()
-
-        ulip_1st_half = ulip_cp[:25]
-        ulip_2nd_half = ulip_cp[25:]
-
-        keep_indices = np.where(ulip_2nd_half[:, 1] > reference[1] - (10 / DatasetConfig.PIXEL_SPACING))
-
-        tailless_ulip = np.concatenate([
-            ulip_1st_half,
-            ulip_2nd_half[keep_indices]
-        ])
-
-        # Remove the back tail of the upper lip using the upper incisor as the reference
-        ref_idx = -1
-        reference = upper_incisor[ref_idx]
-
-        ulip_cp = tailless_ulip.copy()
-
-        ulip_1st_half = ulip_cp[:25]
-        ulip_2nd_half = ulip_cp[25:]
-
-        keep_indices = np.where(ulip_1st_half[:, 1] > reference[1] - (5 / DatasetConfig.PIXEL_SPACING))
-
-        tailless_ulip = np.concatenate([
-            ulip_1st_half[keep_indices],
-            ulip_2nd_half
-        ])
-
-        if reg_out:
-            reg_x, reg_y = regularize_Bsplines(tailless_ulip, 3)
-            tailless_ulip = np.array([reg_x, reg_y]).T
-
-        return tailless_ulip
 
 
 def pad_sequence_collate_fn(batch):
@@ -242,12 +116,12 @@ class ArtSpeechDataset(Dataset):
         with open(filepath) as f:
             data = funcy.lfilter(self._exclude_missing_data, json.load(f))
 
-        tail_clip_refs = [LOWER_INCISOR, UPPER_INCISOR, EPIGLOTTIS]
-        if clip_tails and not all(map(lambda art: art in articulators, tail_clip_refs)):
-            raise ValueError(
-                f"clip_tails == True requires that all the references are available."
-                f"References are {tail_clip_refs}"
-            )
+        self.tail_clip_refs = [LOWER_INCISOR, UPPER_INCISOR, EPIGLOTTIS]
+        # if clip_tails and not all(map(lambda art: art in articulators, tail_clip_refs)):
+        #     raise ValueError(
+        #         f"clip_tails == True requires that all the references are available."
+        #         f"References are {tail_clip_refs}"
+        #     )
 
         self.clip_tails = clip_tails
 
@@ -292,7 +166,7 @@ class ArtSpeechDataset(Dataset):
             lower_incisor_fp = os.path.join(datadir, frame_targets_filepaths[LOWER_INCISOR])
             lower_incisor = ArtSpeechDataset.load_target_array(lower_incisor_fp)
 
-            upper_incisor = coord_system_reference
+            upper_incisor = coord_system_reference.copy()
 
             epiglottis_fp = os.path.join(datadir, frame_targets_filepaths[EPIGLOTTIS])
             epiglottis = ArtSpeechDataset.load_target_array(epiglottis_fp)

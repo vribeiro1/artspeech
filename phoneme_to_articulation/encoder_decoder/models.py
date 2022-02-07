@@ -69,7 +69,10 @@ class ArtSpeech(nn.Module):
 
     def forward(self, x, lengths):
         """
-        input: torch.Size([bs, seq_len])
+        Args:
+        x (torch.tensor): Torch tensor of shape (bs, seq).
+        lengths (list): Lengths of the input sequences sorted in decreasing order.
+
         output: torch.Size([bs, seq_len, n_articulators, 2, n_samples])
         """
         embed = self.embedding(x)

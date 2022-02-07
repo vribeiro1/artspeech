@@ -20,7 +20,7 @@ from vt_tools.bs_regularization import regularize_Bsplines
 from vt_shape_gen.vocal_tract_tube import generate_vocal_tract_tube
 from helpers import npy_to_xarticul
 from phoneme_wise_mean_contour import forward_mean_contour
-from phoneme_to_articulation.model import ArtSpeech
+from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
 from settings import DatasetConfig
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

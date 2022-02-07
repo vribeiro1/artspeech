@@ -11,9 +11,9 @@ from torch.utils.data import DataLoader
 
 from helpers import set_seeds
 from loss import EuclideanDistanceLoss
-from phoneme_to_articulation.dataset import ArtSpeechDataset, pad_sequence_collate_fn
-from phoneme_to_articulation.evaluation import run_test
-from phoneme_to_articulation.model import ArtSpeech
+from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
+from phoneme_to_articulation.encoder_decoder.evaluation import run_test
+from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
 
 
 def main(cfg):

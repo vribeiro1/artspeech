@@ -18,9 +18,9 @@ from tqdm import tqdm
 from helpers import set_seeds
 from loss import EuclideanDistanceLoss
 from metrics import pearsons_correlation
-from phoneme_to_articulation.dataset import ArtSpeechDataset, pad_sequence_collate_fn
-from phoneme_to_articulation.evaluation import run_test
-from phoneme_to_articulation.model import ArtSpeech
+from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
+from phoneme_to_articulation.encoder_decoder.evaluation import run_test
+from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -29,7 +29,7 @@ VALID = "validation"
 TEST = "test"
 
 ex = Experiment()
-fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "phoneme_to_articulation", "results"))
+fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "phoneme_to_articulation", "encoder_decoder", "results"))
 ex.observers.append(fs_observer)
 
 

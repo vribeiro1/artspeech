@@ -12,7 +12,7 @@ from tqdm import tqdm
 
 from loss import EuclideanDistanceLoss
 from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
-from phoneme_to_articulation.evaluation import save_outputs, tract_variables
+from phoneme_to_articulation.encoder_decoder.evaluation import save_outputs, tract_variables
 
 
 def calculate_tokens_sequences_len(tokens):

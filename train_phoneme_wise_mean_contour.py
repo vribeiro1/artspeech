@@ -5,7 +5,7 @@ import pandas as pd
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
 
-from phoneme_to_articulation.dataset import ArtSpeechDataset
+from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset
 from phoneme_wise_mean_contour import train, test
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
