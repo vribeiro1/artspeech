@@ -19,9 +19,9 @@ from tqdm import tqdm
 from articulation_to_melspec.model import ArticulatorsEmbedding
 from helpers import set_seeds
 from loss import EuclideanDistanceLoss
-from phoneme_to_articulation.dataset import ArtSpeechDataset, pad_sequence_collate_fn
-from phoneme_to_articulation.evaluation import save_outputs
-from phoneme_to_articulation.model import ArtSpeech, Decoder
+from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
+from phoneme_to_articulation.encoder_decoder.evaluation import save_outputs
+from phoneme_to_articulation.encoder_decoder.models import Decoder
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -143,8 +143,9 @@ def main(
 
     n_articulators = len(articulators)
 
-    encoder = ArticulatorsEmbedding(n_curves=n_articulators, n_samples=50, embed_size=192)
-    decoder = Decoder(n_articulators=n_articulators, hidden_size=192, n_samples=50)
+    embed_size = 192
+    encoder = ArticulatorsEmbedding(n_curves=n_articulators, n_samples=50, embed_size=embed_size)
+    decoder = Decoder(n_articulators=n_articulators, hidden_size=embed_size, n_samples=50)
 
     model = nn.Sequential(OrderedDict([
         ("encoder", encoder),
@@ -252,12 +253,12 @@ def main(
         collate_fn=pad_sequence_collate_fn
     )
 
-    best_encoder = ArticulatorsEmbedding(n_curves=n_articulators, n_samples=50, embed_size=192)
+    best_encoder = ArticulatorsEmbedding(n_curves=n_articulators, n_samples=50, embed_size=embed_size)
     state_dict = torch.load(best_encoder_path, map_location=device)
     best_encoder.load_state_dict(state_dict)
     best_encoder.to(device)
 
-    best_decoder = Decoder(n_articulators=n_articulators, hidden_size=192, n_samples=50)
+    best_decoder = Decoder(n_articulators=n_articulators, hidden_size=embed_size, n_samples=50)
     state_dict = torch.load(best_decoder_path, map_location=device)
     best_decoder.load_state_dict(state_dict)
     best_decoder.to(device)
