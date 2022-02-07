@@ -116,12 +116,11 @@ class ArtSpeechDataset(Dataset):
         with open(filepath) as f:
             data = funcy.lfilter(self._exclude_missing_data, json.load(f))
 
-        self.tail_clip_refs = [LOWER_INCISOR, UPPER_INCISOR, EPIGLOTTIS]
-        # if clip_tails and not all(map(lambda art: art in articulators, tail_clip_refs)):
-        #     raise ValueError(
-        #         f"clip_tails == True requires that all the references are available."
-        #         f"References are {tail_clip_refs}"
-        #     )
+        if clip_tails and not all(map(lambda art: art in articulators, TailClipper.TAIL_CLIP_REFERENCES)):
+            raise ValueError(
+                f"clip_tails == True requires that all the references are available."
+                f"References are {TailClipper.TAIL_CLIP_REFERENCES}"
+            )
 
         self.clip_tails = clip_tails
 

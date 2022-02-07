@@ -1,11 +1,14 @@
 import numpy as np
 
+from vt_tools import LOWER_INCISOR, UPPER_INCISOR, EPIGLOTTIS
 from vt_tools.bs_regularization import regularize_Bsplines
 
 from settings import DatasetConfig
 
 
 class TailClipper:
+    TAIL_CLIP_REFERENCES = [LOWER_INCISOR, UPPER_INCISOR, EPIGLOTTIS]
+
     @classmethod
     def clip_tongue_tails(cls, tongue, lower_incisor, epiglottis, reg_out=True, **kwargs):
         # Remove the front tail of the tongue using the lower incisor as the reference
