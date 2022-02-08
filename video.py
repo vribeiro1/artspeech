@@ -55,7 +55,7 @@ class Video:
         if load_frames:
             frames = torch.stack([self.load_frame(fp) for fp in frames_filepaths])
         else:
-            frames = frames_filepaths
+            frames = [frames_filepaths] if isinstance(frames_filepaths, str) else frames_filepaths
 
         return torch.tensor(time[indices], dtype=torch.float), frames
 

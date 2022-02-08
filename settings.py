@@ -1,3 +1,8 @@
+import os
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
 class ArtSpeechConfig:
     RES = 136
     PIXEL_SPACING = 1.6176470518112

@@ -100,7 +100,6 @@ class ArtSpeechDataset(Dataset):
         clip_tails (bool): If should clip the tails of some articulators to keep only the
             acoustically relevant parts of the articulator.
         """
-
         self.vocabulary = vocabulary
         self.datadir = datadir
         self.articulators = sorted(articulators)
