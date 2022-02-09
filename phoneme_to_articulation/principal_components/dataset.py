@@ -3,6 +3,7 @@ import pdb
 import funcy
 import numpy as np
 import os
+import pandas as pd
 import torch
 
 from functools import lru_cache
@@ -97,7 +98,7 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         self.clip_tails = clip_tails
 
         sentence_data = collect_data(datadir, sequences, sync_shift, framerate)
-        self.data = funcy.lflatten([(
+        data = funcy.lflatten([(
             {
                 "subject": sentence["subject"],
                 "sequence": sentence["sequence"],
@@ -106,6 +107,7 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
             }
             for frame_id, phoneme in zip(sentence["frame_ids"], sentence["phonemes"])
         ) for sentence in sentence_data])
+        self.data = pd.DataFrame(data)
 
         mean = torch.from_numpy(np.load(os.path.join(BASE_DIR, "data", f"{articulator}_mean.npy")))
         std = torch.from_numpy(np.load(os.path.join(BASE_DIR, "data", f"{articulator}_std.npy")))
@@ -115,7 +117,7 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         return len(self.data)
 
     def __getitem__(self, index):
-        item = self.data[index]
+        item = self.data.iloc[index]
 
         frame_name = f"{item['subject']}_{item['sequence']}_{item['frame_id']}"
 
