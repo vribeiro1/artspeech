@@ -16,11 +16,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict
-from loss import EuclideanDistanceLoss
 from phoneme_to_articulation.encoder_decoder.dataset import pad_sequence_collate_fn
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsPhonemeToArticulationDataset
-from phoneme_to_articulation.principal_components.evaluation import run_test
-from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech, Encoder, Decoder
+from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_PC_test
+from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
+from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -61,60 +61,16 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
             losses.append(loss.item())
             progress_bar.set_postfix(loss=np.mean(losses))
 
-
     mean_loss = np.mean(losses)
     loss_tag = f"{phase}/loss"
     if writer is not None:
         writer.add_scalar(loss_tag, mean_loss, epoch)
 
     info = {
-        "loss": np.mean(losses)
+        "loss": mean_loss
     }
 
     return info
-
-
-class AutoencoderLoss(nn.Module):
-    def __init__(self, in_features, n_components, encoder_state_dict_fpath, decoder_state_dict_fpath, device):
-        super().__init__()
-
-        self.encoder = Encoder(in_features=in_features, n_components=n_components)
-        encoder_state_dict = torch.load(encoder_state_dict_fpath, map_location=device)
-        self.encoder.load_state_dict(encoder_state_dict)
-        self.encoder.eval()
-
-        self.decoder = Decoder(n_components=n_components, out_features=in_features)
-        decoder_state_dict = torch.load(decoder_state_dict_fpath, map_location=device)
-        self.decoder.load_state_dict(decoder_state_dict)
-        self.decoder.eval()
-
-        # The encoder and the decoder should not be trained during this phase. They should only be
-        # used for evaluation without learning anything new. Therefore, we have to turn off the
-        # gradients of these two networks.
-
-        for parameter in self.encoder.parameters():
-            parameter.requires_grad = False
-
-        for parameter in self.decoder.parameters():
-            parameter.requires_grad = False
-
-        self.mse = nn.MSELoss()
-        self.euclidean = EuclideanDistanceLoss()
-
-    def forward(self, outputs, targets):
-        bs, seq_len, _, _, n_samples = targets.shape
-        encoder_inputs = targets.squeeze(dim=2).reshape(bs, seq_len, 2 * n_samples)
-        target_pcs = self.encoder(encoder_inputs)
-
-        output_shapes = self.decoder(outputs)
-        output_shapes = output_shapes.reshape(bs, seq_len, 2, n_samples).unsqueeze(dim=2)
-
-        # Mean squared error loss in the level of the principal components
-        mse_loss = self.mse(outputs, target_pcs)
-        # Euclidean distance loss in the level of the shapes
-        euclidean_loss = self.euclidean(targets, output_shapes)
-
-        return mse_loss + euclidean_loss
 
 
 @ex.automain
@@ -124,8 +80,7 @@ def main(
     vocab_fpath, encoder_state_dict_fpath, decoder_state_dict_fpath,
     clip_tails=True, state_dict_fpath=None
 ):
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
 
     writer = SummaryWriter(os.path.join(fs_observer.dir, f"experiment"))
@@ -249,16 +204,17 @@ def main(
 
     best_model = PrincipalComponentsArtSpeech(vocab_size=len(vocabulary), n_components=12, gru_dropout=0.2)
     best_model_state_dict = torch.load(best_model_path, map_location=device)
-    best_model.encoder.load_state_dict(best_model_state_dict)
+    best_model.load_state_dict(best_model_state_dict)
     best_model.to(device)
 
     test_outputs_dir = os.path.join(fs_observer.dir, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
-    info_test = run_test(
+    info_test = run_phoneme_to_PC_test(
         epoch=0,
         model=best_model,
+        decoder_state_dict_fpath=decoder_state_dict_fpath,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
         device=device
