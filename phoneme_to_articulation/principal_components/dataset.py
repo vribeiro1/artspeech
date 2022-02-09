@@ -20,6 +20,15 @@ from settings import BASE_DIR, DatasetConfig
 from video import Video
 
 
+phonetic_groups = {
+    "l": "dental",
+    "d": "dental",
+    "t": "dental",
+    "k": "hard_palate",
+    "g": "hard_palate"
+}
+
+
 phoneme_weights = {
     "l": 3,
     "d": 3,
@@ -103,7 +112,8 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
                 "subject": sentence["subject"],
                 "sequence": sentence["sequence"],
                 "frame_id": frame_id,
-                "phoneme": phoneme
+                "phoneme": phoneme,
+                "phonetic_group": phonetic_groups.get(phoneme, phoneme)
             }
             for frame_id, phoneme in zip(sentence["frame_ids"], sentence["phonemes"])
         ) for sentence in sentence_data])
@@ -116,57 +126,37 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
-    def __getitem__(self, index):
-        item = self.data.iloc[index]
-
-        frame_name = f"{item['subject']}_{item['sequence']}_{item['frame_id']}"
-
+    def prepare_articulator_array(self, subject, sequence, frame_id):
         fp_articulator = os.path.join(
-            self.datadir,
-            item["subject"],
-            item["sequence"],
-            "inference_contours",
-            f"{item['frame_id']}_{self.articulator}.npy"
+            self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{self.articulator}.npy"
         )
 
-        articulator_array = cached_load_articulator_array(
-            fp_articulator,
-            norm_value=DatasetConfig.RES
-        )
+        articulator_array = cached_load_articulator_array(fp_articulator, norm_value=DatasetConfig.RES)
 
         if self.clip_tails:
             tail_clip_refs = {}
             for reference in TailClipper.TAIL_CLIP_REFERENCES:
                 fp_reference = os.path.join(
-                    self.datadir, item["subject"], item["sequence"], "inference_contours",
-                    f"{item['frame_id']}_{reference}.npy"
+                    self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
                 )
 
-                reference_array = cached_load_articulator_array(
-                    fp_reference, norm_value=DatasetConfig.RES
-                )
-
+                reference_array = cached_load_articulator_array(fp_reference, norm_value=DatasetConfig.RES)
                 tail_clip_refs[reference.replace("-", "_")] = reference_array
 
-            tail_clip_method = getattr(
-                TailClipper, f"clip_{self.articulator.replace('-', '_')}_tails", None
-            )
+            tail_clip_method_name = f"clip_{self.articulator.replace('-', '_')}_tails"
+            tail_clip_method = getattr(TailClipper, tail_clip_method_name, None)
 
             if tail_clip_method:
                 articulator_array = tail_clip_method(articulator_array, **tail_clip_refs)
 
         articulator_array = articulator_array.T
 
-        # Centralize the targets using the upper incisor as the reference of the coordinates system
         fp_coord_system_reference = os.path.join(
-            self.datadir, item["subject"], item["sequence"], "inference_contours",
-            f"{item['frame_id']}_{UPPER_INCISOR}.npy"
+            self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{UPPER_INCISOR}.npy"
         )
 
-        coord_system_reference_array = cached_load_articulator_array(
-            fp_coord_system_reference, norm_value=DatasetConfig.RES
-        ).T
-        coord_system_reference = coord_system_reference_array[:, -1]
+        coord_system_reference_array = cached_load_articulator_array(fp_coord_system_reference, norm_value=DatasetConfig.RES)
+        coord_system_reference = coord_system_reference_array.T[:, -1]
         coord_system_reference = np.expand_dims(coord_system_reference, axis=-1)
 
         articulator_array = articulator_array - coord_system_reference
@@ -177,6 +167,19 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         articulator_norm = self.normalize(articulator_tensor)
         n, m = articulator_norm.shape
         articulator_norm = articulator_norm.reshape(n * m).type(torch.float)
+
+        return articulator_norm
+
+    def __getitem__(self, index):
+        item = self.data.iloc[index]
+
+        subject = item["subject"]
+        sequence = item["sequence"]
+        frame_id = item["frame_id"]
+
+        frame_name = f"{subject}_{sequence}_{frame_id}"
+
+        articulator_norm = self.prepare_articulator_array(subject, sequence, frame_id)
 
         phoneme = item["phoneme"]
         weight = torch.tensor(phoneme_weights.get(phoneme, 1), dtype=torch.float)
