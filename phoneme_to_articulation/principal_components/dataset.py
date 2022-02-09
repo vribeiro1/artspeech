@@ -19,6 +19,15 @@ from settings import BASE_DIR, DatasetConfig
 from video import Video
 
 
+phoneme_weights = {
+    "l": 3,
+    "d": 3,
+    "t": 3,
+    "k": 2,
+    "g": 2
+}
+
+
 @lru_cache(maxsize=None)
 def cached_load_articulator_array(filepath, norm_value):
     return load_articulator_array(filepath, norm_value)
@@ -92,9 +101,10 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
             {
                 "subject": sentence["subject"],
                 "sequence": sentence["sequence"],
-                "frame_id": frame_id
+                "frame_id": frame_id,
+                "phoneme": phoneme
             }
-            for frame_id in sentence["frame_ids"]
+            for frame_id, phoneme in zip(sentence["frame_ids"], sentence["phonemes"])
         ) for sentence in sentence_data])
 
         mean = torch.from_numpy(np.load(os.path.join(BASE_DIR, "data", f"{articulator}_mean.npy")))
@@ -166,7 +176,10 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         n, m = articulator_norm.shape
         articulator_norm = articulator_norm.reshape(n * m).type(torch.float)
 
-        return frame_name, articulator_norm
+        phoneme = item["phoneme"]
+        weight = torch.tensor(phoneme_weights.get(phoneme, 1), dtype=torch.float)
+
+        return frame_name, articulator_norm, weight
 
 
 class PrincipalComponentsPhonemeToArticulationDataset(Dataset):

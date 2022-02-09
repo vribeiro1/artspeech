@@ -1,6 +1,7 @@
 import pdb
 
 import logging
+from random import sample
 import numpy as np
 import os
 import torch
@@ -42,8 +43,9 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
 
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for i, (_, inputs) in enumerate(progress_bar):
+    for i, (_, inputs, sample_weigths) in enumerate(progress_bar):
         inputs = inputs.to(device)
+        sample_weigths = sample_weigths.to(device)
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
@@ -74,10 +76,14 @@ class RegularizedLatentsMSELoss(nn.Module):
         super().__init__()
 
         self.alpha = alpha
-        self.mse = nn.MSELoss()
+        self.mse = nn.MSELoss(reduction="none")
 
-    def forward(self, outputs, latents, targets):
+    def forward(self, outputs, latents, targets, sample_weights=None):
         mse = self.mse(outputs, targets)
+        if sample_weights is not None:
+            mse = (sample_weights * mse.T).T
+        mse = mse.mean()
+
         reg_latents = torch.norm(latents, p=2, dim=1).mean()
 
         return mse + self.alpha * reg_latents
@@ -213,6 +219,7 @@ def main(
     info_test = run_test(
         epoch=0,
         model=best_autoencoder,
+        dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
         device=device
