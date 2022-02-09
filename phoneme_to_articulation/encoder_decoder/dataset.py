@@ -151,7 +151,7 @@ class ArtSpeechDataset(Dataset):
         if norm:
             target_array = target_array.copy() / DatasetConfig.RES
 
-        return target_array
+        return torch.from_numpy(target_array).type(torch.float)
 
     @staticmethod
     def load_frame_targets(datadir, frame_targets_filepaths, articulators, clip_tails=False):
@@ -164,7 +164,7 @@ class ArtSpeechDataset(Dataset):
             lower_incisor_fp = os.path.join(datadir, frame_targets_filepaths[LOWER_INCISOR])
             lower_incisor = ArtSpeechDataset.load_target_array(lower_incisor_fp)
 
-            upper_incisor = coord_system_reference.copy()
+            upper_incisor = coord_system_reference.clone()
 
             epiglottis_fp = os.path.join(datadir, frame_targets_filepaths[EPIGLOTTIS])
             epiglottis = ArtSpeechDataset.load_target_array(epiglottis_fp)
@@ -192,13 +192,11 @@ class ArtSpeechDataset(Dataset):
                         epiglottis=epiglottis
                     )
 
-            contour = torch.from_numpy(contour_arr)  # torch.Size([self.n_samples, 2])
             contour = contour.transpose(1, 0)  # torch.Size([2, self.n_samples])
             contour = contour.unsqueeze(dim=0)  # torch.Size([1, 2, self.n_samples]
 
             frame_targets = torch.cat([frame_targets, contour])
 
-        coord_system_reference = torch.from_numpy(coord_system_reference)
         coord_system_reference = coord_system_reference.T.unsqueeze(dim=0)
 
         return frame_targets, coord_system_reference

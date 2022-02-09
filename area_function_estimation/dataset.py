@@ -75,7 +75,9 @@ class AreaFunctionDataset2(Dataset):
         target_dict = np.load(frame_filepath, allow_pickle=True).item()
 
         target_dict = {
-            articulator: self.flip_and_reshape(articulator_array) / DatasetConfig.RES
+            articulator: torch.from_numpy(
+                self.flip_and_reshape(articulator_array)
+            ).type(torch.float) / DatasetConfig.RES
             for articulator, articulator_array in target_dict.items()
         }
 
@@ -93,8 +95,7 @@ class AreaFunctionDataset2(Dataset):
                         epiglottis=target_dict["epiglottis"]
                     )
 
-            articulator_array = torch.from_numpy(articulator_array).T
-            articulator_array = articulator_array.type(torch.float)
+            articulator_array = articulator_array.T
 
             frame_articulators = torch.cat([
                 frame_articulators,
