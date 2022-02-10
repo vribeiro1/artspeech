@@ -11,9 +11,11 @@ class EuclideanDistanceLoss(nn.Module):
         self.reduction = getattr(torch, reduction, lambda x: x)
 
     def forward(self, outputs, targets):
-        # outputs: torch.Size([bs, seq_len, N_art, 2, N_samples])
-        # targets: torch.Size([bs, seq_len, N_art, 2, N_samples])
-
+        """
+        Args:
+        outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+        targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+        """
         x_outputs = outputs[:, :, :, 0, :].clone()
         y_outputs = outputs[:, :, :, 1, :].clone()
 

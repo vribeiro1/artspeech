@@ -41,4 +41,4 @@ if __name__ == "__main__":
     if not os.path.exists(save_to):
         os.makedirs(save_to)
 
-    run_inference(model, dataloader, device, save_to)
+    run_tacotron2_inference(model, dataloader, device, save_to)

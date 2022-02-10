@@ -1,20 +1,14 @@
 import pdb
 
 import logging
-from pydoc import cli
-import matplotlib.pyplot as plt
 import numpy as np
 import os
-import re
 import torch
 import torch.nn as nn
-
-from glob import glob
 
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
 from tensorboardX import SummaryWriter
-from tgt.io import read_textgrid
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
@@ -24,8 +18,6 @@ from area_function_estimation.dataset import AreaFunctionDataset2
 from area_function_estimation.evaluation import run_test
 from articulation_to_melspec.model import ArticulatorsEmbedding
 from helpers import set_seeds
-from settings import DatasetConfig
-from video import Video
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 

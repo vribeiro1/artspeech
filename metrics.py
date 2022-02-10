@@ -6,8 +6,11 @@ from loss import EuclideanDistanceLoss
 
 
 def p2cp_distance(outputs, targets):
-    # outputs: torch.Size([bs, seq_len, N_art, 2, N_samples])
-    # targets: torch.Size([bs, seq_len, N_art, 2, N_samples])
+    """
+    Args:
+    outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+    targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+    """
     bs, seq_len, N_art, _, N_samples = outputs.shape
 
     results = torch.zeros(0, seq_len, N_art)
@@ -58,7 +61,10 @@ def pearsons_correlation(outputs, targets):
 
 
 def euclidean_distance(outputs, targets):
-    # outputs: torch.Size([bs, seq_len, N_art, 2, N_samples])
-    # targets: torch.Size([bs, seq_len, N_art, 2, N_samples])
+    """
+    Args:
+    outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+    targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+    """
     euclidean_distance_fn = EuclideanDistanceLoss(reduction="none")
     return euclidean_distance_fn(outputs, targets).mean(dim=-1)

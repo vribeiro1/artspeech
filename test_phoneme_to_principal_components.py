@@ -39,7 +39,7 @@ def main(cfg):
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=cfg["batch_size"],
-        shuffle=True,
+        shuffle=False,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )
