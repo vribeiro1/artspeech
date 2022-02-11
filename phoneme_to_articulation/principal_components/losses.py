@@ -48,3 +48,23 @@ class AutoencoderLoss(nn.Module):
         euclidean_loss = self.euclidean(targets, output_shapes)
 
         return mse_loss + euclidean_loss
+
+
+class RegularizedLatentsMSELoss(nn.Module):
+    def __init__(self, alpha):
+        super().__init__()
+
+        self.alpha = alpha
+        self.mse = nn.MSELoss(reduction="none")
+        self.triplet = nn.TripletMarginLoss()
+
+    def forward(self, anchor_outputs, anchor_latents, pos_latents, neg_latents, anchor_target, sample_weights=None):
+        mse = self.mse(anchor_outputs, anchor_target)
+        if sample_weights is not None:
+            mse = (sample_weights * mse.T).T
+        mse = mse.mean()
+
+        triplet = self.triplet(anchor_latents, pos_latents, neg_latents)
+        reg_latents = torch.norm(anchor_latents, p=2, dim=1).mean()
+
+        return mse + triplet + self.alpha * reg_latents

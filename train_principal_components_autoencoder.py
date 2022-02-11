@@ -17,6 +17,7 @@ from tqdm import tqdm
 from helpers import set_seeds, sequences_from_dict
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsAutoencoderDataset
 from phoneme_to_articulation.principal_components.evaluation import run_autoencoder_test
+from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss
 from phoneme_to_articulation.principal_components.models import Autoencoder
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -80,28 +81,6 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
     }
 
     return info
-
-
-class RegularizedLatentsMSELoss(nn.Module):
-    def __init__(self, alpha, beta):
-        super().__init__()
-
-        self.alpha = alpha
-        self.beta = beta
-        self.mse = nn.MSELoss(reduction="none")
-        self.triplet = nn.TripletMarginLoss()
-
-    def forward(self, anchor_outputs, anchor_latents, pos_latents, neg_latents, anchor_target, sample_weights=None):
-        mse = self.mse(anchor_outputs, anchor_target)
-        if sample_weights is not None:
-            mse = (sample_weights * mse.T).T
-        mse = mse.mean()
-
-        triplet = self.triplet(anchor_latents, pos_latents, neg_latents)
-        reg_latents = torch.norm(anchor_latents, p=2, dim=1).mean()
-        cov_features = torch.cov(anchor_latents.T).square().sum()
-
-        return mse + triplet + self.alpha * reg_latents + self.beta * cov_features
 
 
 @ex.automain
