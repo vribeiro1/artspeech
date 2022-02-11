@@ -1,9 +1,7 @@
-import numpy as np
 import torch
 import torch.nn.functional as F
 
 from vt_tools import LOWER_INCISOR, UPPER_INCISOR, EPIGLOTTIS
-from vt_tools.bs_regularization import regularize_Bsplines
 
 from settings import DatasetConfig
 

@@ -15,8 +15,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict
-from phoneme_to_articulation.encoder_decoder.dataset import pad_sequence_collate_fn
-from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsPhonemeToArticulationDataset
+from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsPhonemeToArticulationDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_PC_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
@@ -44,7 +43,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
 
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for _, sentence, targets, lengths, _ in progress_bar:
+    for _, sentence, targets, lengths, _, _ in progress_bar:
         sentence = sentence.to(device)
         targets = targets.to(device)
 
@@ -120,6 +119,7 @@ def main(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
+        num_workers=5,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )
@@ -138,6 +138,7 @@ def main(
         valid_dataset,
         batch_size=batch_size,
         shuffle=False,
+        num_workers=5,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )
@@ -214,6 +215,7 @@ def main(
         epoch=0,
         model=best_model,
         decoder_state_dict_fpath=decoder_state_dict_fpath,
+        dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
         device=device

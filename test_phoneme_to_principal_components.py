@@ -12,8 +12,7 @@ from torch.utils.data import DataLoader
 from vt_tools import COLORS
 
 from helpers import sequences_from_dict, set_seeds
-from phoneme_to_articulation.encoder_decoder.dataset import pad_sequence_collate_fn
-from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsPhonemeToArticulationDataset
+from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsPhonemeToArticulationDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_PC_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech

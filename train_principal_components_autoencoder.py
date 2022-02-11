@@ -1,7 +1,6 @@
 import pdb
 
 import logging
-from random import sample
 import numpy as np
 import os
 import torch
@@ -17,7 +16,7 @@ from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsAutoencoderDataset
-from phoneme_to_articulation.principal_components.evaluation import run_test
+from phoneme_to_articulation.principal_components.evaluation import run_autoencoder_test
 from phoneme_to_articulation.principal_components.models import Autoencoder
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -43,14 +42,26 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
 
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for i, (_, inputs, sample_weigths) in enumerate(progress_bar):
-        inputs = inputs.to(device)
+    for _, anchor, pos, neg, sample_weigths, _ in progress_bar:
+        anchor = anchor.to(device)
+        pos = pos.to(device)
+        neg = neg.to(device)
         sample_weigths = sample_weigths.to(device)
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
-            outputs, latents = model(inputs)
-            loss = criterion(outputs, latents, inputs)
+            anchor_outputs, anchor_latents = model(anchor)
+            _, pos_latents = model(pos)
+            _, neg_latents = model(neg)
+
+            loss = criterion(
+                anchor_outputs,
+                anchor_latents,
+                pos_latents,
+                neg_latents,
+                anchor,
+                sample_weigths
+            )
 
             if training:
                 loss.backward()
@@ -72,21 +83,25 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
 
 
 class RegularizedLatentsMSELoss(nn.Module):
-    def __init__(self, alpha):
+    def __init__(self, alpha, beta):
         super().__init__()
 
         self.alpha = alpha
+        self.beta = beta
         self.mse = nn.MSELoss(reduction="none")
+        self.triplet = nn.TripletMarginLoss()
 
-    def forward(self, outputs, latents, targets, sample_weights=None):
-        mse = self.mse(outputs, targets)
+    def forward(self, anchor_outputs, anchor_latents, pos_latents, neg_latents, anchor_target, sample_weights=None):
+        mse = self.mse(anchor_outputs, anchor_target)
         if sample_weights is not None:
             mse = (sample_weights * mse.T).T
         mse = mse.mean()
 
-        reg_latents = torch.norm(latents, p=2, dim=1).mean()
+        triplet = self.triplet(anchor_latents, pos_latents, neg_latents)
+        reg_latents = torch.norm(anchor_latents, p=2, dim=1).mean()
+        cov_features = torch.cov(anchor_latents.T).square().sum()
 
-        return mse + self.alpha * reg_latents
+        return mse + triplet + self.alpha * reg_latents + self.beta * cov_features
 
 
 @ex.automain
@@ -110,7 +125,7 @@ def main(
         autoencoder.load_state_dict(state_dict)
     autoencoder.to(device)
 
-    loss_fn = RegularizedLatentsMSELoss(alpha=1e-3)
+    loss_fn = RegularizedLatentsMSELoss(alpha=1e-2, beta=1e-2)
     optimizer = Adam(autoencoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
 
@@ -127,6 +142,7 @@ def main(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
+        num_workers=5,
         worker_init_fn=set_seeds
     )
 
@@ -143,6 +159,7 @@ def main(
         valid_dataset,
         batch_size=batch_size,
         shuffle=False,
+        num_workers=5,
         worker_init_fn=set_seeds
     )
 
@@ -202,6 +219,7 @@ def main(
         test_dataset,
         batch_size=batch_size,
         shuffle=True,
+        num_workers=5,
         worker_init_fn=set_seeds
     )
 
@@ -210,13 +228,13 @@ def main(
     best_autoencoder.encoder.load_state_dict(best_encoder_state_dict)
     best_decoder_state_dict = torch.load(best_decoder_path, map_location=device)
     best_autoencoder.decoder.load_state_dict(best_decoder_state_dict)
-    autoencoder.to(device)
+    best_autoencoder.to(device)
 
     test_outputs_dir = os.path.join(fs_observer.dir, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
-    info_test = run_test(
+    info_test = run_autoencoder_test(
         epoch=0,
         model=best_autoencoder,
         dataloader=test_dataloader,
