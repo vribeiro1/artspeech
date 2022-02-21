@@ -4,7 +4,6 @@ import logging
 import numpy as np
 import os
 import torch
-import torch.nn as nn
 
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
@@ -27,7 +26,15 @@ VALID = "validation"
 TEST = "test"
 
 ex = Experiment()
-fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "phoneme_to_articulation", "principal_components", "results"))
+fs_observer = FileStorageObserver.create(
+    os.path.join(
+        BASE_DIR,
+        "phoneme_to_articulation",
+        "principal_components",
+        "results",
+        "autoencoder"
+    )
+)
 ex.observers.append(fs_observer)
 
 
@@ -43,24 +50,18 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
 
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for _, anchor, pos, neg, sample_weigths, _ in progress_bar:
-        anchor = anchor.to(device)
-        pos = pos.to(device)
-        neg = neg.to(device)
+    for _, inputs, sample_weigths, _ in progress_bar:
+        inputs = inputs.to(device)
         sample_weigths = sample_weigths.to(device)
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
-            anchor_outputs, anchor_latents = model(anchor)
-            _, pos_latents = model(pos)
-            _, neg_latents = model(neg)
+            outputs, latents = model(inputs)
 
             loss = criterion(
-                anchor_outputs,
-                anchor_latents,
-                pos_latents,
-                neg_latents,
-                anchor,
+                outputs,
+                latents,
+                inputs,
                 sample_weigths
             )
 

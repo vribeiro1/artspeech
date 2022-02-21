@@ -27,7 +27,15 @@ VALID = "validation"
 TEST = "test"
 
 ex = Experiment()
-fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "phoneme_to_articulation", "principal_components", "results"))
+fs_observer = FileStorageObserver.create(
+    os.path.join(
+        BASE_DIR,
+        "phoneme_to_articulation",
+        "principal_components",
+        "results",
+        "shape_prediction"
+    )
+)
 ex.observers.append(fs_observer)
 
 
@@ -43,14 +51,16 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
 
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for _, sentence, targets, lengths, _, _ in progress_bar:
+    for _, sentence, targets, lengths, _, references, critical_mask, _ in progress_bar:
         sentence = sentence.to(device)
         targets = targets.to(device)
+        references = references.to(device)
+        critical_mask = critical_mask.to(device)
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
             outputs = model(sentence, lengths)
-            loss = criterion(outputs, targets)
+            loss = criterion(outputs, targets, references, critical_mask)
 
             if training:
                 loss.backward()

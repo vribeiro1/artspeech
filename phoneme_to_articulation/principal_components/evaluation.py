@@ -6,7 +6,7 @@ import os
 import torch
 
 from tqdm import tqdm
-from vt_tools import UPPER_INCISOR
+from vt_tools import COLORS, TONGUE, UPPER_INCISOR
 from vt_shape_gen.helpers import load_articulator_array
 
 from phoneme_to_articulation.encoder_decoder.evaluation import save_outputs
@@ -17,8 +17,8 @@ from settings import DatasetConfig
 def plot_array(output, target, reference, save_to, phoneme=None):
     plt.figure(figsize=(10, 10))
 
-    plt.plot(*reference, color="yellow")
-    plt.plot(*output)
+    plt.plot(*reference, color=COLORS[UPPER_INCISOR])
+    plt.plot(*output, color=COLORS[TONGUE])
     plt.plot(*target, "r--")
 
     plt.xlim([0., 1.])
@@ -53,25 +53,20 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, devic
 
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
-    for i, (frame_ids, anchor, pos, neg, sample_weigths, phonemes) in enumerate(progress_bar):
-        anchor = anchor.to(device)
-        pos = pos.to(device)
-        neg = neg.to(device)
+    for frame_ids, inputs, sample_weigths, phonemes in progress_bar:
+        inputs = inputs.to(device)
         sample_weigths = sample_weigths.to(device)
 
         with torch.set_grad_enabled(False):
-            anchor_outputs, anchor_latents = model(anchor)
-            _, pos_latents = model(pos)
-            _, neg_latents = model(neg)
-
+            outputs, anchor_latents = model(inputs)
             loss = criterion(
-                anchor_outputs, anchor_latents, pos_latents, neg_latents, anchor, sample_weigths
+                outputs, anchor_latents, inputs, sample_weigths
             )
 
             losses.append(loss.item())
             progress_bar.set_postfix(loss=np.mean(losses))
 
-            for frame_id, output, target, phoneme in zip(frame_ids, anchor_outputs, anchor, phonemes):
+            for frame_id, output, target, phoneme in zip(frame_ids, outputs, inputs, phonemes):
                 subject, sequence, inumber = frame_id.split("_")
 
                 reference_filepath = os.path.join(
@@ -112,13 +107,15 @@ def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, c
 
     losses = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
-    for sentence_ids, sentence, targets, lengths, phonemes, _ in progress_bar:
+    for sentence_ids, sentence, targets, lengths, phonemes, references, critical_weights, frames in progress_bar:
         sentence = sentence.to(device)
         targets = targets.to(device)
+        references = references.to(device)
+        critical_weights = critical_weights.to(device)
 
         with torch.set_grad_enabled(False):
             outputs = model(sentence, lengths)
-            loss = criterion(outputs, targets)
+            loss = criterion(outputs, targets, references, critical_weights)
 
             pred_shapes = decoder(outputs)
             bs, seq_len, _ = pred_shapes.shape
@@ -127,19 +124,38 @@ def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, c
             pred_shapes = pred_shapes.detach().cpu()
             target_shapes = targets.detach().cpu()
 
-            save_outputs(
-                sentence_ids,
-                pred_shapes,
-                target_shapes,
-                lengths,
-                phonemes,
-                ["tongue"],
-                epoch_outputs_dir,
-                regularize_out=False
-            )
+        save_outputs(
+            sentence_ids,
+            pred_shapes,
+            target_shapes,
+            lengths,
+            phonemes,
+            [TONGUE],
+            epoch_outputs_dir,
+            regularize_out=False
+        )
 
-            losses.append(loss.item())
-            progress_bar.set_postfix(loss=np.mean(losses))
+        for (
+            sentence_id, sentence_pred_shapes, sentence_target_shapes, sentence_references, sentence_length, sentence_phonemes, sentence_frames
+        ) in zip(sentence_ids, pred_shapes, target_shapes, references, lengths, phonemes, frames):
+            save_to_dir = os.path.join(epoch_outputs_dir, sentence_id, "plots")
+
+            if not os.path.exists(save_to_dir):
+                os.makedirs(save_to_dir)
+
+            sentence_pred_shapes = sentence_pred_shapes[:sentence_length]
+            sentence_target_shapes = sentence_target_shapes[:sentence_length]
+            sentence_references = sentence_references[:sentence_length]
+            for pred_shape, target_shape, reference, phoneme, frame_id in zip(sentence_pred_shapes, sentence_target_shapes, sentence_references, sentence_phonemes, sentence_frames):
+                pred_shape = dataloader.dataset.normalize.inverse(pred_shape.squeeze(dim=0))
+                target_shape = dataloader.dataset.normalize.inverse(target_shape.squeeze(dim=0))
+                reference = dataloader.dataset.normalize.inverse(reference.detach().cpu())
+
+                save_to_filepath = os.path.join(save_to_dir, f"{frame_id}.jpg")
+                plot_array(pred_shape, target_shape, reference, save_to_filepath, phoneme)
+
+        losses.append(loss.item())
+        progress_bar.set_postfix(loss=np.mean(losses))
 
     mean_loss = np.mean(losses)
     info = {

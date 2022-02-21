@@ -1,15 +1,10 @@
 import argparse
-import matplotlib.pyplot as plt
-import numpy as np
 import os
 import torch
-from tqdm import tqdm
 import ujson
 import yaml
 
-from glob import glob
 from torch.utils.data import DataLoader
-from vt_tools import COLORS
 
 from helpers import sequences_from_dict, set_seeds
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsPhonemeToArticulationDataset, pad_sequence_collate_fn
@@ -69,33 +64,6 @@ def main(cfg):
         outputs_dir=test_outputs_dir,
         device=device
     )
-
-    preds_filepaths = sorted(glob(os.path.join(info_test["saves_dir"], "*", "contours", f"*_{cfg['articulator']}.npy")))
-    true_filepaths = sorted(glob(os.path.join(info_test["saves_dir"], "*", "contours", f"*_{cfg['articulator']}_true.npy")))
-    for pred_filepath, true_filepath in tqdm(zip(preds_filepaths, true_filepaths), desc="Plotting", total=len(preds_filepaths)):
-        filename, _ = os.path.basename(pred_filepath).split(".")
-        plots_dir = os.path.join(os.path.dirname(os.path.dirname(pred_filepath)), "plots")
-        if not os.path.exists(plots_dir):
-            os.makedirs(plots_dir)
-
-        pred_array = test_dataset.normalize.inverse(torch.from_numpy(np.load(pred_filepath)).type(torch.float))
-        true_array = test_dataset.normalize.inverse(torch.from_numpy(np.load(true_filepath)).type(torch.float))
-
-        plt.figure(figsize=(10, 10))
-
-        plt.plot(*pred_array, c=COLORS[cfg["articulator"]], lw=3)
-        plt.plot(*true_array, "r--", lw=3, alpha=0.5)
-
-        plt.xlim([0., 1.])
-        plt.ylim([1., 0.])
-
-        plt.grid(which="major")
-        plt.grid(which="minor", alpha=0.4)
-        plt.minorticks_on()
-
-        plt.tight_layout()
-        plt.savefig(os.path.join(plots_dir, f"{filename}.jpg"))
-        plt.close()
 
 
 if __name__ == "__main__":
