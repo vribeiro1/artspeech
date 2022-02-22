@@ -58,9 +58,9 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, devic
         sample_weigths = sample_weigths.to(device)
 
         with torch.set_grad_enabled(False):
-            outputs, anchor_latents = model(inputs)
+            outputs, latents = model(inputs)
             loss = criterion(
-                outputs, anchor_latents, inputs, sample_weigths
+                outputs, latents, inputs, sample_weigths
             )
 
             losses.append(loss.item())

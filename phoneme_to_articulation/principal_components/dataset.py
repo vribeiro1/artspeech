@@ -67,10 +67,15 @@ def collect_data(datadir, sequences, sync_shift, framerate):
         sentence_tier = textgrid.get_tier_by_name("SentenceTier")
 
         for sentence_interval in sentence_tier.intervals:
-            sentence_phone_intervals = funcy.lfilter(lambda phone: (
+            sentence_phone_intervals = filter(lambda phone: (
                 phone.start_time >= sentence_interval.start_time and
                 phone.end_time <= sentence_interval.end_time
             ), phone_tier)
+
+            sentence_phone_intervals = sorted(
+                sentence_phone_intervals,
+                key=lambda interval: interval.start_time
+            )
 
             sentence_phonemes = []
             sentence_frame_ids = []
@@ -276,7 +281,15 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
             self.vocabulary[token] for token in sentence_tokens
         ], dtype=torch.long)
 
-        return sentence_name, sentence_numerized, sentence_targets, sentence_tokens, sentence_references, critical_mask, sentence_frames
+        return (
+            sentence_name,
+            sentence_numerized,
+            sentence_targets,
+            sentence_tokens,
+            sentence_references,
+            critical_mask,
+            sentence_frames
+        )
 
 
 def pad_sequence_collate_fn(batch):

@@ -52,10 +52,14 @@ class Video:
         indices = list(set(ge_start) & set(lt_end))
 
         frames_filepaths = itemgetter(*indices)(self.frames_filepaths)
+        if isinstance(frames_filepaths, str):
+            frames_filepaths = [frames_filepaths]
+        frames_filepaths = sorted(frames_filepaths)
+
         if load_frames:
             frames = torch.stack([self.load_frame(fp) for fp in frames_filepaths])
         else:
-            frames = [frames_filepaths] if isinstance(frames_filepaths, str) else frames_filepaths
+            frames = frames_filepaths
 
         return torch.tensor(time[indices], dtype=torch.float), frames
 
