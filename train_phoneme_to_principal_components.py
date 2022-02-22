@@ -4,8 +4,10 @@ import logging
 import numpy as np
 import os
 import torch
+import torch.nn as nn
 import ujson
 
+from collections import OrderedDict
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
 from tensorboardX import SummaryWriter
@@ -15,10 +17,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict
+from loss import EuclideanDistanceLoss
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsPhonemeToArticulationDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_PC_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
-from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
+from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech, Decoder
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -39,9 +42,34 @@ fs_observer = FileStorageObserver.create(
 ex.observers.append(fs_observer)
 
 
-def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None, device=None):
+class DecoderEuclideanDistance(nn.Module):
+    def __init__(self, decoder_filepath, n_components, n_samples, device):
+        super().__init__()
+        self.n_samples = n_samples
+
+        self.decoder = Decoder(n_components=n_components, out_features=2*n_samples)
+        decoder_state_dict = torch.load(decoder_filepath, map_location=device)
+        self.decoder.load_state_dict(decoder_state_dict)
+        self.decoder.to(device)
+        self.decoder.eval()
+
+        for parameter in self.decoder.parameters():
+            parameter.requires_grad = False
+
+        self.euclidean = EuclideanDistanceLoss()
+
+    def forward(self, outputs, targets):
+        bs, seq_len, _, _, _ = targets.shape
+        output_shapes = self.decoder(outputs)
+        output_shapes = output_shapes.reshape(bs, seq_len, 2, self.n_samples).unsqueeze(dim=2)
+        return self.euclidean(output_shapes, targets)
+
+
+def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=None, writer=None, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if fn_metrics is None:
+        fn_metrics={}
     training = phase == TRAIN
 
     if training:
@@ -50,6 +78,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
         model.eval()
 
     losses = []
+    metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
     for _, sentence, targets, lengths, _, references, critical_mask, _ in progress_bar:
         sentence = sentence.to(device)
@@ -66,8 +95,22 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
                 loss.backward()
                 optimizer.step()
 
+            for metric_name, fn_metric in fn_metrics.items():
+                metric_val = fn_metric(outputs, targets)
+                metrics_values[metric_name].append(metric_val.item())
+
             losses.append(loss.item())
-            progress_bar.set_postfix(loss=np.mean(losses))
+
+            postfixes = {
+                "loss": np.mean(losses)
+            }
+
+            postfixes.update({
+                metric_name: np.mean(metric_vals)
+                for metric_name, metric_vals in metrics_values.items()
+            })
+
+            progress_bar.set_postfix(OrderedDict(postfixes))
 
     mean_loss = np.mean(losses)
     loss_tag = f"{phase}/loss"
@@ -77,6 +120,11 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
     info = {
         "loss": mean_loss
     }
+
+    info.update({
+        metric_name: np.mean(metric_vals)
+        for metric_name, metric_vals in metrics_values.items()
+    })
 
     return info
 
@@ -156,6 +204,15 @@ def main(
     best_metric = np.inf
     epochs_since_best = 0
 
+    metrics = {
+        "euclidean_distance": DecoderEuclideanDistance(
+            decoder_filepath=decoder_state_dict_fpath,
+            n_components=12,
+            n_samples=50,
+            device=device
+        )
+    }
+
     epochs = range(1, n_epochs + 1)
     for epoch in epochs:
         info_train = run_epoch(
@@ -165,6 +222,7 @@ def main(
             dataloader=train_dataloader,
             optimizer=optimizer,
             criterion=loss_fn,
+            fn_metrics=metrics,
             writer=writer,
             device=device
         )
@@ -176,14 +234,15 @@ def main(
             dataloader=valid_dataloader,
             optimizer=optimizer,
             criterion=loss_fn,
+            fn_metrics=metrics,
             writer=writer,
             device=device
         )
 
         scheduler.step(info_valid["loss"])
 
-        if info_valid["loss"] < best_metric:
-            best_metric = info_valid["loss"]
+        if info_valid["euclidean_distance"] < best_metric:
+            best_metric = info_valid["euclidean_distance"]
             epochs_since_best = 0
             torch.save(model.state_dict(), best_model_path)
         else:
