@@ -132,7 +132,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=
 @ex.automain
 def main(
     _run, datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
-    train_seq_dict, valid_seq_dict, test_seq_dict, articulator,
+    train_seq_dict, valid_seq_dict, test_seq_dict, articulator, n_components,
     vocab_fpath, encoder_state_dict_fpath, decoder_state_dict_fpath,
     clip_tails=True, state_dict_fpath=None
 ):
@@ -147,7 +147,11 @@ def main(
         tokens = ujson.load(f)
         vocabulary = {token: i for i, token in enumerate(tokens)}
 
-    model = PrincipalComponentsArtSpeech(vocab_size=len(vocabulary), n_components=12, gru_dropout=0.2)
+    model = PrincipalComponentsArtSpeech(
+        vocab_size=len(vocabulary),
+        n_components=n_components,
+        gru_dropout=0.2
+    )
     if state_dict_fpath is not None:
         state_dict = torch.load(state_dict_fpath, map_location=device)
         model.load_state_dict(state_dict)
@@ -155,7 +159,7 @@ def main(
 
     loss_fn = AutoencoderLoss(
         in_features=100,
-        n_components=12,
+        n_components=n_components,
         encoder_state_dict_fpath=encoder_state_dict_fpath,
         decoder_state_dict_fpath=decoder_state_dict_fpath,
         device=device
@@ -207,7 +211,7 @@ def main(
     metrics = {
         "euclidean_distance": DecoderEuclideanDistance(
             decoder_filepath=decoder_state_dict_fpath,
-            n_components=12,
+            n_components=n_components,
             n_samples=50,
             device=device
         )
@@ -271,7 +275,11 @@ def main(
         collate_fn=pad_sequence_collate_fn
     )
 
-    best_model = PrincipalComponentsArtSpeech(vocab_size=len(vocabulary), n_components=12, gru_dropout=0.2)
+    best_model = PrincipalComponentsArtSpeech(
+        vocab_size=len(vocabulary),
+        n_components=n_components,
+        gru_dropout=0.2
+    )
     best_model_state_dict = torch.load(best_model_path, map_location=device)
     best_model.load_state_dict(best_model_state_dict)
     best_model.to(device)

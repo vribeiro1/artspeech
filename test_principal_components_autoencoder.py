@@ -31,7 +31,10 @@ def main(cfg):
         worker_init_fn=set_seeds
     )
 
-    best_autoencoder = Autoencoder(in_features=100, n_components=12)
+    best_autoencoder = Autoencoder(
+        in_features=100,
+        n_components=cfg["n_components"]
+    )
     best_encoder_state_dict = torch.load(cfg["encoder_state_dict_fpath"], map_location=device)
     best_autoencoder.encoder.load_state_dict(best_encoder_state_dict)
     best_decoder_state_dict = torch.load(cfg["decoder_state_dict_fpath"], map_location=device)

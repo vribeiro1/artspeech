@@ -38,7 +38,11 @@ def main(cfg):
         collate_fn=pad_sequence_collate_fn
     )
 
-    best_model = PrincipalComponentsArtSpeech(vocab_size=len(vocabulary), n_components=12, gru_dropout=0.2)
+    best_model = PrincipalComponentsArtSpeech(
+        vocab_size=len(vocabulary),
+        n_components=cfg["n_components"],
+        gru_dropout=0.2
+    )
     best_model_state_dict = torch.load(cfg["state_dict_fpath"], map_location=device)
     best_model.load_state_dict(best_model_state_dict)
     best_model.to(device)
@@ -49,7 +53,7 @@ def main(cfg):
 
     loss_fn = AutoencoderLoss(
         in_features=100,
-        n_components=12,
+        n_components=cfg["n_components"],
         encoder_state_dict_fpath=cfg["encoder_state_dict_fpath"],
         decoder_state_dict_fpath=cfg["decoder_state_dict_fpath"],
         device=device

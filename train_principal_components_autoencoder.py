@@ -87,7 +87,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
 @ex.automain
 def main(
     _run, datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
-    train_seq_dict, valid_seq_dict, test_seq_dict, articulator,
+    train_seq_dict, valid_seq_dict, test_seq_dict, articulator, n_components,
     clip_tails=True, state_dict_fpath=None
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -99,13 +99,16 @@ def main(
     last_encoder_path = os.path.join(fs_observer.dir, "last_encoder.pt")
     last_decoder_path = os.path.join(fs_observer.dir, "last_decoder.pt")
 
-    autoencoder = Autoencoder(in_features=100, n_components=12)
+    autoencoder = Autoencoder(
+        in_features=100,
+        n_components=n_components
+    )
     if state_dict_fpath is not None:
         state_dict = torch.load(state_dict_fpath, map_location=device)
         autoencoder.load_state_dict(state_dict)
     autoencoder.to(device)
 
-    loss_fn = RegularizedLatentsMSELoss(alpha=1e-2, beta=1e-2)
+    loss_fn = RegularizedLatentsMSELoss(alpha=1e-2)
     optimizer = Adam(autoencoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
 
@@ -203,7 +206,10 @@ def main(
         worker_init_fn=set_seeds
     )
 
-    best_autoencoder = Autoencoder(in_features=100, n_components=12)
+    best_autoencoder = Autoencoder(
+        in_features=100,
+        n_components=n_components
+    )
     best_encoder_state_dict = torch.load(best_encoder_path, map_location=device)
     best_autoencoder.encoder.load_state_dict(best_encoder_state_dict)
     best_decoder_state_dict = torch.load(best_decoder_path, map_location=device)
