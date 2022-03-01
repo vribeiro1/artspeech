@@ -1,3 +1,4 @@
+import torch
 import torch.nn as nn
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
@@ -43,7 +44,7 @@ class Autoencoder(nn.Module):
         self.decoder = Decoder(n_components=n_components, out_features=in_features)
 
     def forward(self, x):
-        latents = self.encoder(x)
+        latents = torch.tanh(self.encoder(x))
         outputs = self.decoder(latents)
         return outputs, latents
 
@@ -60,7 +61,10 @@ class ArticulatorPrincipalComponentsPredictor(nn.Module):
             nn.Linear(in_features=256, out_features=256),
             nn.ReLU(),
             nn.LayerNorm(256),
-            nn.Linear(in_features=256, out_features=n_components)
+            nn.Linear(in_features=256, out_features=128),
+            nn.ReLU(),
+            nn.LayerNorm(128),
+            nn.Linear(in_features=128, out_features=n_components)
         )
 
     def forward(self, inputs):
@@ -101,6 +105,6 @@ class PrincipalComponentsArtSpeech(nn.Module):
         rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
 
         linear_out = self.linear(rnn_out)  # (bs, seq_len, embed_dim)
-        components = self.predictor(linear_out)
+        components = torch.tanh(self.predictor(linear_out))
 
         return components
