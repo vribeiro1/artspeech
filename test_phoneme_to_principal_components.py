@@ -83,7 +83,8 @@ def main(cfg):
         n_components=cfg["n_components"],
         encoder_state_dict_fpath=cfg["encoder_state_dict_fpath"],
         decoder_state_dict_fpath=cfg["decoder_state_dict_fpath"],
-        device=device
+        device=device,
+        beta=0.2
     )
 
     info_test = run_phoneme_to_PC_test(

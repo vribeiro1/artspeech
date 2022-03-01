@@ -31,6 +31,22 @@ class MeanP2CPDistance(nn.Module):
         return self.reduction(mean_p2cp)
 
 
+def tract_variable(u_, v_):
+    """
+    Args:
+    u (torch.tensor): Tensor of shape (*, N, 2)
+    v (torch.tensor): Tensor of shape (*, N, 2)
+    """
+    n = u_.shape[-2]
+    m = v_.shape[-2]
+
+    dist_matrix = torch.cdist(u_, v_)
+    dist_matrix = dist_matrix.view(*(list(dist_matrix.shape[:-2]) + [n * m]))
+    TV_val, _ = dist_matrix.min(dim=-1)
+
+    return TV_val
+
+
 class DecoderEuclideanDistance(nn.Module):
     def __init__(self, decoder_filepath, n_components, n_samples, reduction, device, denorm_fn=None):
         super().__init__()

@@ -3,21 +3,25 @@ import pdb
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import pandas as pd
 import torch
 
 from tqdm import tqdm
 from vt_tools import COLORS, TONGUE, UPPER_INCISOR
 from vt_shape_gen.helpers import load_articulator_array
 
+from phoneme_to_articulation.principal_components.metrics import tract_variable
 from phoneme_to_articulation.encoder_decoder.evaluation import save_outputs
 from phoneme_to_articulation.principal_components.models import Decoder
 from settings import DatasetConfig
 
 
-def plot_array(output, target, reference, save_to, phoneme=None):
+def plot_array(output, target, references, save_to, phoneme=None):
     plt.figure(figsize=(10, 10))
 
-    plt.plot(*reference, color=COLORS[UPPER_INCISOR])
+    for reference in references:
+        plt.plot(*reference, color=COLORS[UPPER_INCISOR])
+
     plt.plot(*output, color=COLORS[TONGUE])
     plt.plot(*target, "r--")
 
@@ -87,7 +91,7 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, fn_me
                 output = dataloader.dataset.normalize.inverse(output.reshape(2, 50).detach().cpu())
 
                 save_to = os.path.join(epoch_outputs_dir, f"{frame_id}.jpg")
-                plot_array(output, target, reference, save_to, phoneme)
+                plot_array(output, target, reference.unsqueeze(dim=0), save_to, phoneme)
 
     mean_loss = np.mean(losses)
     info = {
@@ -97,17 +101,21 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, fn_me
     return info
 
 
-def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, criterion, outputs_dir, fn_metrics=None, device=None):
+def run_phoneme_to_PC_test(
+    epoch, model, decoder_state_dict_fpath, dataloader, criterion, outputs_dir,
+    fn_metrics=None, device=None
+):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if fn_metrics is None:
-        fn_metrics={}
+        fn_metrics = {}
 
     epoch_outputs_dir = os.path.join(outputs_dir, str(epoch))
     if not os.path.exists(epoch_outputs_dir):
         os.makedirs(epoch_outputs_dir)
 
     model.eval()
+    denorm_fn = dataloader.dataset.normalize.inverse
 
     decoder = Decoder(n_components=12, out_features=100)
     decoder_state_dict = torch.load(decoder_state_dict_fpath, map_location=device)
@@ -118,15 +126,15 @@ def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, c
     losses = []
     metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
-    for sentence_ids, sentence, targets, lengths, phonemes, references, critical_weights, frames in progress_bar:
+    for sentence_ids, sentence, targets, lengths, phonemes, critical_masks, critical_references, _ in progress_bar:
         sentence = sentence.to(device)
         targets = targets.to(device)
-        references = references.to(device)
-        critical_weights = critical_weights.to(device)
+        critical_references = critical_references.to(device)
+        critical_masks = critical_masks.to(device)
 
         with torch.set_grad_enabled(False):
             outputs = model(sentence, lengths)
-            loss = criterion(outputs, targets, references, critical_weights)
+            loss = criterion(outputs, targets, critical_references, critical_masks)
 
             for metric_name, fn_metric in fn_metrics.items():
                 metric_val = fn_metric(outputs, targets).squeeze(dim=-1)
@@ -137,8 +145,63 @@ def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, c
             bs, seq_len, _ = pred_shapes.shape
             pred_shapes = pred_shapes.reshape(bs, seq_len, 1, 2, 50)
 
+            pred_shapes = denorm_fn(pred_shapes)
             pred_shapes = pred_shapes.detach().cpu()
-            target_shapes = targets.detach().cpu()
+
+            target_shapes = denorm_fn(targets)
+            target_shapes = target_shapes.detach().cpu()
+
+            critical_references = denorm_fn(critical_references)
+            critical_references = critical_references.detach().cpu()
+
+        ############################################################################################
+        # Compute the TVs associated with the tongue and save to a csv file
+        # TODO: Move this code to a separate function
+
+        TV_target_shapes = torch.transpose(target_shapes[..., 0, :, :], -2, -1)
+        TV_pred_shapes = torch.transpose(pred_shapes[..., 0, :, :], -2, -1)
+        TBCD_reference = torch.transpose(critical_references[..., 0, :, :], -2, -1)
+        TTCD_reference = torch.transpose(critical_references[..., 1, :, :], -2, -1)
+
+        TBCD_true= tract_variable(TV_target_shapes, TBCD_reference)
+        TBCD_pred = tract_variable(TV_pred_shapes, TBCD_reference)
+        TTCD_true= tract_variable(TV_target_shapes, TTCD_reference)
+        TTCD_pred = tract_variable(TV_pred_shapes, TTCD_reference)
+
+        for (
+            sentence_id,
+            sentence_TBCD_true,
+            sentence_TBCD_pred,
+            sentence_TTCD_true,
+            sentence_TTCD_pred,
+            length,
+            sentence_phonemes
+        ) in zip(sentence_ids, TBCD_true, TBCD_pred, TTCD_true, TTCD_pred, lengths, phonemes):
+            frames = list(range(len(sentence_phonemes)))
+
+            sentence_TBCD_true = sentence_TBCD_true[:length, ...].numpy()
+            sentence_TBCD_pred = sentence_TBCD_pred[:length, ...].numpy()
+            sentence_TTCD_true = sentence_TTCD_true[:length, ...].numpy()
+            sentence_TTCD_pred = sentence_TTCD_pred[:length, ...].numpy()
+
+            df = pd.DataFrame({
+                "sentence": sentence_id,
+                "frame": frames,
+                "phoneme": sentence_phonemes,
+                "TBCD_target": sentence_TBCD_true,
+                "TBCD_pred": sentence_TBCD_pred,
+                "TTCD_target": sentence_TTCD_true,
+                "TTCD_pred": sentence_TTCD_pred
+            })
+
+            sentence_id_dir = os.path.join(epoch_outputs_dir, sentence_id)
+            if not os.path.exists(sentence_id_dir):
+                os.makedirs(sentence_id_dir)
+
+            csv_filepath = os.path.join(sentence_id_dir, "tract_variables.csv")
+            df.to_csv(csv_filepath, index=False)
+
+        ############################################################################################
 
         save_outputs(
             sentence_ids,
@@ -151,9 +214,13 @@ def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, c
             regularize_out=False
         )
 
+        ############################################################################################
+        # Plot the results
+        # TODO: Move this code to a separate function
+
         for (
             sentence_id, sentence_pred_shapes, sentence_target_shapes, sentence_references, sentence_length, sentence_phonemes, sentence_frames
-        ) in zip(sentence_ids, pred_shapes, target_shapes, references, lengths, phonemes, frames):
+        ) in zip(sentence_ids, pred_shapes, target_shapes, critical_references, lengths, phonemes, frames):
             save_to_dir = os.path.join(epoch_outputs_dir, sentence_id, "plots")
 
             if not os.path.exists(save_to_dir):
@@ -173,6 +240,8 @@ def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, c
         losses.append(loss.item())
         progress_bar.set_postfix(loss=np.mean(losses))
 
+        ############################################################################################
+
     mean_loss = np.mean(losses)
     info = {
         "loss": mean_loss,
@@ -180,7 +249,12 @@ def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, c
     }
 
     info.update({
-        metric_name: np.mean(metric_vals)
+        metric_name + "_mean": np.mean(metric_vals)
+        for metric_name, metric_vals in metrics_values.items()
+    })
+
+    info.update({
+        metric_name + "_std": np.std(metric_vals)
         for metric_name, metric_vals in metrics_values.items()
     })
 
