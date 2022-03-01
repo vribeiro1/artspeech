@@ -4,7 +4,6 @@ import logging
 import numpy as np
 import os
 import torch
-import torch.nn as nn
 import ujson
 
 from collections import OrderedDict
@@ -17,11 +16,14 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict
-from loss import EuclideanDistanceLoss
-from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsPhonemeToArticulationDataset, pad_sequence_collate_fn
+from phoneme_to_articulation.principal_components.dataset import (
+    PrincipalComponentsPhonemeToArticulationDataset,
+    pad_sequence_collate_fn
+)
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_PC_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
-from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech, Decoder
+from phoneme_to_articulation.principal_components.metrics import DecoderEuclideanDistance, DecoderMeanP2CPDistance
+from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -40,29 +42,6 @@ fs_observer = FileStorageObserver.create(
     )
 )
 ex.observers.append(fs_observer)
-
-
-class DecoderEuclideanDistance(nn.Module):
-    def __init__(self, decoder_filepath, n_components, n_samples, device):
-        super().__init__()
-        self.n_samples = n_samples
-
-        self.decoder = Decoder(n_components=n_components, out_features=2*n_samples)
-        decoder_state_dict = torch.load(decoder_filepath, map_location=device)
-        self.decoder.load_state_dict(decoder_state_dict)
-        self.decoder.to(device)
-        self.decoder.eval()
-
-        for parameter in self.decoder.parameters():
-            parameter.requires_grad = False
-
-        self.euclidean = EuclideanDistanceLoss()
-
-    def forward(self, outputs, targets):
-        bs, seq_len, _, _, _ = targets.shape
-        output_shapes = self.decoder(outputs)
-        output_shapes = output_shapes.reshape(bs, seq_len, 2, self.n_samples).unsqueeze(dim=2)
-        return self.euclidean(output_shapes, targets)
 
 
 def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=None, writer=None, device=None):
@@ -213,7 +192,18 @@ def main(
             decoder_filepath=decoder_state_dict_fpath,
             n_components=n_components,
             n_samples=50,
-            device=device
+            device=device,
+            reduction="mean",
+            denorm_fn=train_dataset.normalize.inverse
+        ),
+
+        "mean_p2cp": DecoderMeanP2CPDistance(
+            decoder_filepath=decoder_state_dict_fpath,
+            n_components=n_components,
+            n_samples=50,
+            reduction="mean",
+            device=device,
+            denorm_fn=train_dataset.normalize.inverse
         )
     }
 
@@ -294,6 +284,10 @@ def main(
         decoder_state_dict_fpath=decoder_state_dict_fpath,
         dataloader=test_dataloader,
         criterion=loss_fn,
+        fn_metrics=metrics,
         outputs_dir=test_outputs_dir,
         device=device
     )
+
+    with open(os.path.join(fs_observer.dir, "test_results.json"), "w") as f:
+        ujson.dump(info_test, f)

@@ -38,9 +38,11 @@ fs_observer = FileStorageObserver.create(
 ex.observers.append(fs_observer)
 
 
-def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None, device=None):
+def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=None, writer=None, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if fn_metrics is None:
+        fn_metrics={}
     training = phase == TRAIN
 
     if training:
@@ -49,6 +51,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
         model.eval()
 
     losses = []
+    metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
     for _, inputs, sample_weigths, _ in progress_bar:
         inputs = inputs.to(device)
@@ -68,6 +71,10 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, writer=None
             if training:
                 loss.backward()
                 optimizer.step()
+
+            for metric_name, fn_metric in fn_metrics.items():
+                metric_val = fn_metric(outputs, inputs)
+                metrics_values[metric_name].append(metric_val.item())
 
             losses.append(loss.item())
             progress_bar.set_postfix(loss=np.mean(losses))
@@ -112,6 +119,7 @@ def main(
     optimizer = Adam(autoencoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
 
+    num_workers = 5
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsAutoencoderDataset(
         datadir=datadir,
@@ -125,7 +133,7 @@ def main(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=5,
+        num_workers=num_workers,
         worker_init_fn=set_seeds
     )
 
@@ -142,7 +150,7 @@ def main(
         valid_dataset,
         batch_size=batch_size,
         shuffle=False,
-        num_workers=5,
+        num_workers=num_workers,
         worker_init_fn=set_seeds
     )
 
@@ -202,7 +210,7 @@ def main(
         test_dataset,
         batch_size=batch_size,
         shuffle=True,
-        num_workers=5,
+        num_workers=num_workers,
         worker_init_fn=set_seeds
     )
 

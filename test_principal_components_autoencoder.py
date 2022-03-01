@@ -1,6 +1,7 @@
 import argparse
 import os
 import torch
+import ujson
 import yaml
 
 from torch.utils.data import DataLoader
@@ -55,6 +56,9 @@ def main(cfg):
         outputs_dir=test_outputs_dir,
         device=device
     )
+
+    with open(os.path.join(cfg["save_to"], "test_results.json"), "w") as f:
+        ujson.dump(info_test, f)
 
 
 if __name__ == "__main__":

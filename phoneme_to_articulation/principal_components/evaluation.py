@@ -41,9 +41,11 @@ def plot_array(output, target, reference, save_to, phoneme=None):
     plt.close()
 
 
-def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, device=None):
+def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, fn_metrics=None, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if fn_metrics is None:
+        fn_metrics={}
 
     epoch_outputs_dir = os.path.join(outputs_dir, str(epoch))
     if not os.path.exists(epoch_outputs_dir):
@@ -52,6 +54,7 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, devic
     model.eval()
 
     losses = []
+    metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
     for frame_ids, inputs, sample_weigths, phonemes in progress_bar:
         inputs = inputs.to(device)
@@ -62,6 +65,11 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, devic
             loss = criterion(
                 outputs, latents, inputs, sample_weigths
             )
+
+            for metric_name, fn_metric in fn_metrics.items():
+                metric_val = fn_metric(outputs, inputs)
+                metric_val = metric_val.flatten()
+                metrics_values[metric_name].extend([val.item() for val in metric_val])
 
             losses.append(loss.item())
             progress_bar.set_postfix(loss=np.mean(losses))
@@ -89,9 +97,11 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, devic
     return info
 
 
-def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, criterion, outputs_dir, device=None):
+def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, criterion, outputs_dir, fn_metrics=None, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if fn_metrics is None:
+        fn_metrics={}
 
     epoch_outputs_dir = os.path.join(outputs_dir, str(epoch))
     if not os.path.exists(epoch_outputs_dir):
@@ -106,6 +116,7 @@ def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, c
     decoder.eval()
 
     losses = []
+    metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
     for sentence_ids, sentence, targets, lengths, phonemes, references, critical_weights, frames in progress_bar:
         sentence = sentence.to(device)
@@ -116,6 +127,11 @@ def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, c
         with torch.set_grad_enabled(False):
             outputs = model(sentence, lengths)
             loss = criterion(outputs, targets, references, critical_weights)
+
+            for metric_name, fn_metric in fn_metrics.items():
+                metric_val = fn_metric(outputs, targets).squeeze(dim=-1)
+                metric_val = metric_val.flatten()
+                metrics_values[metric_name].extend([val.item() for val in metric_val])
 
             pred_shapes = decoder(outputs)
             bs, seq_len, _ = pred_shapes.shape
@@ -162,5 +178,10 @@ def run_phoneme_to_PC_test(epoch, model, decoder_state_dict_fpath, dataloader, c
         "loss": mean_loss,
         "saves_dir": epoch_outputs_dir
     }
+
+    info.update({
+        metric_name: np.mean(metric_vals)
+        for metric_name, metric_vals in metrics_values.items()
+    })
 
     return info
