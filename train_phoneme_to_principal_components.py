@@ -59,16 +59,16 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=
     losses = []
     metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for _, sentence, targets, lengths, _, references, critical_mask, _ in progress_bar:
+    for _, sentence, targets, lengths, _, critical_mask, critical_references, _ in progress_bar:
         sentence = sentence.to(device)
         targets = targets.to(device)
-        references = references.to(device)
+        critical_references = critical_references.to(device)
         critical_mask = critical_mask.to(device)
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
             outputs = model(sentence, lengths)
-            loss = criterion(outputs, targets, references, critical_mask)
+            loss = criterion(outputs, targets, critical_references, critical_mask)
 
             if training:
                 loss.backward()
@@ -141,7 +141,8 @@ def main(
         n_components=n_components,
         encoder_state_dict_fpath=encoder_state_dict_fpath,
         decoder_state_dict_fpath=decoder_state_dict_fpath,
-        device=device
+        device=device,
+        beta=0.2
     )
     optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = ReduceLROnPlateau(optimizer, factor=0.1, patience=10)

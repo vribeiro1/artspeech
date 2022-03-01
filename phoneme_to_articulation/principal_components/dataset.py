@@ -5,6 +5,7 @@ import numpy as np
 import os
 import pandas as pd
 import torch
+import torch.nn.functional as F
 
 from functools import lru_cache
 from glob import glob
@@ -187,7 +188,10 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
 
 
 class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
-    tongue_critical_articulators = ["l", "d", "t", "n", "k", "g"]
+    critical_phonemes = {
+        "TTCD": lambda p: p in ["l", "d", "n", "t"],
+        "TBCD": lambda p: p in ["k", "g"]
+    }
 
     def __init__(self, datadir, sequences, vocabulary, articulator, sync_shift, framerate, n_samples=50, clip_tails=True):
         self.datadir = datadir
@@ -196,6 +200,7 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
         self.n_samples = n_samples
         self.clip_tails = clip_tails
 
+        self.TVs = ["TBCD", "TTCD"]
         self.data = collect_data(datadir, sequences, sync_shift, framerate)
 
         mean = torch.from_numpy(np.load(os.path.join(BASE_DIR, "data", f"{articulator}_mean.npy")))
@@ -258,8 +263,8 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
         critical_mask = []
         sentence_frames = []
         sentence_targets = torch.zeros(size=(0, 1, 2, self.n_samples))
-        sentence_references = torch.zeros(size=(0, 2, self.n_samples))
-        for frame_id, phoneme in zip(item["frame_ids"], item["phonemes"]):
+        sentence_critical_references = torch.zeros(size=(0, len(self.TVs), 2, self.n_samples))
+        for frame_id in item["frame_ids"]:
             subject = item["subject"]
             sequence = item["sequence"]
 
@@ -267,14 +272,29 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
             articulator_array = articulator_array.unsqueeze(dim=0).unsqueeze(dim=0)
             coord_system_reference_array = coord_system_reference_array.unsqueeze(dim=0)
             sentence_targets = torch.cat([sentence_targets, articulator_array], dim=0)
-            sentence_references = torch.cat([sentence_references, coord_system_reference_array], dim=0)
 
-            critical_mask.append(int(phoneme in self.tongue_critical_articulators))
+            denorm_coord_system_reference_array = self.normalize.inverse(coord_system_reference_array)
+            hard_palate = denorm_coord_system_reference_array[:, :, :20]
+            hard_palate = F.interpolate(hard_palate, size=self.n_samples, mode="linear", align_corners=True)
+            norm_hard_palate = self.normalize(hard_palate)
+
+            alveolar_region = denorm_coord_system_reference_array[:, :, 20:42]
+            alveolar_region = F.interpolate(alveolar_region, size=self.n_samples, mode="linear", align_corners=True)
+            norm_alveolar_region = self.normalize(alveolar_region)
+
+            critical_reference = torch.cat([norm_hard_palate, norm_alveolar_region], dim=0)
+            critical_reference = critical_reference.unsqueeze(dim=0)
+            sentence_critical_references = torch.cat([sentence_critical_references, critical_reference])
+
             sentence_frames.append(frame_id)
 
         sentence_targets = sentence_targets.type(torch.float)
-        sentence_references = sentence_references.type(torch.float)
-        critical_mask = torch.tensor(critical_mask, dtype=torch.int)
+        sentence_critical_references = sentence_critical_references.type(torch.float)
+
+        critical_mask = torch.stack([
+            torch.tensor([int(self.critical_phonemes[TV](p)) for p in item["phonemes"]], dtype=torch.int)
+             for TV in sorted(self.TVs)
+        ])
 
         sentence_tokens = item["phonemes"]
         sentence_numerized = torch.tensor([
@@ -286,8 +306,8 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
             sentence_numerized,
             sentence_targets,
             sentence_tokens,
-            sentence_references,
             critical_mask,
+            sentence_critical_references,
             sentence_frames
         )
 
@@ -307,13 +327,14 @@ def pad_sequence_collate_fn(batch):
 
     phonemes = [batch[i][3] for i in sentences_sorted_indices]
 
-    sentence_references = [item[4] for item in batch]
-    padded_sentence_references = pad_sequence(sentence_references, batch_first=True)
-    padded_sentence_references = padded_sentence_references[sentences_sorted_indices]
+    critical_masks = [item[4].T for item in batch]
+    padded_critical_masks = pad_sequence(critical_masks, batch_first=True)
+    padded_critical_masks = padded_critical_masks[sentences_sorted_indices]
+    padded_critical_masks = padded_critical_masks.permute(0, 2, 1)
 
-    critical_weights = [item[5] for item in batch]
-    padded_critical_weights = pad_sequence(critical_weights, batch_first=True)
-    padded_critical_weights = padded_critical_weights[sentences_sorted_indices]
+    critical_references = [item[5] for item in batch]
+    padded_critical_references = pad_sequence(critical_references, batch_first=True)
+    padded_critical_references = padded_critical_references[sentences_sorted_indices]
 
     sentence_frames = [batch[i][6] for i in sentences_sorted_indices]
 
@@ -323,7 +344,7 @@ def pad_sequence_collate_fn(batch):
         padded_sentence_targets,
         len_sentences_sorted,
         phonemes,
-        padded_sentence_references,
-        padded_critical_weights,
+        padded_critical_masks,
+        padded_critical_references,
         sentence_frames
     )

@@ -3,79 +3,81 @@ import torch.nn as nn
 
 from loss import EuclideanDistanceLoss
 from phoneme_to_articulation.principal_components.models import Encoder, Decoder
+from phoneme_to_articulation.principal_components.transforms import Encode, Decode
 
 
 class AutoencoderLoss(nn.Module):
-    def __init__(self, in_features, n_components, encoder_state_dict_fpath, decoder_state_dict_fpath, device):
-        super().__init__()
-
-        self.encoder = Encoder(in_features=in_features, n_components=n_components)
-        encoder_state_dict = torch.load(encoder_state_dict_fpath, map_location=device)
-        self.encoder.load_state_dict(encoder_state_dict)
-        self.encoder.to(device)
-        self.encoder.eval()
-
-        self.decoder = Decoder(n_components=n_components, out_features=in_features)
-        decoder_state_dict = torch.load(decoder_state_dict_fpath, map_location=device)
-        self.decoder.load_state_dict(decoder_state_dict)
-        self.decoder.to(device)
-        self.decoder.eval()
-
-        # The encoder and the decoder should not be trained during this phase. They should only be
-        # used for evaluation without learning anything new. Therefore, we have to turn off the
-        # gradients of these two networks.
-
-        for parameter in self.encoder.parameters():
-            parameter.requires_grad = False
-
-        for parameter in self.decoder.parameters():
-            parameter.requires_grad = False
-
-        self.mse = nn.MSELoss()
-        self.euclidean = EuclideanDistanceLoss()
-
-    def forward(self, outputs, targets, references, critical_mask):
-        bs, seq_len, _, _, n_samples = targets.shape
-        encoder_inputs = targets.squeeze(dim=2).reshape(bs, seq_len, 2 * n_samples)
-        target_pcs = self.encoder(encoder_inputs)
-
-        output_shapes = self.decoder(outputs)
-        output_shapes = output_shapes.reshape(bs, seq_len, 2, n_samples).unsqueeze(dim=2)
-
-        # Critical loss
-        output_shapes = output_shapes.permute(0, 1, 3, 2)
-        references = references.reshape(bs, seq_len, 2, n_samples)
-        references = references.permute(0, 1, 3, 2)
-
-        critical_loss = torch.cdist(output_shapes, references)
-        critical_loss = critical_loss.reshape(bs, seq_len, n_samples * n_samples)
-
-        min_critical_loss, _ = critical_loss.min(dim=-1)
-        mean_min_critical_loss = min_critical_loss[critical_mask == 1].mean()
-
-        # Mean squared error loss in the level of the principal components
-        mse_loss = self.mse(outputs, target_pcs)
-        # Euclidean distance loss in the level of the shapes
-        euclidean_loss = self.euclidean(targets, output_shapes)
-
-        return mse_loss + euclidean_loss + mean_min_critical_loss
-
-
-class RegularizedLatentsMSELoss(nn.Module):
-    def __init__(self, alpha, beta):
+    def __init__(
+        self, in_features, n_components, encoder_state_dict_fpath, decoder_state_dict_fpath, device,
+        alpha=1., beta=1.
+    ):
         super().__init__()
 
         self.alpha = alpha
         self.beta = beta
+
+        self.encode = Encode(
+            encoder_cls=Encoder,
+            state_dict_filepath=encoder_state_dict_fpath,
+            device=device,
+            in_features=in_features,
+            n_components=n_components
+        )
+
+        self.decode = Decode(
+            decoder_cls=Decoder,
+            state_dict_filepath=decoder_state_dict_fpath,
+            device=device,
+            n_components=n_components,
+            out_features=in_features
+        )
+
+        self.mse = nn.MSELoss()
+        self.euclidean = EuclideanDistanceLoss()
+
+    def forward(self, outputs_pcs, targets_shapes, references, critical_mask):
+        bs, seq_len, _, _, n_samples = targets_shapes.shape
+        encoder_inputs = targets_shapes.squeeze(dim=2).reshape(bs, seq_len, 2 * n_samples)
+        target_pcs = torch.tanh(self.encode(encoder_inputs))
+
+        output_shapes = self.decode(outputs_pcs)
+        output_shapes = output_shapes.reshape(bs, seq_len, 2, n_samples)
+
+        # Mean squared error loss in the level of the principal components
+        mse_loss = self.mse(outputs_pcs, target_pcs)
+
+        # Euclidean distance loss in the level of the shapes
+        euclidean_loss = self.euclidean(output_shapes.unsqueeze(dim=2), targets_shapes)
+
+        # Critical loss
+        output_shapes = output_shapes.permute(0, 1, 3, 2)
+        references = references.permute(2, 0, 1, 4, 3)
+        n_refs, _, _, _, _ = references.shape
+
+        critical_loss = torch.stack([
+            torch.cdist(output_shapes, reference) for reference in references
+        ], dim=0)
+        critical_loss = critical_loss.permute(1, 0, 2, 3, 4)
+        critical_loss = critical_loss.reshape(bs, n_refs, seq_len, n_samples * n_samples)
+        min_critical_loss, _ = critical_loss.min(dim=-1)
+        mean_min_critical_loss = min_critical_loss[critical_mask == 1].mean()
+
+        return mse_loss + self.alpha * euclidean_loss + self.beta * mean_min_critical_loss
+
+
+class RegularizedLatentsMSELoss(nn.Module):
+    def __init__(self, alpha):
+        super().__init__()
+
+        self.alpha = alpha
         self.mse = nn.MSELoss(reduction="none")
 
-    def forward(self, anchor_outputs, anchor_latents, anchor_target, sample_weights=None):
-        mse = self.mse(anchor_outputs, anchor_target)
+    def forward(self, outputs, latents, target, sample_weights=None):
+        mse = self.mse(outputs, target)
         if sample_weights is not None:
             mse = (sample_weights * mse.T).T
         mse = mse.mean()
 
-        reg_latents = torch.norm(anchor_latents, p=2, dim=1).mean()
-        cov_features = torch.cov(anchor_latents.T).square().sum()
+        cov_features = torch.cov(latents.T).square().sum()
 
-        return mse + self.alpha * reg_latents + self.beta * cov_features
+        return mse + self.alpha * cov_features
