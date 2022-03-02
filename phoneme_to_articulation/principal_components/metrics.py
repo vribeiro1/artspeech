@@ -1,50 +1,10 @@
 import pdb
 
-import torch
 import torch.nn as nn
 
-from loss import EuclideanDistance
-from .models import Decoder
-from .transforms import Decode
-
-
-class MeanP2CPDistance(nn.Module):
-    def __init__(self, reduction="mean"):
-        super().__init__()
-
-        self.reduction = getattr(torch, reduction, lambda x: x)
-
-    def forward(self, u_, v_):
-        """
-        Args:
-        u_ (torch.tensor): Tensor of shape (*, N, 2)
-        v_ (torch.tensor): Tensor of shape (*, M, 2)
-        """
-        n = u_.shape[-2]
-        m = v_.shape[-2]
-
-        dist_matrix = torch.cdist(u_, v_)
-        u2cp, _ = dist_matrix.min(axis=-1)
-        v2cp, _ = dist_matrix.min(axis=-2)
-        mean_p2cp = (torch.sum(u2cp, dim=-1) + torch.sum(v2cp, dim=-1)) / (n + m)
-
-        return self.reduction(mean_p2cp)
-
-
-def tract_variable(u_, v_):
-    """
-    Args:
-    u_ (torch.tensor): Tensor of shape (*, N, 2)
-    v_ (torch.tensor): Tensor of shape (*, N, 2)
-    """
-    n = u_.shape[-2]
-    m = v_.shape[-2]
-
-    dist_matrix = torch.cdist(u_, v_)
-    dist_matrix = dist_matrix.view(*(list(dist_matrix.shape[:-2]) + [n * m]))
-    TV_val, _ = dist_matrix.min(dim=-1)
-
-    return TV_val
+from phoneme_to_articulation.metrics import EuclideanDistance, MeanP2CPDistance
+from phoneme_to_articulation.principal_components.models import Decoder
+from phoneme_to_articulation.principal_components.transforms import Decode
 
 
 # Problem in metrics calculation since it is taking padding into account, which creates unrealistic

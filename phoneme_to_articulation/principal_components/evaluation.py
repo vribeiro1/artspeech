@@ -10,7 +10,7 @@ from tqdm import tqdm
 from vt_tools import COLORS, TONGUE, UPPER_INCISOR
 from vt_shape_gen.helpers import load_articulator_array
 
-from phoneme_to_articulation.principal_components.metrics import tract_variable, MeanP2CPDistance
+from phoneme_to_articulation.metrics import minimal_distance, MeanP2CPDistance
 from phoneme_to_articulation.encoder_decoder.evaluation import save_outputs
 from phoneme_to_articulation.principal_components.models import Decoder
 from settings import DatasetConfig
@@ -164,10 +164,10 @@ def run_phoneme_to_PC_test(
         TBCD_reference = torch.transpose(critical_references[..., 0, :, :], -2, -1)
         TTCD_reference = torch.transpose(critical_references[..., 1, :, :], -2, -1)
 
-        TBCD_true= tract_variable(TV_target_shapes, TBCD_reference)
-        TBCD_pred = tract_variable(TV_pred_shapes, TBCD_reference)
-        TTCD_true= tract_variable(TV_target_shapes, TTCD_reference)
-        TTCD_pred = tract_variable(TV_pred_shapes, TTCD_reference)
+        TBCD_true= minimal_distance(TV_target_shapes, TBCD_reference)
+        TBCD_pred = minimal_distance(TV_pred_shapes, TBCD_reference)
+        TTCD_true= minimal_distance(TV_target_shapes, TTCD_reference)
+        TTCD_pred = minimal_distance(TV_pred_shapes, TTCD_reference)
 
         for (
             sentence_id,

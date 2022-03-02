@@ -2,7 +2,7 @@ import torch
 
 from vt_tools.metrics import p2cp_mean
 
-from loss import EuclideanDistance
+from phoneme_to_articulation.metrics import EuclideanDistance
 
 
 def p2cp_distance(outputs, targets):

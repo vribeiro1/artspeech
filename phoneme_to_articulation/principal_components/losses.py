@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from loss import EuclideanDistance
+from phoneme_to_articulation.metrics import EuclideanDistance
 from phoneme_to_articulation.principal_components.models import Encoder, Decoder
 from phoneme_to_articulation.principal_components.transforms import Encode, Decode
 
