@@ -2,7 +2,7 @@ import torch
 
 from vt_tools.metrics import p2cp_mean
 
-from loss import EuclideanDistanceLoss
+from loss import EuclideanDistance
 
 
 def p2cp_distance(outputs, targets):
@@ -66,5 +66,5 @@ def euclidean_distance(outputs, targets):
     outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
     targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
     """
-    euclidean_distance_fn = EuclideanDistanceLoss(reduction="none")
+    euclidean_distance_fn = EuclideanDistance(reduction="none")
     return euclidean_distance_fn(outputs, targets).mean(dim=-1)

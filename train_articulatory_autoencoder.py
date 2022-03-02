@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from articulation_to_melspec.model import ArticulatorsEmbedding
 from helpers import set_seeds
-from loss import EuclideanDistanceLoss
+from loss import EuclideanDistance
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import save_outputs
 from phoneme_to_articulation.encoder_decoder.models import Decoder
@@ -153,7 +153,7 @@ def main(
     ]))
     model.to(device)
 
-    loss_fn = EuclideanDistanceLoss()
+    loss_fn = EuclideanDistance()
     optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = ReduceLROnPlateau(
         optimizer,

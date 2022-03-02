@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 
-from loss import EuclideanDistanceLoss
+from loss import EuclideanDistance
 from phoneme_to_articulation.principal_components.models import Encoder, Decoder
 from phoneme_to_articulation.principal_components.transforms import Encode, Decode
 
@@ -33,7 +33,7 @@ class AutoencoderLoss(nn.Module):
         )
 
         self.mse = nn.MSELoss()
-        self.euclidean = EuclideanDistanceLoss()
+        self.euclidean = EuclideanDistance()
 
     def forward(self, outputs_pcs, targets_shapes, references, critical_mask):
         bs, seq_len, _, _, n_samples = targets_shapes.shape

@@ -6,7 +6,6 @@ import yaml
 
 from torch.utils.data import DataLoader
 
-from loss import EuclideanDistanceLoss
 from helpers import sequences_from_dict, set_seeds
 from phoneme_to_articulation.principal_components.dataset import (
     PrincipalComponentsPhonemeToArticulationDataset,
@@ -14,10 +13,6 @@ from phoneme_to_articulation.principal_components.dataset import (
 )
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_PC_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
-from phoneme_to_articulation.principal_components.metrics import (
-    DecoderEuclideanDistance,
-    DecoderMeanP2CPDistance, MeanP2CPDistance
-)
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
 
 

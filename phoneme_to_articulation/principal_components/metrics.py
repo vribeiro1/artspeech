@@ -3,7 +3,7 @@ import pdb
 import torch
 import torch.nn as nn
 
-from loss import EuclideanDistanceLoss
+from loss import EuclideanDistance
 from .models import Decoder
 from .transforms import Decode
 
@@ -66,7 +66,7 @@ class DecoderEuclideanDistance(nn.Module):
             out_features=2*n_samples
         )
 
-        self.euclidean = EuclideanDistanceLoss(reduction=reduction)
+        self.euclidean = EuclideanDistance(reduction=reduction)
 
     def forward(self, outputs, targets):
         bs, seq_len, _, _, _ = targets.shape

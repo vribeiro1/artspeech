@@ -3,10 +3,12 @@ import pdb
 import torch
 import torch.nn as nn
 
+from vt_tools import *
 
-class EuclideanDistanceLoss(nn.Module):
+
+class EuclideanDistance(nn.Module):
     def __init__(self, reduction="mean"):
-        super(EuclideanDistanceLoss, self).__init__()
+        super().__init__()
 
         self.reduction = getattr(torch, reduction, lambda x: x)
 
@@ -16,11 +18,11 @@ class EuclideanDistanceLoss(nn.Module):
         outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
         targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
         """
-        x_outputs = outputs[:, :, :, 0, :].clone()
-        y_outputs = outputs[:, :, :, 1, :].clone()
+        x_outputs = outputs[..., 0, :].clone()
+        y_outputs = outputs[..., 1, :].clone()
 
-        x_targets = targets[:, :, :, 0, :].clone()
-        y_targets = targets[:, :, :, 1, :].clone()
+        x_targets = targets[..., 0, :].clone()
+        y_targets = targets[..., 1, :].clone()
 
         dist = torch.sqrt((x_outputs - x_targets) ** 2 + (y_outputs - y_targets) ** 2)
         return self.reduction(dist)
@@ -28,7 +30,7 @@ class EuclideanDistanceLoss(nn.Module):
 
 class Tacotron2Loss(nn.Module):
     def __init__(self):
-        super(Tacotron2Loss, self).__init__()
+        super().__init__()
 
         self.mel_loss_fn = nn.MSELoss()
         self.gate_loss_fn = nn.BCEWithLogitsLoss()

@@ -10,7 +10,7 @@ import torch.nn.functional as F
 
 from tqdm import tqdm
 
-from loss import EuclideanDistanceLoss
+from loss import EuclideanDistance
 from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
 from phoneme_to_articulation.encoder_decoder.evaluation import save_outputs, tract_variables
 
@@ -124,10 +124,7 @@ def test(dataset, df, save_to):
     if isinstance(df, str):
         df = pd.read_csv(df)
 
-    n_articulators = len(dataset.articulators)
-    n_samples = dataset.n_samples
-
-    criterion = EuclideanDistanceLoss()
+    criterion = EuclideanDistance()
 
     losses = []
     euclidean_per_articulator = [[] for _ in dataset.articulators]

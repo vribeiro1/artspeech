@@ -7,19 +7,19 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 class ArticulatorPredictor(nn.Module):
     def __init__(self, in_features, n_samples):
-        super(ArticulatorPredictor, self).__init__()
+        super().__init__()
         self.linear = nn.Sequential(
             nn.LayerNorm([in_features]),
-            nn.Linear(in_features, 256),
+            nn.Linear(in_features=in_features, out_features=256),
             nn.ReLU(),
             nn.LayerNorm([256]),
-            nn.Linear(256, 256),
+            nn.Linear(in_features=256, out_features=256),
             nn.ReLU(),
             nn.LayerNorm(256),
         )
 
-        self.x_coords = nn.Linear(256, n_samples)
-        self.y_coords = nn.Linear(256, n_samples)
+        self.x_coords = nn.Linear(in_features=256, out_features=n_samples)
+        self.y_coords = nn.Linear(in_features=256, out_features=n_samples)
 
     def forward(self, inputs):
         """
@@ -54,7 +54,7 @@ class ArtSpeech(nn.Module):
     def __init__(
         self, vocab_size, n_articulators, embed_dim=64, hidden_size=128, n_samples=50, gru_dropout=0.
     ):
-        super(ArtSpeech, self).__init__()
+        super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
         self.rnn = nn.GRU(embed_dim, hidden_size, num_layers=2, bidirectional=True, dropout=gru_dropout, batch_first=True)
 
