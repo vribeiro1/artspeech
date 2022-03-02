@@ -14,19 +14,19 @@ class MeanP2CPDistance(nn.Module):
 
         self.reduction = getattr(torch, reduction, lambda x: x)
 
-    def forward(self, u, v):
+    def forward(self, u_, v_):
         """
         Args:
-        u (torch.tensor): Tensor of shape (*, N, 2)
-        v (torch.tensor): Tensor of shape (*, M, 2)
+        u_ (torch.tensor): Tensor of shape (*, N, 2)
+        v_ (torch.tensor): Tensor of shape (*, M, 2)
         """
-        n = u.shape[-2]
-        m = v.shape[-2]
+        n = u_.shape[-2]
+        m = v_.shape[-2]
 
-        dist_matrix = torch.cdist(u, v)
-        u2cv, _ = dist_matrix.min(axis=-1)
-        v2cv, _ = dist_matrix.min(axis=-2)
-        mean_p2cp = (torch.sum(u2cv, dim=-1) + torch.sum(v2cv, dim=-1)) / (n + m)
+        dist_matrix = torch.cdist(u_, v_)
+        u2cp, _ = dist_matrix.min(axis=-1)
+        v2cp, _ = dist_matrix.min(axis=-2)
+        mean_p2cp = (torch.sum(u2cp, dim=-1) + torch.sum(v2cp, dim=-1)) / (n + m)
 
         return self.reduction(mean_p2cp)
 
@@ -34,8 +34,8 @@ class MeanP2CPDistance(nn.Module):
 def tract_variable(u_, v_):
     """
     Args:
-    u (torch.tensor): Tensor of shape (*, N, 2)
-    v (torch.tensor): Tensor of shape (*, N, 2)
+    u_ (torch.tensor): Tensor of shape (*, N, 2)
+    v_ (torch.tensor): Tensor of shape (*, N, 2)
     """
     n = u_.shape[-2]
     m = v_.shape[-2]
@@ -45,6 +45,11 @@ def tract_variable(u_, v_):
     TV_val, _ = dist_matrix.min(dim=-1)
 
     return TV_val
+
+
+# Problem in metrics calculation since it is taking padding into account, which creates unrealistic
+# good results.
+# TODO: Think about how to fix this problem.
 
 
 class DecoderEuclideanDistance(nn.Module):
@@ -124,7 +129,7 @@ class AutoencoderP2CPDistance(nn.Module):
             outputs = self.denorm_fn(outputs)
         outputs = outputs.reshape(0, 2, 1)
 
-        targets = targets.clone().reshape(bs, in_features // 2, 2)
+        targets = targets.clone().reshape(bs, 2, in_features // 2)
         if self.denorm_fn is not None:
             targets = self.denorm(targets)
         targets = targets.reshape(0, 2, 1)

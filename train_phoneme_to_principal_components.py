@@ -285,7 +285,6 @@ def main(
         decoder_state_dict_fpath=decoder_state_dict_fpath,
         dataloader=test_dataloader,
         criterion=loss_fn,
-        fn_metrics=metrics,
         outputs_dir=test_outputs_dir,
         device=device
     )

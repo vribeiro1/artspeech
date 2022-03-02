@@ -6,6 +6,7 @@ import yaml
 
 from torch.utils.data import DataLoader
 
+from loss import EuclideanDistanceLoss
 from helpers import sequences_from_dict, set_seeds
 from phoneme_to_articulation.principal_components.dataset import (
     PrincipalComponentsPhonemeToArticulationDataset,
@@ -15,7 +16,7 @@ from phoneme_to_articulation.principal_components.evaluation import run_phoneme_
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
 from phoneme_to_articulation.principal_components.metrics import (
     DecoderEuclideanDistance,
-    DecoderMeanP2CPDistance
+    DecoderMeanP2CPDistance, MeanP2CPDistance
 )
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
 
@@ -54,26 +55,6 @@ def main(cfg):
     best_model.load_state_dict(best_model_state_dict)
     best_model.to(device)
 
-    metrics = {
-        "euclidean_distance": DecoderEuclideanDistance(
-            decoder_filepath=cfg["decoder_state_dict_fpath"],
-            n_components=cfg["n_components"],
-            n_samples=50,
-            reduction="none",
-            device=device,
-            denorm_fn=test_dataset.normalize.inverse
-        ),
-
-        "mean_p2cp": DecoderMeanP2CPDistance(
-            decoder_filepath=cfg["decoder_state_dict_fpath"],
-            n_components=cfg["n_components"],
-            n_samples=50,
-            reduction="none",
-            device=device,
-            denorm_fn=test_dataset.normalize.inverse
-        )
-    }
-
     test_outputs_dir = os.path.join(cfg["save_to"], "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
@@ -93,7 +74,6 @@ def main(cfg):
         decoder_state_dict_fpath=cfg["decoder_state_dict_fpath"],
         dataloader=test_dataloader,
         criterion=loss_fn,
-        fn_metrics=metrics,
         outputs_dir=test_outputs_dir,
         device=device
     )

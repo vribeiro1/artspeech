@@ -10,13 +10,13 @@ from tqdm import tqdm
 from vt_tools import COLORS, TONGUE, UPPER_INCISOR
 from vt_shape_gen.helpers import load_articulator_array
 
-from phoneme_to_articulation.principal_components.metrics import tract_variable
+from phoneme_to_articulation.principal_components.metrics import tract_variable, MeanP2CPDistance
 from phoneme_to_articulation.encoder_decoder.evaluation import save_outputs
 from phoneme_to_articulation.principal_components.models import Decoder
 from settings import DatasetConfig
 
 
-def plot_array(output, target, references, save_to, phoneme=None):
+def plot_array(output, target, references, save_to, phoneme=None, tag=None):
     plt.figure(figsize=(10, 10))
 
     for reference in references:
@@ -30,11 +30,17 @@ def plot_array(output, target, references, save_to, phoneme=None):
 
     if phoneme is not None:
         fontdict = dict(
-            family="serif",
             fontsize=22,
             color="darkblue"
         )
         plt.text(0.5, 0.2, phoneme, fontdict=fontdict)
+
+    if tag is not None:
+        fontdict = dict(
+            fontsize=22,
+            color="red"
+        )
+        plt.text(0.05, 0.95, tag, fontdict=fontdict)
 
     plt.grid(which="major")
     plt.grid(which="minor", alpha=0.4)
@@ -124,9 +130,9 @@ def run_phoneme_to_PC_test(
     decoder.eval()
 
     losses = []
-    metrics_values = {metric_name: [] for metric_name in fn_metrics}
+    p2cp_metric_values = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
-    for sentence_ids, sentence, targets, lengths, phonemes, critical_masks, critical_references, _ in progress_bar:
+    for sentence_ids, sentence, targets, lengths, phonemes, critical_masks, critical_references, frames in progress_bar:
         sentence = sentence.to(device)
         targets = targets.to(device)
         critical_references = critical_references.to(device)
@@ -135,11 +141,6 @@ def run_phoneme_to_PC_test(
         with torch.set_grad_enabled(False):
             outputs = model(sentence, lengths)
             loss = criterion(outputs, targets, critical_references, critical_masks)
-
-            for metric_name, fn_metric in fn_metrics.items():
-                metric_val = fn_metric(outputs, targets).squeeze(dim=-1)
-                metric_val = metric_val.flatten()
-                metrics_values[metric_name].extend([val.item() for val in metric_val])
 
             pred_shapes = decoder(outputs)
             bs, seq_len, _ = pred_shapes.shape
@@ -177,7 +178,7 @@ def run_phoneme_to_PC_test(
             length,
             sentence_phonemes
         ) in zip(sentence_ids, TBCD_true, TBCD_pred, TTCD_true, TTCD_pred, lengths, phonemes):
-            frames = list(range(len(sentence_phonemes)))
+            TV_frames = list(range(len(sentence_phonemes)))
 
             sentence_TBCD_true = sentence_TBCD_true[:length, ...].numpy()
             sentence_TBCD_pred = sentence_TBCD_pred[:length, ...].numpy()
@@ -186,7 +187,7 @@ def run_phoneme_to_PC_test(
 
             df = pd.DataFrame({
                 "sentence": sentence_id,
-                "frame": frames,
+                "frame": TV_frames,
                 "phoneme": sentence_phonemes,
                 "TBCD_target": sentence_TBCD_true,
                 "TBCD_pred": sentence_TBCD_pred,
@@ -218,24 +219,38 @@ def run_phoneme_to_PC_test(
         # Plot the results
         # TODO: Move this code to a separate function
 
+        p2cp_dist = MeanP2CPDistance(reduction="none")
         for (
-            sentence_id, sentence_pred_shapes, sentence_target_shapes, sentence_references, sentence_length, sentence_phonemes, sentence_frames
+            sentence_id, sentence_pred_shapes, sentence_target_shapes, sentence_references, length, sentence_phonemes, sentence_frames
         ) in zip(sentence_ids, pred_shapes, target_shapes, critical_references, lengths, phonemes, frames):
             save_to_dir = os.path.join(epoch_outputs_dir, sentence_id, "plots")
 
             if not os.path.exists(save_to_dir):
                 os.makedirs(save_to_dir)
 
-            sentence_pred_shapes = sentence_pred_shapes[:sentence_length]
-            sentence_target_shapes = sentence_target_shapes[:sentence_length]
-            sentence_references = sentence_references[:sentence_length]
-            for pred_shape, target_shape, reference, phoneme, frame_id in zip(sentence_pred_shapes, sentence_target_shapes, sentence_references, sentence_phonemes, sentence_frames):
-                pred_shape = dataloader.dataset.normalize.inverse(pred_shape.squeeze(dim=0))
-                target_shape = dataloader.dataset.normalize.inverse(target_shape.squeeze(dim=0))
-                reference = dataloader.dataset.normalize.inverse(reference.detach().cpu())
+            sentence_pred_shapes = sentence_pred_shapes[:length]
+            sentence_target_shapes = sentence_target_shapes[:length]
 
+            sentence_p2cp = p2cp_dist(
+                torch.transpose(sentence_pred_shapes, -1, -2),
+                torch.transpose(sentence_target_shapes, -1, -2)
+            )
+            p2cp_metric_values.extend([d.item() for d in sentence_p2cp])
+
+            sentence_references = sentence_references[:length]
+            for (
+                pred_shape, target_shape, reference, phoneme, frame_id, p2cp
+            ) in zip(
+                sentence_pred_shapes, sentence_target_shapes, sentence_references, sentence_phonemes, sentence_frames, sentence_p2cp
+            ):
                 save_to_filepath = os.path.join(save_to_dir, f"{frame_id}.jpg")
-                plot_array(pred_shape, target_shape, reference, save_to_filepath, phoneme)
+                pred_shape = pred_shape.squeeze(dim=0)
+                target_shape = target_shape.squeeze(dim=0)
+
+                p2cp_mm = p2cp * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES
+                p2cp__mm_str ="%0.3f mm" % p2cp_mm
+
+                plot_array(pred_shape, target_shape, reference, save_to_filepath, phoneme, p2cp__mm_str)
 
         losses.append(loss.item())
         progress_bar.set_postfix(loss=np.mean(losses))
@@ -245,17 +260,11 @@ def run_phoneme_to_PC_test(
     mean_loss = np.mean(losses)
     info = {
         "loss": mean_loss,
+        "p2cp_mean": np.mean(p2cp_metric_values),
+        "p2cp_std": np.std(p2cp_metric_values),
+        "p2cp_mean_mm": np.mean(p2cp_metric_values) * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES,
+        "p2cp_std_mm": np.mean(p2cp_metric_values) * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES,
         "saves_dir": epoch_outputs_dir
     }
-
-    info.update({
-        metric_name + "_mean": np.mean(metric_vals)
-        for metric_name, metric_vals in metrics_values.items()
-    })
-
-    info.update({
-        metric_name + "_std": np.std(metric_vals)
-        for metric_name, metric_vals in metrics_values.items()
-    })
 
     return info
