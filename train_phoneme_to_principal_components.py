@@ -142,7 +142,7 @@ def main(
         encoder_state_dict_fpath=encoder_state_dict_fpath,
         decoder_state_dict_fpath=decoder_state_dict_fpath,
         device=device,
-        beta=0.2
+        beta=0.3
     )
     optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
@@ -283,6 +283,7 @@ def main(
         epoch=0,
         model=best_model,
         decoder_state_dict_fpath=decoder_state_dict_fpath,
+        n_components=n_components,
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,

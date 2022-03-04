@@ -60,13 +60,14 @@ def main(cfg):
         encoder_state_dict_fpath=cfg["encoder_state_dict_fpath"],
         decoder_state_dict_fpath=cfg["decoder_state_dict_fpath"],
         device=device,
-        beta=0.2
+        beta=0.3
     )
 
     info_test = run_phoneme_to_PC_test(
         epoch=0,
         model=best_model,
         decoder_state_dict_fpath=cfg["decoder_state_dict_fpath"],
+        n_components=cfg["n_components"],
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,

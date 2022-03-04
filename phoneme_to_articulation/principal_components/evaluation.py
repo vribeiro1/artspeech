@@ -91,7 +91,7 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, fn_me
                     dataloader.dataset.datadir, subject, sequence, "inference_contours", f"{inumber}_{UPPER_INCISOR}.npy"
                 )
                 reference = load_articulator_array(reference_filepath, norm_value=DatasetConfig.RES)
-                reference = (reference - reference[-1] + 0.3).T
+                reference = torch.from_numpy((reference - reference[-1] + 0.3).T)
 
                 target = dataloader.dataset.normalize.inverse(target.reshape(2, 50).detach().cpu())
                 output = dataloader.dataset.normalize.inverse(output.reshape(2, 50).detach().cpu())
@@ -108,7 +108,7 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, fn_me
 
 
 def run_phoneme_to_PC_test(
-    epoch, model, decoder_state_dict_fpath, dataloader, criterion, outputs_dir,
+    epoch, model, decoder_state_dict_fpath, n_components, dataloader, criterion, outputs_dir,
     fn_metrics=None, device=None
 ):
     if device is None:
@@ -123,7 +123,7 @@ def run_phoneme_to_PC_test(
     model.eval()
     denorm_fn = dataloader.dataset.normalize.inverse
 
-    decoder = Decoder(n_components=12, out_features=100)
+    decoder = Decoder(n_components=n_components, out_features=100)
     decoder_state_dict = torch.load(decoder_state_dict_fpath, map_location=device)
     decoder.load_state_dict(decoder_state_dict)
     decoder.to(device)
@@ -206,6 +206,7 @@ def run_phoneme_to_PC_test(
 
         save_outputs(
             sentence_ids,
+            frames,
             pred_shapes,
             target_shapes,
             lengths,
@@ -263,7 +264,7 @@ def run_phoneme_to_PC_test(
         "p2cp_mean": np.mean(p2cp_metric_values),
         "p2cp_std": np.std(p2cp_metric_values),
         "p2cp_mean_mm": np.mean(p2cp_metric_values) * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES,
-        "p2cp_std_mm": np.mean(p2cp_metric_values) * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES,
+        "p2cp_std_mm": np.std(p2cp_metric_values) * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES,
         "saves_dir": epoch_outputs_dir
     }
 
