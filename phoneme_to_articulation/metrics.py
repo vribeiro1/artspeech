@@ -42,7 +42,7 @@ class MeanP2CPDistance(nn.Module):
         dist_matrix = torch.cdist(u_, v_)
         u2cp, _ = dist_matrix.min(axis=-1)
         v2cp, _ = dist_matrix.min(axis=-2)
-        mean_p2cp = (torch.sum(u2cp, dim=-1) + torch.sum(v2cp, dim=-1)) / (n + m)
+        mean_p2cp = ((torch.sum(u2cp, dim=-1) / n + torch.sum(v2cp, dim=-1)) / m) / 2
 
         return self.reduction(mean_p2cp)
 

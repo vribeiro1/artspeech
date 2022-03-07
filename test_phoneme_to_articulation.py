@@ -10,7 +10,7 @@ import yaml
 from torch.utils.data import DataLoader
 
 from helpers import set_seeds
-from loss import EuclideanDistanceLoss
+from phoneme_to_articulation.metrics import EuclideanDistance
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
@@ -51,7 +51,7 @@ def main(cfg):
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
-    loss_fn = EuclideanDistanceLoss()
+    loss_fn = EuclideanDistance()
 
     test_results = run_test(
         epoch=0,

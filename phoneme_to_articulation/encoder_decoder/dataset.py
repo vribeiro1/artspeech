@@ -192,10 +192,10 @@ class ArtSpeechDataset(Dataset):
                         epiglottis=epiglottis
                     )
 
-            contour = contour.transpose(1, 0)  # torch.Size([2, self.n_samples])
-            contour = contour.unsqueeze(dim=0)  # torch.Size([1, 2, self.n_samples]
+            contour_arr = contour_arr.transpose(1, 0)  # torch.Size([2, self.n_samples])
+            contour_arr = contour_arr.unsqueeze(dim=0)  # torch.Size([1, 2, self.n_samples]
 
-            frame_targets = torch.cat([frame_targets, contour])
+            frame_targets = torch.cat([frame_targets, contour_arr])
 
         coord_system_reference = coord_system_reference.T.unsqueeze(dim=0)
 
