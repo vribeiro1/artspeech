@@ -1,4 +1,4 @@
-# Towards the prediction of the vocal tract shape from the sequence of phonemes to be articulated
+# Articulatory Speech Synthesis
 
 <b>Vinicius de Paulo Souza Ribeiro</b><br>
 LORIA - Laboratoire Lorrain de Recherche en Informatique et ses Applications<br>
@@ -9,7 +9,33 @@ Université de Lorraine
 <b>LinkedIn:</b> https://www.linkedin.com/in/vribeiro1/<br>
 <b>Web:</b> https://vribeiro1.github.io<br>
 
-<br>
+<hr>
+
+
+This repository contains the code related to three papers, which are:
+
+<ul>
+
+<li>
+<b>Autoencoder-Based Tongue Shape Estimation During Continuous Speech</b><br>
+Vinicius Ribeiro, Yves Laprie<br>
+<i>Under review</i><br>
+</li>
+
+<li>
+<b>Automatic Generation of the Complete Vocal Tract Shape from the Sequence of Phonemes to be Articulated</b><br>
+Vinicius Ribeiro, Karyna Isaieva, Justine Leclere, Pierre-André Vuissoz, Yves Laprie<br>
+<i>Under review</i><br>
+</li>
+
+<li>
+<b>Towards the Prediction of the Vocal Tract Shape from the Sequence of Phonemes to be Articulated</b><br>
+Vinicius Ribeiro, Karyna Isaieva, Justine Leclere, Pierre-André Vuissoz, Yves Laprie<br>
+Aug 30, 2021 <a href="https://www.isca-speech.org/archive/interspeech_2021/ribeiro21b_interspeech.html">Interspeech 2021</a><br>
+</li>
+
+</ul>
+
 
 # Vocal Tract Tools Dependency
 
