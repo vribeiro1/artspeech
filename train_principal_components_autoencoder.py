@@ -76,8 +76,8 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=
                 metric_val = fn_metric(outputs, inputs)
                 metrics_values[metric_name].append(metric_val.item())
 
-            losses.append(loss.item())
-            progress_bar.set_postfix(loss=np.mean(losses))
+        losses.append(loss.item())
+        progress_bar.set_postfix(loss=np.mean(losses))
 
     mean_loss = np.mean(losses)
     loss_tag = f"{phase}/loss"

@@ -11,6 +11,7 @@ sacred
 scikit-learn
 scikit-image
 shapely
+statsmodels
 tensorboardX
 tgt
 torch
