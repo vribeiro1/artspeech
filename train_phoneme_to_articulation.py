@@ -15,12 +15,12 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from helpers import set_seeds
+from helpers import set_seeds, sequences_from_dict
 from metrics import pearsons_correlation
-from phoneme_to_articulation.metrics import EuclideanDistance
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
+from phoneme_to_articulation.metrics import EuclideanDistance
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -47,7 +47,7 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulator
     x_corrs = [[] for _ in articulators]
     y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for i, (_, sentence, targets, lengths, _) in enumerate(progress_bar):
+    for i, (_, sentence, targets, lengths, _, _, _) in enumerate(progress_bar):
         sentence = sentence.to(device)
         targets = targets.to(device)
 
@@ -98,8 +98,8 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, articulator
 @ex.automain
 def main(
     _run, datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
-    train_filepath, valid_filepath, test_filepath, vocab_filepath, articulators,
-    p_aug=0., clip_tails=True, state_dict_fpath=None
+    train_seq_dict, valid_seq_dict, test_seq_dict, vocab_filepath, articulators,
+    clip_tails=True, state_dict_fpath=None
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
@@ -132,34 +132,37 @@ def main(
         patience=10,
     )
 
+    num_workers=5
+    train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = ArtSpeechDataset(
-        os.path.dirname(datadir),
-        train_filepath,
+        datadir,
+        train_sequences,
         vocabulary,
         articulators,
-        p_aug=p_aug,
         clip_tails=clip_tails
     )
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
+        num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )
 
+    valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = ArtSpeechDataset(
-        os.path.dirname(datadir),
-        valid_filepath,
+        datadir,
+        valid_sequences,
         vocabulary,
         articulators,
-        p_aug=p_aug,
         clip_tails=clip_tails
     )
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=batch_size,
         shuffle=False,
+        num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )
@@ -208,18 +211,19 @@ def main(
         if epochs_since_best > patience:
             break
 
+    test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = ArtSpeechDataset(
-        os.path.dirname(datadir),
-        test_filepath,
+        datadir,
+        test_sequences,
         vocabulary,
         articulators,
-        clip_tails=clip_tails,
-        lazy_load=True
+        clip_tails=clip_tails
     )
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=batch_size,
         shuffle=False,
+        num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )

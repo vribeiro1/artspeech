@@ -13,8 +13,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from articulation_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
+from articulation_to_melspec.losses import Tacotron2Loss
 from articulation_to_melspec.model import ArticulatoryTacotron2
-from loss import Tacotron2Loss
 from helpers import set_seeds, sequences_from_dict
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))

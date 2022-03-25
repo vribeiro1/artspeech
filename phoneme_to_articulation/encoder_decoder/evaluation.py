@@ -29,10 +29,11 @@ required_articulators_for_TVs = [
 ]
 
 
-def save_outputs(sentences_ids, outputs, targets, lengths, phonemes, articulators, save_to, regularize_out):
+def save_outputs(sentences_ids, frame_ids, outputs, targets, lengths, phonemes, articulators, save_to, regularize_out):
     """
     Args:
     sentences_ids (str): Unique id of each sentence to save the results.
+    frame_ids (list)
     outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
     targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
     lengths (List): List with the length of each sentence in the batch.
@@ -41,16 +42,21 @@ def save_outputs(sentences_ids, outputs, targets, lengths, phonemes, articulator
     save_to (str): Path to the directory to save the results.
     regularize_out (bool): If should apply bspline regularization or not.
     """
-    for i_sentence, (
-        sentence_id, sentence_outs, sentence_targets, length, sentence_phonemes
-    ) in enumerate(zip(
-        sentences_ids, outputs, targets, lengths, phonemes
-    )):
+    for sentence_id, sentence_outs, sentence_targets, length, sentence_phonemes, sentence_frames in zip(
+        sentences_ids, outputs, targets, lengths, phonemes, frame_ids
+    ):
+        phoneme_data = []
         saves_i_dir = os.path.join(save_to, sentence_id)
         if not os.path.exists(os.path.join(saves_i_dir, "contours")):
             os.makedirs(os.path.join(saves_i_dir, "contours"))
 
-        for i_frame, (out, target, _) in enumerate(zip(sentence_outs[:length], sentence_targets[:length], sentence_phonemes)):
+        for out, target, phoneme, frame in zip(sentence_outs[:length], sentence_targets[:length], sentence_phonemes, sentence_frames):
+            phoneme_data.append({
+                "sentence": sentence_id,
+                "frame": frame,
+                "phoneme": phoneme
+            })
+
             for i_art, art in enumerate(sorted(articulators)):
                 pred_art_arr = out[i_art].numpy()
                 true_art_arr = target[i_art].numpy()
@@ -59,13 +65,15 @@ def save_outputs(sentences_ids, outputs, targets, lengths, phonemes, articulator
                     resX, resY = regularize_Bsplines(pred_art_arr.transpose(1, 0), 3)
                     pred_art_arr = np.array([resX, resY])
 
-                pred_npy_filepath = os.path.join(saves_i_dir, "contours", f"{'%04d' % i_frame}_{art}.npy")
+                pred_npy_filepath = os.path.join(saves_i_dir, "contours", f"{frame}_{art}.npy")
                 with open(pred_npy_filepath, "wb") as f:
                     np.save(f, pred_art_arr)
 
-                true_npy_filepath = os.path.join(saves_i_dir, "contours", f"{'%04d' % i_frame}_{art}_true.npy")
+                true_npy_filepath = os.path.join(saves_i_dir, "contours", f"{frame}_{art}_true.npy")
                 with open(true_npy_filepath, "wb") as f:
                     np.save(f, true_art_arr)
+
+            pd.DataFrame(phoneme_data).to_csv(os.path.join(saves_i_dir, "phonemes.csv"), index=False)
 
 
 def tract_variables(sentences_ids, outputs, targets, lengths, phonemes, articulators, save_to):
@@ -147,14 +155,13 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
         os.makedirs(epoch_outputs_dir)
 
     model.eval()
-
     losses = []
     euclidean_per_articulator = [[] for _ in articulators]
     p2cp_per_articulator = [[] for _ in articulators]
     x_corrs = [[] for _ in articulators]
     y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - inference")
-    for i_batch, (sentences_ids, sentences, targets, lengths, phonemes) in enumerate(progress_bar):
+    for sentences_ids, sentences, targets, lengths, phonemes, _, sentence_frames in progress_bar:
         sentences = sentences.to(device)
         targets = targets.to(device)
 
@@ -201,6 +208,7 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
 
             save_outputs(
                 sentences_ids,
+                sentence_frames,
                 outputs,
                 targets,
                 lengths,
