@@ -1,8 +1,4 @@
-import pdb
-
 import torch.nn as nn
-
-from vt_tools import *
 
 
 class Tacotron2Loss(nn.Module):

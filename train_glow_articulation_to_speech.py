@@ -1,5 +1,4 @@
 import logging
-import matplotlib.pyplot as plt
 import numpy as np
 import os
 import torch
@@ -8,14 +7,12 @@ from glow_tts.commons import Adam, mle_loss, duration_loss, clip_grad_value
 from sacred import Experiment
 from sacred.observers import FileStorageObserver
 from tensorboardX import SummaryWriter
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from articulation_to_melspec.dataset import ArticulToMelSpecDataset, pad_sequence_collate_fn
 from articulation_to_melspec.evaluation import run_glow_tts_inference
 from articulation_to_melspec.model import GlowATS
-from loss import Tacotron2Loss
 from helpers import set_seeds, sequences_from_dict
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
