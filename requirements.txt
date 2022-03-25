@@ -2,7 +2,7 @@ cython
 funcy
 librosa
 matplotlib
-numpy==1.20
+numpy==1.21
 opencv-python
 pandas
 pydicom
