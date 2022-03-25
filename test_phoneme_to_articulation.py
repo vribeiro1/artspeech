@@ -9,11 +9,12 @@ import yaml
 
 from torch.utils.data import DataLoader
 
-from helpers import set_seeds
+from helpers import set_seeds, sequences_from_dict
 from phoneme_to_articulation.metrics import EuclideanDistance
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
+from phoneme_to_articulation.metrics import EuclideanDistance
 
 
 def main(cfg):
@@ -26,23 +27,24 @@ def main(cfg):
     articulators = cfg["articulators"]
     n_articulators = len(articulators)
 
+    test_sequences = sequences_from_dict(cfg["datadir"], cfg["test_seq_dict"])
     test_dataset = ArtSpeechDataset(
-        os.path.dirname(cfg["datadir"]),
-        cfg["test_filepath"],
+        cfg["datadir"],
+        test_sequences,
         vocabulary,
         articulators,
-        p_aug=0.,
-        lazy_load=True
+        clip_tails=cfg["clip_tails"]
     )
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=cfg["batch_size"],
         shuffle=False,
+        num_workers=5,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )
 
-    best_model = ArtSpeech(len(vocabulary), n_articulators)
+    best_model = ArtSpeech(len(vocabulary), n_articulators, gru_dropout=0.2)
     state_dict = torch.load(cfg["state_dict_fpath"], map_location=device)
     best_model.load_state_dict(state_dict)
     best_model.to(device)
