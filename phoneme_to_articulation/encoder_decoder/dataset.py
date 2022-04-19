@@ -132,7 +132,7 @@ def collect_data(datadir, sequences, sync_shift, framerate, required_articulator
 class ArtSpeechDataset(Dataset):
     def __init__(
         self, datadir, sequences, vocabulary, articulators, n_samples=50,
-        sync_shift=0, framerate=DatasetConfig.FRAMERATE, clip_tails=False,
+        sync_shift=DatasetConfig.SYNC_SHIFT, framerate=DatasetConfig.FRAMERATE, clip_tails=False,
         TVs=None
     ):
         self.vocabulary = vocabulary
@@ -221,12 +221,15 @@ class ArtSpeechDataset(Dataset):
             coord_system_reference_array = coord_system_reference_array.unsqueeze(dim=0)
             sentence_references = torch.cat([sentence_references, coord_system_reference_array], dim=0)
 
-        critical_masks = torch.stack([
-            torch.tensor([
-                int(phonemes_per_TV[TV](phoneme)) for phoneme in item["phonemes"]
-            ], dtype=torch.int)
-            for TV in self.TVs
-        ])
+        if len(self.TVs) == 0:
+            critical_masks = torch.tensor([], dtype=torch.int)
+        else:
+            critical_masks = torch.stack([
+                torch.tensor([
+                    int(phonemes_per_TV[TV](phoneme)) for phoneme in item["phonemes"]
+                ], dtype=torch.int)
+                for TV in self.TVs
+            ])
 
         sentence_targets = sentence_targets.type(torch.float)
         sentence_references = sentence_references.type(torch.float)

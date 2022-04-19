@@ -66,7 +66,7 @@ def prepare_articulator_array(datadir, subject, sequence, frame_number, articula
 def main(cfg):
     datadir = cfg["datadir"]
     sequences_dict = cfg["sequences_dict"]
-    sequences = sequences_from_dict(sequences_dict)
+    sequences = sequences_from_dict(datadir, sequences_dict)
     articulators = cfg["articulators"]
     save_to = cfg["save_to"]
 
