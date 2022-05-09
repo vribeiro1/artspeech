@@ -1,3 +1,4 @@
+import funcy
 import torch
 import torch.nn as nn
 
@@ -157,3 +158,63 @@ class PrincipalComponentsArtSpeech(nn.Module):
         components = torch.tanh(self.predictor(linear_out))
 
         return components
+
+
+class MultiArticulatorAutoencoder(nn.Module):
+    def __init__(self, in_features, indices_dict, hidden_blocks=1, hidden_features=64):
+        super().__init__()
+
+        self.indices_dict = indices_dict
+        self.shared_latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
+        self.sorted_articulators = sorted(self.indices_dict.keys())
+
+        self.encoders = nn.ModuleDict({
+            articulator: Encoder(
+                in_features=in_features,
+                n_components=len(indices),
+                hidden_blocks=hidden_blocks,
+                hidden_features=hidden_features
+            )
+            for articulator, indices in self.indices_dict.items()
+        })
+
+        self.decoders = nn.ModuleDict({
+            articulator: Decoder(
+                n_components=len(indices),
+                out_features=in_features,
+                hidden_blocks=hidden_blocks,
+                hidden_features=hidden_features
+            )
+            for articulator, indices in self.indices_dict.items()
+        })
+
+    def forward(self, x):
+        """
+        Args:
+        x (torch.tensor): Torch tensor of shape (bs, N_articulators, in_features)
+        """
+        bs, _, _ = x.shape
+
+        articulators_latent_space = {
+            articulator: -torch.inf * torch.ones(
+                size=(bs, self.shared_latent_size),
+                dtype=torch.float, device=x.device
+            ) for articulator in self.sorted_articulators
+        }
+
+        for i, articulator in enumerate(self.sorted_articulators):
+            indices = self.indices_dict[articulator]
+            encoder = self.encoders[articulator]
+            articulators_latent_space[articulator][:, indices] = torch.tanh(encoder(x[:, i, :]))
+
+        latent_space = torch.stack([
+            articulators_latent_space[articulator] for articulator in self.sorted_articulators
+        ], dim=1)
+
+        shared_latent_space, _ = torch.max(latent_space, dim=1)
+        outputs = torch.concat([
+            self.decoders[articulator](shared_latent_space[:, self.indices_dict[articulator]]).unsqueeze(dim=1)
+            for articulator in self.sorted_articulators
+        ], dim=1)
+
+        return outputs, shared_latent_space

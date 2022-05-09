@@ -81,3 +81,25 @@ class RegularizedLatentsMSELoss(nn.Module):
         cov_features = torch.cov(latents.T).square().sum()
 
         return mse + self.alpha * cov_features
+
+
+class MultiArtRegularizedLatentsMSELoss(nn.Module):
+    def __init__(self, alpha, indices_dict):
+        super().__init__()
+
+        self.alpha = alpha
+        self.mse = nn.MSELoss(reduction="none")
+        self.indices_dict = indices_dict
+
+    def forward(self, outputs, latents, target, sample_weights=None):
+        mse = self.mse(outputs, target)
+        if sample_weights is not None:
+            mse = (sample_weights * mse.T).T
+        mse = mse.mean()
+
+        cov_features = torch.tensor([
+            torch.cov(latents.T[indices]).square().sum()
+            for _, indices in self.indices_dict.items()
+        ]).sum()
+
+        return mse + self.alpha * cov_features

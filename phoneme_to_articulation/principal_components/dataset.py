@@ -196,6 +196,47 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         return frame_name, articulator, weight, phoneme
 
 
+class PrincipalComponentsMultiArticulatorAutoencoderDataset(PrincipalComponentsAutoencoderDataset):
+    def __init__(self, datadir, sequences, articulators, sync_shift, framerate, clip_tails=True):
+        super().__init__(datadir, sequences, articulators[0], sync_shift, framerate, clip_tails)
+        self.articulators = articulators
+
+        self.normalize = {}
+        for articulator in self.articulators:
+            mean = torch.from_numpy(np.load(os.path.join(BASE_DIR, "data", f"{articulator}_mean.npy")))
+            std = torch.from_numpy(np.load(os.path.join(BASE_DIR, "data", f"{articulator}_std.npy")))
+            self.normalize[articulator] = Normalize(mean, std)
+
+    def __getitem__(self, index):
+        item = self.data.iloc[index]
+        phoneme = item["phoneme"]
+
+        subject = item["subject"]
+        sequence = item["sequence"]
+        frame_id = item["frame_id"]
+
+        weight = torch.tensor(phoneme_weights.get(phoneme, 1), dtype=torch.float)
+        frame_name = f"{subject}_{sequence}_{frame_id}"
+
+        articulators = torch.stack([
+            self.prepare_articulator_array(
+                self.datadir,
+                subject,
+                sequence,
+                frame_id,
+                articulator,
+                self.normalize[articulator],
+                self.clip_tails
+            )
+            for articulator in self.articulators
+        ], dim=0)
+
+        l, n, m = articulators.shape
+        articulators = articulators.reshape(l, n * m).type(torch.float)
+
+        return frame_name, articulators, weight, phoneme
+
+
 class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
     critical_phonemes = {
         "TTCD": lambda p: p in ["l", "d", "n", "t"],
