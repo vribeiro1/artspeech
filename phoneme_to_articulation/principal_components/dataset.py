@@ -128,24 +128,25 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
-    def prepare_articulator_array(self, subject, sequence, frame_id):
+    @staticmethod
+    def prepare_articulator_array(datadir, subject, sequence, frame_id, articulator, normalize_fn, clip_tails=True):
         fp_articulator = os.path.join(
-            self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{self.articulator}.npy"
+            datadir, subject, sequence, "inference_contours", f"{frame_id}_{articulator}.npy"
         )
 
         articulator_array = cached_load_articulator_array(fp_articulator, norm_value=DatasetConfig.RES)
 
-        if self.clip_tails:
+        if clip_tails:
             tail_clip_refs = {}
             for reference in TailClipper.TAIL_CLIP_REFERENCES:
                 fp_reference = os.path.join(
-                    self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
+                    datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
                 )
 
                 reference_array = cached_load_articulator_array(fp_reference, norm_value=DatasetConfig.RES)
                 tail_clip_refs[reference.replace("-", "_")] = reference_array
 
-            tail_clip_method_name = f"clip_{self.articulator.replace('-', '_')}_tails"
+            tail_clip_method_name = f"clip_{articulator.replace('-', '_')}_tails"
             tail_clip_method = getattr(TailClipper, tail_clip_method_name, None)
 
             if tail_clip_method:
@@ -154,7 +155,7 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         articulator_array = articulator_array.T
 
         fp_coord_system_reference = os.path.join(
-            self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{UPPER_INCISOR}.npy"
+            datadir, subject, sequence, "inference_contours", f"{frame_id}_{UPPER_INCISOR}.npy"
         )
 
         coord_system_reference_array = cached_load_articulator_array(fp_coord_system_reference, norm_value=DatasetConfig.RES)
@@ -165,7 +166,7 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         articulator_array[0, :] = articulator_array[0, :] + 0.3
         articulator_array[1, :] = articulator_array[1, :] + 0.3
 
-        articulator_norm = self.normalize(articulator_array)
+        articulator_norm = normalize_fn(articulator_array)
 
         return articulator_norm
 
@@ -180,7 +181,15 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         weight = torch.tensor(phoneme_weights.get(phoneme, 1), dtype=torch.float)
         frame_name = f"{subject}_{sequence}_{frame_id}"
 
-        articulator = self.prepare_articulator_array(subject, sequence, frame_id)
+        articulator = self.prepare_articulator_array(
+            self.datadir,
+            subject,
+            sequence,
+            frame_id,
+            self.articulator,
+            self.normalize,
+            self.clip_tails
+        )
         n, m = articulator.shape
         articulator = articulator.reshape(n * m).type(torch.float)
 
