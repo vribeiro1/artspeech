@@ -11,19 +11,15 @@ from tensorboardX import SummaryWriter
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
-from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict
+from phoneme_to_articulation.principal_components import run_autoencoder_epoch, TRAIN, VALID
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsAutoencoderDataset
 from phoneme_to_articulation.principal_components.evaluation import run_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss
 from phoneme_to_articulation.principal_components.models import Autoencoder
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-TRAIN = "train"
-VALID = "validation"
-TEST = "test"
 
 ex = Experiment()
 fs_observer = FileStorageObserver.create(
@@ -36,59 +32,6 @@ fs_observer = FileStorageObserver.create(
     )
 )
 ex.observers.append(fs_observer)
-
-
-def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=None, writer=None, device=None):
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if fn_metrics is None:
-        fn_metrics={}
-    training = phase == TRAIN
-
-    if training:
-        model.train()
-    else:
-        model.eval()
-
-    losses = []
-    metrics_values = {metric_name: [] for metric_name in fn_metrics}
-    progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for _, inputs, sample_weigths, _ in progress_bar:
-        inputs = inputs.to(device)
-        sample_weigths = sample_weigths.to(device)
-
-        optimizer.zero_grad()
-        with torch.set_grad_enabled(training):
-            outputs, latents = model(inputs)
-
-            loss = criterion(
-                outputs,
-                latents,
-                inputs,
-                sample_weigths
-            )
-
-            if training:
-                loss.backward()
-                optimizer.step()
-
-            for metric_name, fn_metric in fn_metrics.items():
-                metric_val = fn_metric(outputs, inputs)
-                metrics_values[metric_name].append(metric_val.item())
-
-        losses.append(loss.item())
-        progress_bar.set_postfix(loss=np.mean(losses))
-
-    mean_loss = np.mean(losses)
-    loss_tag = f"{phase}/loss"
-    if writer is not None:
-        writer.add_scalar(loss_tag, mean_loss, epoch)
-
-    info = {
-        "loss": mean_loss
-    }
-
-    return info
 
 
 @ex.automain
@@ -159,7 +102,7 @@ def main(
 
     epochs = range(1, n_epochs + 1)
     for epoch in epochs:
-        info_train = run_epoch(
+        info_train = run_autoencoder_epoch(
             phase=TRAIN,
             epoch=epoch,
             model=autoencoder,
@@ -170,7 +113,7 @@ def main(
             device=device
         )
 
-        info_valid = run_epoch(
+        info_valid = run_autoencoder_epoch(
             phase=VALID,
             epoch=epoch,
             model=autoencoder,
