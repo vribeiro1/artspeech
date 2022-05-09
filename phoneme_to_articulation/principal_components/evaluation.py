@@ -16,14 +16,16 @@ from phoneme_to_articulation.principal_components.models import Decoder
 from settings import DatasetConfig
 
 
-def plot_array(output, target, references, save_to, phoneme=None, tag=None):
+def plot_array(outputs, targets, references, save_to, phoneme=None, tag=None):
     plt.figure(figsize=(10, 10))
 
     for reference in references:
         plt.plot(*reference, color=COLORS[UPPER_INCISOR])
 
-    plt.plot(*output, color=COLORS[TONGUE])
-    plt.plot(*target, "r--")
+    for output in outputs:
+        plt.plot(*output)
+    for target in targets:
+        plt.plot(*target, "r--")
 
     plt.xlim([0., 1.])
     plt.ylim([1., 0])
@@ -51,15 +53,45 @@ def plot_array(output, target, references, save_to, phoneme=None, tag=None):
     plt.close()
 
 
-def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, fn_metrics=None, device=None):
+def plot_autoencoder_outputs(datadir, frame_ids, outputs, inputs, phonemes, denorm_fn, outputs_dir, multiarticulator=True):
+    if not multiarticulator:
+        inputs = inputs.unsqueeze(dim=1)
+        outputs = outputs.unsqueeze(dim=1)
+
+    for frame_id, output, target, phoneme in zip(frame_ids, outputs, inputs, phonemes):
+        subject, sequence, inumber = frame_id.split("_")
+
+        reference_filepath = os.path.join(
+            datadir, subject, sequence, "inference_contours", f"{inumber}_{UPPER_INCISOR}.npy"
+        )
+        reference = load_articulator_array(reference_filepath, norm_value=DatasetConfig.RES)
+        reference = torch.from_numpy((reference - reference[-1] + 0.3).T)
+
+        articulators = sorted(denorm_fn.keys())
+        denorm_targets = torch.zeros(size=(len(articulators), 2, 50), device=target.device, dtype=target.dtype)
+        denorm_outputs = torch.zeros(size=(len(articulators), 2, 50), device=target.device, dtype=target.dtype)
+        for i, articulator in enumerate(articulators):
+            denorm_targets[i] = denorm_fn[articulator].inverse(target[i].reshape(2, 50))
+            denorm_outputs[i] = denorm_fn[articulator].inverse(output[i].reshape(2, 50))
+
+        denorm_targets = denorm_targets.detach().cpu()
+        denorm_outputs = denorm_outputs.detach().cpu()
+
+        save_to = os.path.join(outputs_dir, f"{frame_id}.jpg")
+        plot_array(denorm_outputs, denorm_targets, reference.unsqueeze(dim=0), save_to, phoneme)
+
+
+def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir=None, fn_metrics=None, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if fn_metrics is None:
         fn_metrics={}
 
-    epoch_outputs_dir = os.path.join(outputs_dir, str(epoch))
-    if not os.path.exists(epoch_outputs_dir):
-        os.makedirs(epoch_outputs_dir)
+    plot_outputs = outputs_dir is not None
+    if plot_outputs:
+        epoch_outputs_dir = os.path.join(outputs_dir, str(epoch))
+        if not os.path.exists(epoch_outputs_dir):
+            os.makedirs(epoch_outputs_dir)
 
     model.eval()
 
@@ -84,20 +116,17 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir, fn_me
             losses.append(loss.item())
             progress_bar.set_postfix(loss=np.mean(losses))
 
-            for frame_id, output, target, phoneme in zip(frame_ids, outputs, inputs, phonemes):
-                subject, sequence, inumber = frame_id.split("_")
-
-                reference_filepath = os.path.join(
-                    dataloader.dataset.datadir, subject, sequence, "inference_contours", f"{inumber}_{UPPER_INCISOR}.npy"
+            if plot_outputs:
+                plot_autoencoder_outputs(
+                    dataloader.dataset.datadir,
+                    frame_ids,
+                    outputs,
+                    inputs,
+                    phonemes,
+                    {TONGUE: dataloader.dataset.normalize.inverse},
+                    outputs_dir=epoch_outputs_dir,
+                    multiarticulator=False
                 )
-                reference = load_articulator_array(reference_filepath, norm_value=DatasetConfig.RES)
-                reference = torch.from_numpy((reference - reference[-1] + 0.3).T)
-
-                target = dataloader.dataset.normalize.inverse(target.reshape(2, 50).detach().cpu())
-                output = dataloader.dataset.normalize.inverse(output.reshape(2, 50).detach().cpu())
-
-                save_to = os.path.join(epoch_outputs_dir, f"{frame_id}.jpg")
-                plot_array(output, target, reference.unsqueeze(dim=0), save_to, phoneme)
 
     mean_loss = np.mean(losses)
     info = {
