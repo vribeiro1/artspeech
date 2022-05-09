@@ -14,12 +14,16 @@ from phoneme_to_articulation.tail_clipper import TailClipper
 from settings import DatasetConfig
 
 
+def load_articulator_tensor(*args, **kwargs):
+    return torch.from_numpy(load_articulator_array(*args, **kwargs)).type(torch.float)
+
+
 def prepare_articulator_array(datadir, subject, sequence, frame_number, articulator):
     fp_articulator = os.path.join(
         datadir, subject, sequence, "inference_contours", f"{frame_number}_{articulator}.npy"
     )
 
-    articulator_array = load_articulator_array(
+    articulator_array = load_articulator_tensor(
         fp_articulator,
         norm_value=DatasetConfig.RES
     )
@@ -30,7 +34,7 @@ def prepare_articulator_array(datadir, subject, sequence, frame_number, articula
             datadir, subject, sequence, "inference_contours", f"{frame_number}_{reference}.npy"
         )
 
-        reference_array = load_articulator_array(
+        reference_array = load_articulator_tensor(
             fp_reference,
             norm_value=DatasetConfig.RES
         )
@@ -49,7 +53,7 @@ def prepare_articulator_array(datadir, subject, sequence, frame_number, articula
         datadir, subject, sequence, "inference_contours", f"{frame_number}_{UPPER_INCISOR}.npy"
     )
 
-    coord_system_reference_array = load_articulator_array(
+    coord_system_reference_array = load_articulator_tensor(
         fp_coord_system_reference,
         norm_value=DatasetConfig.RES
     )
