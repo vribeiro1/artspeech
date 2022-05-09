@@ -2,46 +2,95 @@ import torch
 import torch.nn as nn
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+from vt_tools import *
+
+
+class HiddenBlock(nn.Module):
+    def __init__(self, hidden_features):
+        super().__init__()
+
+        self.block = nn.Sequential(
+            nn.Linear(in_features=hidden_features, out_features=hidden_features),
+            nn.LeakyReLU()
+        )
+
+    def forward(self, x):
+        return self.block(x)
 
 
 class Encoder(nn.Module):
-    def __init__(self, in_features, n_components):
+    def __init__(self, in_features, n_components, hidden_blocks=1, hidden_features=64):
         super().__init__()
 
-        self.encoder = nn.Sequential(
-            nn.Linear(in_features=in_features, out_features=50),
-            nn.ReLU(),
-            nn.Linear(in_features=50, out_features=25),
-            nn.ReLU(),
-            nn.Linear(in_features=25, out_features=n_components)
+        self.input_layer = nn.Sequential(
+            nn.Linear(in_features=in_features, out_features=hidden_features),
+            nn.ReLU()
         )
 
+        self.hidden_layers = nn.ModuleList([
+            HiddenBlock(hidden_features=hidden_features)
+            for _ in range(hidden_blocks)]
+        )
+
+        self.output_layer = nn.Linear(in_features=hidden_features, out_features=n_components)
+
     def forward(self, x):
-        return self.encoder(x)
+        out_input = self.input_layer(x)
+
+        out_hidden = out_input
+        for hidden_layer in self.hidden_layers:
+            out_hidden = hidden_layer(out_hidden)
+
+        out = self.output_layer(out_hidden)
+
+        return out
 
 
 class Decoder(nn.Module):
-    def __init__(self, n_components, out_features):
+    def __init__(self, n_components, out_features, hidden_blocks=1, hidden_features=64):
         super().__init__()
 
-        self.decoder = nn.Sequential(
-            nn.Linear(in_features=n_components, out_features=25),
-            nn.ReLU(),
-            nn.Linear(in_features=25, out_features=50),
-            nn.ReLU(),
-            nn.Linear(in_features=50, out_features=out_features)
+        self.input_layer = nn.Sequential(
+            nn.Linear(in_features=n_components, out_features=hidden_features),
+            nn.ReLU()
         )
 
+        self.hidden_layers = nn.ModuleList([
+            HiddenBlock(hidden_features=hidden_features)
+            for _ in range(hidden_blocks)]
+        )
+
+        self.output_layer = nn.Linear(in_features=hidden_features, out_features=out_features)
+
     def forward(self, x):
-        return self.decoder(x)
+        out_input = self.input_layer(x)
+
+        out_hidden = out_input
+        for hidden_layer in self.hidden_layers:
+            out_hidden = hidden_layer(out_hidden)
+
+        out = self.output_layer(out_hidden)
+
+        return out
 
 
 class Autoencoder(nn.Module):
-    def __init__(self, in_features, n_components):
+    def __init__(self, in_features, n_components, hidden_blocks=1, hidden_features=64):
         super().__init__()
 
-        self.encoder = Encoder(in_features=in_features, n_components=n_components)
-        self.decoder = Decoder(n_components=n_components, out_features=in_features)
+        self.encoder = Encoder(
+            in_features=in_features,
+            n_components=n_components,
+            hidden_blocks=hidden_blocks,
+            hidden_features=hidden_features
+        )
+
+        self.decoder = Decoder(
+            n_components=n_components,
+            out_features=in_features,
+            hidden_blocks=hidden_blocks,
+            hidden_features=hidden_features
+        )
 
     def forward(self, x):
         latents = torch.tanh(self.encoder(x))
