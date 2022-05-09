@@ -25,7 +25,7 @@ Vinicius Ribeiro, Yves Laprie<br>
 <li>
 <b>Automatic Generation of the Complete Vocal Tract Shape from the Sequence of Phonemes to be Articulated</b><br>
 Vinicius Ribeiro, Karyna Isaieva, Justine Leclere, Pierre-André Vuissoz, Yves Laprie<br>
-<i>Under review</i><br>
+Apr 22, 2022 <a href="https://www.sciencedirect.com/science/article/pii/S0167639322000607">Speech Communication</a><br>
 </li>
 
 <li>
