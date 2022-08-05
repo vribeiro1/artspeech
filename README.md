@@ -19,7 +19,7 @@ This repository contains the code related to three papers, which are:
 <li>
 <b>Autoencoder-Based Tongue Shape Estimation During Continuous Speech</b><br>
 Vinicius Ribeiro, Yves Laprie<br>
-<i>Under review</i><br>
+Sep 18, 2022 Interspeech 2022<br>
 </li>
 
 <li>
