@@ -1,14 +1,10 @@
-import pdb
-
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
 from glow_tts.models import FlowGenerator
-from torchaudio.models import Tacotron2
 
 from articulation_to_melspec import (
-    NVIDIA_TACOTRON2_WEIGHTS_FILEPATH,
     GLOW_TTS_WEIGHTS_FILEPATH,
     ARTICULATORS_EMBEDDING_WEIGHTS_FILEPATH
 )
@@ -115,46 +111,6 @@ class ArticulatorsEmbedding(nn.Module):
         outputs = self.linear(conv3_out)
 
         return outputs
-
-
-class ArticulatoryTacotron2(Tacotron2):
-    def __init__(self, n_articulators, *args, n_samples=50, pretrained=False, **kwargs):
-        super(ArticulatoryTacotron2, self).__init__(*args, **kwargs)
-
-        if pretrained:
-            self._load_pretrained_weigths()
-
-        self.embedding = ArticulatorsEmbedding(n_curves=n_articulators, n_samples=n_samples)
-
-    def _load_pretrained_weigths(self):
-        tacotron2_state_dict = torch.load(
-            NVIDIA_TACOTRON2_WEIGHTS_FILEPATH, map_location=torch.device("cpu")
-        )
-        self.load_state_dict(tacotron2_state_dict)
-
-    def infer(self, sequence, lengths):
-        """
-        Args:
-        sequence (torch.tensor): Tensor of shape (bs, seq_len, n_curves, 2, n_samples)
-        """
-        n_batch, max_length, _, _, _ = sequence.shape
-        if lengths is None:
-            lengths = torch.tensor([max_length]).expand(n_batch).to(sequence.device, sequence.dtype)
-
-        assert lengths is not None  # For TorchScript compiler
-
-        embedded_inputs = self.embedding(sequence).transpose(1, 2)
-        encoder_outputs = self.encoder(embedded_inputs, lengths)
-        mel_specgram, mel_specgram_lengths, _, alignments = self.decoder.infer(
-            encoder_outputs, lengths
-        )
-
-        mel_outputs_postnet = self.postnet(mel_specgram)
-        mel_outputs_postnet = mel_specgram + mel_outputs_postnet
-
-        alignments = alignments.unfold(1, n_batch, n_batch).transpose(0, 2)
-
-        return mel_outputs_postnet, mel_specgram_lengths, alignments
 
 
 class GlowATS(FlowGenerator):
