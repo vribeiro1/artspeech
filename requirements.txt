@@ -2,6 +2,7 @@ cython
 funcy
 librosa
 matplotlib
+mlflow
 numpy==1.21
 opencv-python
 pandas

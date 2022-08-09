@@ -71,8 +71,8 @@ def plot_autoencoder_outputs(datadir, frame_ids, outputs, inputs, phonemes, deno
         denorm_targets = torch.zeros(size=(len(articulators), 2, 50), device=target.device, dtype=target.dtype)
         denorm_outputs = torch.zeros(size=(len(articulators), 2, 50), device=target.device, dtype=target.dtype)
         for i, articulator in enumerate(articulators):
-            denorm_targets[i] = denorm_fn[articulator].inverse(target[i].reshape(2, 50))
-            denorm_outputs[i] = denorm_fn[articulator].inverse(output[i].reshape(2, 50))
+            denorm_targets[i] = denorm_fn[articulator](target[i].reshape(2, 50))
+            denorm_outputs[i] = denorm_fn[articulator](output[i].reshape(2, 50))
 
         denorm_targets = denorm_targets.detach().cpu()
         denorm_outputs = denorm_outputs.detach().cpu()
