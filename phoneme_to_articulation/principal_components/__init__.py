@@ -60,5 +60,9 @@ def run_autoencoder_epoch(phase, epoch, model, dataloader, optimizer, criterion,
     info = {
         "loss": mean_loss
     }
+    info.update({
+        metric_name: np.mean(values)
+        for metric_name, values in  metrics_values.items()
+    })
 
     return info

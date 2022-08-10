@@ -3,6 +3,7 @@ import logging
 import mlflow
 import numpy as np
 import os
+import tempfile
 import torch
 import yaml
 
@@ -15,13 +16,33 @@ from phoneme_to_articulation.principal_components import run_autoencoder_epoch, 
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsAutoencoderDataset
 from phoneme_to_articulation.principal_components.evaluation import run_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss
+from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistance
 from phoneme_to_articulation.principal_components.models import Autoencoder
+from settings import DatasetConfig
 
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RESULTS_DIR = os.path.join(BASE_DIR, "results")
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
+
+TMP_DIR = tempfile.mkdtemp(dir=RESULTS_DIR)
+
+
+def reconstruction_error(outputs, targets, denorm_fn, px_space=1, res=1):
+    p2cp_fn = MeanP2CPDistance(reduction="mean")
+
+    batch_size, n_features = outputs.shape
+    outputs = outputs.reshape(batch_size, 2, n_features // 2)
+    targets = targets.reshape(batch_size, 2, n_features // 2)
+
+    outputs = denorm_fn(outputs).permute(0, 2, 1)
+    targets = denorm_fn(targets).permute(0, 2, 1)
+
+    p2cp = p2cp_fn(outputs, targets)
+    p2cp_mm = p2cp * px_space * res
+
+    return p2cp_mm
 
 
 def main(
@@ -32,10 +53,10 @@ def main(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
 
-    best_encoder_path = os.path.join(RESULTS_DIR, "best_encoder.pt")
-    best_decoder_path = os.path.join(RESULTS_DIR, "best_decoder.pt")
-    last_encoder_path = os.path.join(RESULTS_DIR, "last_encoder.pt")
-    last_decoder_path = os.path.join(RESULTS_DIR, "last_decoder.pt")
+    best_encoder_path = os.path.join(TMP_DIR, "best_encoder.pt")
+    best_decoder_path = os.path.join(TMP_DIR, "best_decoder.pt")
+    last_encoder_path = os.path.join(TMP_DIR, "last_encoder.pt")
+    last_decoder_path = os.path.join(TMP_DIR, "last_decoder.pt")
 
     autoencoder = Autoencoder(
         in_features=100,
@@ -91,6 +112,15 @@ def main(
         anneal_strategy="linear"
     )
 
+    metrics = {
+        "p2cp_mm": lambda outputs, targets: reconstruction_error(
+            outputs, targets,
+            denorm_fn=train_dataset.normalize.inverse,
+            px_space=DatasetConfig.PIXEL_SPACING,
+            res=DatasetConfig.RES
+        )
+    }
+
     best_metric = np.inf
     epochs_since_best = 0
 
@@ -119,6 +149,7 @@ def main(
             optimizer=optimizer,
             scheduler=scheduler,
             criterion=loss_fn,
+            fn_metrics=metrics,
             device=device
         )
 
@@ -173,7 +204,7 @@ def main(
     best_autoencoder.decoder.load_state_dict(best_decoder_state_dict)
     best_autoencoder.to(device)
 
-    test_outputs_dir = os.path.join(RESULTS_DIR, "test_outputs")
+    test_outputs_dir = os.path.join(TMP_DIR, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
@@ -183,8 +214,13 @@ def main(
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
+        fn_metrics=metrics,
         device=device
     )
+
+    mlflow.log_metrics({
+        f"test_{metric}": value for metric, value in info_test.items()
+    }, step=epoch)
 
     mlflow.log_artifacts(test_outputs_dir, "test_outputs")
 
