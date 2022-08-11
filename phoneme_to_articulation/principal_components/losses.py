@@ -78,9 +78,10 @@ class RegularizedLatentsMSELoss(nn.Module):
             mse = (sample_weights * mse.T).T
         mse = mse.mean()
 
-        cov_features = torch.cov(latents.T).square().sum()
+        cov_mtx = torch.cov(latents.T)
+        cov_loss = cov_mtx.square().sum() - cov_mtx.diag().square().sum()
 
-        return mse + self.alpha * cov_features
+        return mse + self.alpha * cov_loss
 
 
 class MultiArtRegularizedLatentsMSELoss(nn.Module):

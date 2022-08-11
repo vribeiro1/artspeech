@@ -97,7 +97,7 @@ def main(
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=batch_size,
-        shuffle=False,
+        shuffle=True,
         num_workers=num_workers,
         worker_init_fn=set_seeds
     )
@@ -157,8 +157,8 @@ def main(
             f"valid_{metric}": value for metric, value in info_valid.items()
         }, step=epoch)
 
-        if info_valid["loss"] < best_metric:
-            best_metric = info_valid["loss"]
+        if info_valid["p2cp_mm"] < best_metric:
+            best_metric = info_valid["p2cp_mm"]
             epochs_since_best = 0
             torch.save(autoencoder.encoder.state_dict(), best_encoder_path)
             torch.save(autoencoder.decoder.state_dict(), best_decoder_path)
@@ -204,6 +204,9 @@ def main(
     best_autoencoder.decoder.load_state_dict(best_decoder_state_dict)
     best_autoencoder.to(device)
 
+    plots_dir = os.path.join(TMP_DIR, "plots")
+    if not os.path.exists(plots_dir):
+        os.makedirs(plots_dir)
     test_outputs_dir = os.path.join(TMP_DIR, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
@@ -214,6 +217,7 @@ def main(
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
+        plots_dir=plots_dir,
         fn_metrics=metrics,
         device=device
     )
@@ -222,6 +226,7 @@ def main(
         f"test_{metric}": value for metric, value in info_test.items()
     }, step=epoch)
 
+    mlflow.log_artifacts(plots_dir, "plots_dir")
     mlflow.log_artifacts(test_outputs_dir, "test_outputs")
 
 
@@ -234,10 +239,10 @@ if __name__ == "__main__":
     with open(args.config_filepath) as f:
         cfg = yaml.safe_load(f)
 
-    alpha = 1e-2
-    with mlflow.start_run():
-        mlflow.log_param(key="alpha", value=alpha)
-        mlflow.log_params(cfg)
-        mlflow.log_dict(cfg, "config.json")
+    for alpha in [1e-4, 1e-2, 1e-1, 5e-1, 1e0]:
+        with mlflow.start_run():
+            mlflow.log_param(key="alpha", value=alpha)
+            mlflow.log_params(cfg)
+            mlflow.log_dict(cfg, "config.json")
 
-        main(**cfg, alpha=alpha)
+            main(**cfg, alpha=alpha)

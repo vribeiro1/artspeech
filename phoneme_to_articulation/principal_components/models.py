@@ -79,6 +79,8 @@ class Autoencoder(nn.Module):
     def __init__(self, in_features, n_components, hidden_blocks=1, hidden_features=64):
         super().__init__()
 
+        self.latent_size = n_components
+
         self.encoder = Encoder(
             in_features=in_features,
             n_components=n_components,

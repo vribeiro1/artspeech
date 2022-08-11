@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
+import seaborn as sns
 import torch
 
 from tqdm import tqdm
@@ -81,7 +82,30 @@ def plot_autoencoder_outputs(datadir, frame_ids, outputs, inputs, phonemes, deno
         plot_array(denorm_outputs, denorm_targets, reference.unsqueeze(dim=0), save_to, phoneme)
 
 
-def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir=None, fn_metrics=None, device=None):
+def plot_cov_matrix(cov_matrix, saves_dir):
+    n_components, _ = cov_matrix.shape
+
+    plt.figure(figsize=(10, 10))
+
+    sns.heatmap(
+        cov_matrix,
+        cmap="BuPu",
+        linewidths=.5,
+        annot=True,
+        cbar=False,
+        xticklabels=[i + 1 for i in range(n_components)],
+        yticklabels=[i + 1 for i in range(n_components)],
+        annot_kws={
+            "fontsize": 16
+        }
+    )
+
+    plt.tick_params(axis="both", which="major", labelsize=18)
+    plt.tight_layout()
+    plt.savefig(os.path.join(saves_dir, f"covariance_matrix.pdf"))
+
+
+def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir=None, plots_dir=None, fn_metrics=None, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if fn_metrics is None:
@@ -95,6 +119,7 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir=None, 
 
     model.eval()
 
+    all_latents = torch.zeros(size=(0, model.latent_size), device=device)
     losses = []
     metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
@@ -128,10 +153,23 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir=None, 
                     multiarticulator=False
                 )
 
+            all_latents = torch.concat([all_latents, latents], dim=0)
+
+    cov_latents = torch.cov(latents.T)
+    cov_main_diag = cov_latents.diag().abs().sum() / cov_latents.abs().sum()
+    cov_latents = cov_latents.detach().cpu()
+    if plots_dir:
+        plot_cov_matrix(cov_latents, plots_dir)
+
     mean_loss = np.mean(losses)
     info = {
-        "loss": mean_loss
+        "loss": mean_loss,
+        "cov_main_diag": cov_main_diag.item()
     }
+    info.update({
+        metric_name: np.mean(values)
+        for metric_name, values in  metrics_values.items()
+    })
 
     return info
 
@@ -333,9 +371,9 @@ def run_phoneme_to_PC_test(
                 target_shape = target_shape.squeeze(dim=0)
 
                 p2cp_mm = p2cp * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES
-                p2cp__mm_str ="%0.3f mm" % p2cp_mm
+                p2cp_mm_str ="%0.3f mm" % p2cp_mm
 
-                plot_array(pred_shape, target_shape, reference, save_to_filepath, phoneme, p2cp__mm_str)
+                plot_array(pred_shape, target_shape, reference, save_to_filepath, phoneme, p2cp_mm_str)
 
         losses.append(loss.item())
         progress_bar.set_postfix(loss=np.mean(losses))
