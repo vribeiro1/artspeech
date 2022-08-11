@@ -8,7 +8,7 @@ VALID = "validation"
 TEST = "test"
 
 
-def run_autoencoder_epoch(phase, epoch, model, dataloader, optimizer, criterion, scheduler=None, fn_metrics=None, writer=None, device=None):
+def run_autoencoder_epoch(phase, epoch, model, dataloader, optimizer, criterion, scheduler=None, fn_metrics=None, device=None):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if fn_metrics is None:
@@ -53,10 +53,6 @@ def run_autoencoder_epoch(phase, epoch, model, dataloader, optimizer, criterion,
         progress_bar.set_postfix(loss=np.mean(losses))
 
     mean_loss = np.mean(losses)
-    loss_tag = f"{phase}/loss"
-    if writer is not None:
-        writer.add_scalar(loss_tag, mean_loss, epoch)
-
     info = {
         "loss": mean_loss
     }

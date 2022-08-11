@@ -1,13 +1,14 @@
+import argparse
 import logging
+import mlflow
 import numpy as np
 import os
+import tempfile
 import torch
+import yaml
 
-from sacred import Experiment
-from sacred.observers import FileStorageObserver
-from tensorboardX import SummaryWriter
 from torch.optim import Adam
-from torch.optim.lr_scheduler import ReduceLROnPlateau, CyclicLR
+from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader
 from vt_tools import *
 
@@ -19,34 +20,26 @@ from phoneme_to_articulation.principal_components.losses import MultiArtRegulari
 from phoneme_to_articulation.principal_components.models import MultiArticulatorAutoencoder
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+RESULTS_DIR = os.path.join(BASE_DIR, "results")
+if not os.path.exists(RESULTS_DIR):
+    os.makedirs(RESULTS_DIR)
 
-ex = Experiment()
-fs_observer = FileStorageObserver.create(
-    os.path.join(
-        BASE_DIR,
-        "phoneme_to_articulation",
-        "principal_components",
-        "results",
-        "autoencoder"
-    )
-)
-ex.observers.append(fs_observer)
+TMP_DIR = tempfile.mkdtemp(dir=RESULTS_DIR)
 
 
-@ex.automain
 def main(
-    _run, datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
+    datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
     train_seq_dict, valid_seq_dict, test_seq_dict, articulators_indices_dict,
     hidden_blocks, hidden_features, clip_tails=True, state_dict_fpath=None
 ):
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cpu")
     logging.info(f"Running on '{device.type}'")
 
-    writer = SummaryWriter(os.path.join(fs_observer.dir, f"experiment"))
-    best_encoders_path = os.path.join(fs_observer.dir, "best_encoders.pt")
-    best_decoders_path = os.path.join(fs_observer.dir, "best_decoders.pt")
-    last_encoders_path = os.path.join(fs_observer.dir, "last_encoders.pt")
-    last_decoders_path = os.path.join(fs_observer.dir, "last_decoders.pt")
+    best_encoders_path = os.path.join(TMP_DIR, "best_encoders.pt")
+    best_decoders_path = os.path.join(TMP_DIR, "best_decoders.pt")
+    last_encoders_path = os.path.join(TMP_DIR, "last_encoders.pt")
+    last_decoders_path = os.path.join(TMP_DIR, "last_decoders.pt")
 
     articulators = sorted(articulators_indices_dict.keys())
 
@@ -58,21 +51,10 @@ def main(
     )
 
     autoencoder = MultiArticulatorAutoencoder(**model_kwargs)
-
     if state_dict_fpath is not None:
         state_dict = torch.load(state_dict_fpath, map_location=device)
         autoencoder.load_state_dict(state_dict)
     autoencoder.to(device)
-
-    loss_fn = MultiArtRegularizedLatentsMSELoss(alpha=1e-2, indices_dict=articulators_indices_dict)
-    optimizer = Adam(autoencoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
-    # scheduler = CyclicLR(
-    #     optimizer,
-    #     base_lr=learning_rate/10,
-    #     max_lr=learning_rate,
-    #     cycle_momentum=False
-    # )
 
     num_workers = 5
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
@@ -109,6 +91,16 @@ def main(
         worker_init_fn=set_seeds
     )
 
+    loss_fn = MultiArtRegularizedLatentsMSELoss(alpha=1e-2, indices_dict=articulators_indices_dict)
+    optimizer = Adam(autoencoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    scheduler = OneCycleLR(
+        optimizer,
+        max_lr=learning_rate,
+        steps_per_epoch=int(len(train_dataloader)),
+        epochs=n_epochs,
+        anneal_strategy="linear"
+    )
+
     best_metric = np.inf
     epochs_since_best = 0
 
@@ -120,11 +112,14 @@ def main(
             model=autoencoder,
             dataloader=train_dataloader,
             optimizer=optimizer,
-            # scheduler=scheduler,
+            scheduler=scheduler,
             criterion=loss_fn,
-            writer=writer,
             device=device
         )
+
+        mlflow.log_metrics({
+            f"train_{metric}": value for metric, value in info_train.items()
+        }, step=epoch)
 
         info_valid = run_autoencoder_epoch(
             phase=VALID,
@@ -133,22 +128,29 @@ def main(
             dataloader=valid_dataloader,
             optimizer=optimizer,
             criterion=loss_fn,
-            writer=writer,
             device=device
         )
 
-        scheduler.step(info_valid["loss"])
+        mlflow.log_metrics({
+            f"valid_{metric}": value for metric, value in info_valid.items()
+        }, step=epoch)
 
         if info_valid["loss"] < best_metric:
             best_metric = info_valid["loss"]
             epochs_since_best = 0
             torch.save(autoencoder.encoders.state_dict(), best_encoders_path)
             torch.save(autoencoder.decoders.state_dict(), best_decoders_path)
+
+            mlflow.log_artifact(best_encoders_path)
+            mlflow.log_artifact(best_decoders_path)
         else:
             epochs_since_best += 1
 
         torch.save(autoencoder.encoders.state_dict(), last_encoders_path)
         torch.save(autoencoder.decoders.state_dict(), last_decoders_path)
+
+        mlflow.log_artifact(last_encoders_path)
+        mlflow.log_artifact(last_decoders_path)
 
         if epochs_since_best > patience:
             break
@@ -179,7 +181,7 @@ def main(
     best_autoencoder.decoders.load_state_dict(best_decoders_state_dict)
     best_autoencoder.to(device)
 
-    test_outputs_dir = os.path.join(fs_observer.dir, "test_outputs")
+    test_outputs_dir = os.path.join(TMP_DIR, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
@@ -191,3 +193,25 @@ def main(
         outputs_dir=test_outputs_dir,
         device=device
     )
+
+    mlflow.log_metrics({
+        f"test_{metric}": value for metric, value in info_test.items()
+    }, step=epoch)
+
+    mlflow.log_artifacts(test_outputs_dir, "test_outputs")
+
+
+if __name__ == "__main__":
+    if __name__ == "__main__":
+        parser = argparse.ArgumentParser()
+        parser.add_argument("--config", dest="config_filepath")
+        args = parser.parse_args()
+
+    with open(args.config_filepath) as f:
+        cfg = yaml.safe_load(f)
+
+    with mlflow.start_run():
+        mlflow.log_params(cfg)
+        mlflow.log_dict(cfg, "config.json")
+
+        main(**cfg)
