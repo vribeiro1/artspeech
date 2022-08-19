@@ -48,7 +48,7 @@ def reconstruction_error(outputs, targets, denorm_fn, px_space=1, res=1):
 def main(
     datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
     train_seq_dict, valid_seq_dict, test_seq_dict, articulator, n_components,
-    clip_tails=True, state_dict_fpath=None, alpha=1e-2
+    clip_tails=True, state_dict_fpath=None, alpha=1e-1
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
@@ -239,10 +239,8 @@ if __name__ == "__main__":
     with open(args.config_filepath) as f:
         cfg = yaml.safe_load(f)
 
-    for alpha in [1e-4, 1e-2, 1e-1, 5e-1, 1e0]:
-        with mlflow.start_run():
-            mlflow.log_param(key="alpha", value=alpha)
-            mlflow.log_params(cfg)
-            mlflow.log_dict(cfg, "config.json")
+    with mlflow.start_run():
+        mlflow.log_params(cfg)
+        mlflow.log_dict(cfg, "config.json")
 
-            main(**cfg, alpha=alpha)
+        main(**cfg)
