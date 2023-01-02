@@ -12,16 +12,14 @@ from torch.optim.lr_scheduler import OneCycleLR
 from torch.utils.data import DataLoader
 
 from helpers import set_seeds, sequences_from_dict
-from phoneme_to_articulation.principal_components import run_autoencoder_epoch, TRAIN, VALID
+from phoneme_to_articulation.principal_components import run_autoencoder_epoch
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsAutoencoderDataset
 from phoneme_to_articulation.principal_components.evaluation import run_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss
 from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistance
 from phoneme_to_articulation.principal_components.models import Autoencoder
-from settings import DatasetConfig
+from settings import DatasetConfig, BASE_DIR, TRAIN, VALID, TEST
 
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RESULTS_DIR = os.path.join(BASE_DIR, "results")
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)

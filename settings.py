@@ -1,5 +1,8 @@
 import os
 
+TRAIN = "train"
+VALID = "validation"
+TEST = "test"
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 

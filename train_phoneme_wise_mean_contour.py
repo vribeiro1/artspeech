@@ -7,8 +7,7 @@ from sacred.observers import FileStorageObserver
 
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset
 from phoneme_wise_mean_contour import train, test
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+from settings import BASE_DIR
 
 ex = Experiment()
 fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "phoneme_wise_mean_contour", "results"))

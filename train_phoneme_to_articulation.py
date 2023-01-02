@@ -21,12 +21,7 @@ from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pa
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
 from phoneme_to_articulation.metrics import EuclideanDistance
-
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-TRAIN = "train"
-VALID = "validation"
-TEST = "test"
+from settings import BASE_DIR, TRAIN, VALID, TEST
 
 ex = Experiment()
 fs_observer = FileStorageObserver.create(os.path.join(BASE_DIR, "phoneme_to_articulation", "encoder_decoder", "results"))

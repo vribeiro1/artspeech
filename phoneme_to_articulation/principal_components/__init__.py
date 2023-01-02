@@ -2,10 +2,7 @@ import numpy as np
 import torch
 
 from tqdm import tqdm
-
-TRAIN = "train"
-VALID = "validation"
-TEST = "test"
+from settings import TRAIN, VALID, TEST
 
 
 def run_autoencoder_epoch(phase, epoch, model, dataloader, optimizer, criterion, scheduler=None, fn_metrics=None, device=None):

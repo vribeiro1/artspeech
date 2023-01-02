@@ -13,13 +13,13 @@ from torch.utils.data import DataLoader
 from vt_tools import *
 
 from helpers import set_seeds, sequences_from_dict
-from phoneme_to_articulation.principal_components import run_autoencoder_epoch, TRAIN, VALID
+from phoneme_to_articulation.principal_components import run_autoencoder_epoch
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsMultiArticulatorAutoencoderDataset
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import MultiArtRegularizedLatentsMSELoss
 from phoneme_to_articulation.principal_components.models import MultiArticulatorAutoencoder
+from settings import BASE_DIR, TRAIN, VALID, TEST
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 RESULTS_DIR = os.path.join(BASE_DIR, "results")
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
@@ -32,8 +32,7 @@ def main(
     train_seq_dict, valid_seq_dict, test_seq_dict, articulators_indices_dict,
     hidden_blocks, hidden_features, clip_tails=True, state_dict_fpath=None
 ):
-    # device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
 
     best_encoders_path = os.path.join(TMP_DIR, "best_encoders.pt")
