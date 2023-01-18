@@ -22,5 +22,6 @@ config/*
 !config/*.yaml.example
 
 data
+tmp*
 results*
 mlruns
