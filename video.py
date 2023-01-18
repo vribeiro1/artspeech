@@ -7,7 +7,7 @@ from operator import itemgetter
 
 
 class Video:
-    def __init__(self, frames_filepaths, audio_filepath, framerate=50):
+    def __init__(self, frames_filepaths, audio_filepath, framerate=50, max_diff=0.05):
         audio, self.sample_rate = torchaudio.load(audio_filepath)
         audio = torch.mean(audio, dim=0).squeeze(dim=0)
 
@@ -18,9 +18,8 @@ class Video:
         self.num_frames = len(frames_filepaths)
         video_duration = self.num_frames / self.framerate
 
-        max_err = 0.05
         diff = abs(video_duration - audio_duration)
-        if diff > max_err:
+        if diff > max_diff:
             raise ValueError(f"Difference in duration of audio and video is too large ({diff})")
         self.duration = video_duration
 
@@ -37,10 +36,8 @@ class Video:
         time = np.linspace(0., self.duration, self.num_samples)
         ge_start, = np.where(time >= start)  # Greater than or equal to the start
         lt_end, = np.where(time < end)  # Lower than the end
-        indices = list(set(ge_start) & set(lt_end))
-
+        indices = sorted(set(ge_start) & set(lt_end))
         audio_interval = self.audio[indices]
-
         return torch.tensor(time[indices], dtype=torch.float), audio_interval
 
     def get_frames_interval(self, start, end, load_frames=False):
@@ -48,6 +45,9 @@ class Video:
         ge_start, = np.where(time >= start)  # Greater than or equal to the start
         lt_end, = np.where(time < end)  # Lower than the end
         indices = list(set(ge_start) & set(lt_end))
+
+        if len(indices) == 0:
+            return torch.tensor([], dtype=torch.float), []
 
         frames_filepaths = itemgetter(*indices)(self.frames_filepaths)
         if isinstance(frames_filepaths, str):
