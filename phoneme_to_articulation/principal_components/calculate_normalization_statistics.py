@@ -9,7 +9,7 @@ from vt_shape_gen.helpers import load_articulator_array
 from vt_tools import *
 
 from helpers import sequences_from_dict
-from phoneme_to_articulation.principal_components.dataset import collect_data
+from database_collector import GottingenDatabaseCollector
 from phoneme_to_articulation.tail_clipper import TailClipper
 from settings import DatasetConfig
 
@@ -74,7 +74,10 @@ def main(cfg):
     articulators = cfg["articulators"]
     save_to = cfg["save_to"]
 
-    sentence_data = collect_data(datadir, sequences, DatasetConfig.SYNC_SHIFT, DatasetConfig.FRAMERATE)
+    collector = GottingenDatabaseCollector(datadir)
+    sync_shift = DatasetConfig.SYNC_SHIFT
+    framerate = DatasetConfig.FRAMERATE
+    sentence_data = collector.collect_data(sequences, sync_shift, framerate)
     data = []
     for sentence in sentence_data:
         for frame_id, phoneme in zip(sentence["frame_ids"], sentence["phonemes"]):
