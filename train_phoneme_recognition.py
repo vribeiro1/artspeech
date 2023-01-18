@@ -1,0 +1,411 @@
+import pdb
+
+import argparse
+import funcy
+import logging
+import mlflow
+import numpy as np
+import os
+import tempfile
+import torch
+import torch.nn as nn
+import ujson
+import yaml
+
+from collections import namedtuple
+from enum import Enum
+from functools import partial
+from torch.optim import Adam
+from torch.optim.lr_scheduler import CyclicLR
+from torch.utils.data import DataLoader
+from torchaudio.models.decoder import ctc_decoder
+
+from helpers import set_seeds, sequences_from_dict
+from phoneme_recognition import run_epoch, run_test, SIL, BLANK, UNKNOWN
+from phoneme_recognition.datasets import Feature, Target, PhonemeRecognitionDataset, collate_fn
+from phoneme_recognition.deepspeech2 import DeepSpeech2
+from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC
+from settings import DatasetConfig, BASE_DIR, TRAIN, VALID, TEST
+
+TMPFILES = os.path.join(BASE_DIR, "tmp")
+TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
+RESULTS_DIR = os.path.join(TMP_DIR, "results")
+if not os.path.exists(RESULTS_DIR):
+    os.makedirs(RESULTS_DIR)
+
+Hypothesis = namedtuple("Hypothesis", ["tokens"])
+
+
+class CrossEntropyLoss(nn.Module):
+    def __init__(self, *args, class_weights=None, **kwargs):
+        super().__init__()
+
+        if class_weights is None:
+            class_weights = {}
+        else:
+            if isinstance(class_weights, str):
+                with open(class_weights) as f:
+                    class_weights = ujson.load(f)
+
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        # Add a 1.0 weight for the unknown class
+        weight = torch.tensor(
+            [1.0] +
+            [w for _, w in sorted(
+                class_weights.items(),
+                key=lambda t: t[0]
+            )]
+        ).to(device)
+        self.ce = nn.CrossEntropyLoss(*args, weight=weight, **kwargs)
+
+    @staticmethod
+    def get_pad_mask(inputs, lengths):
+        if len(inputs.shape) == 2:
+            bs, time = inputs.shape
+        elif len(inputs.shape) == 3:
+            bs, time, _ = inputs.shape
+        else:
+            raise Exception("invalid inputs")
+
+        cumsum = torch.cumsum(torch.ones((bs, time)), dim=1)
+        lengths = lengths.repeat(time, 1).T
+        pad_mask = (cumsum <= lengths).type(torch.long)
+        pad_mask = pad_mask.to(inputs.device)
+        return pad_mask
+
+    def forward(self, inputs, targets, inputs_lengths, targets_lengths):
+        inputs = inputs.permute(1, 0, 2)
+        bs, time, classes = inputs.shape
+
+        inputs_pad_mask = self.get_pad_mask(inputs, inputs_lengths)
+        inputs_pad_mask = torch.flatten(inputs_pad_mask, start_dim=0, end_dim=1)
+        inputs = torch.flatten(inputs, start_dim=0, end_dim=1)
+        inputs = inputs[inputs_pad_mask == 1]
+
+        targets_pad_mask = self.get_pad_mask(targets, targets_lengths)
+        targets_pad_mask = torch.flatten(targets_pad_mask, start_dim=0, end_dim=1)
+        targets = torch.flatten(targets, start_dim=0, end_dim=1)
+        targets = targets[targets_pad_mask == 1]
+        out = self.ce(inputs, targets)
+
+        return out
+
+
+class Criterion(Enum):
+    CE = CrossEntropyLoss
+    CTC = nn.CTCLoss
+
+
+class TopKDecoder:
+    def __init__(
+        self,
+        tokens,
+        sil_token=None,
+        blank_token=None,
+        unk_word=None,
+        **kwargs,
+    ):
+        self.num_tokens = len(tokens)
+        self.sil_token = sil_token
+        self.blank_token = blank_token
+        self.unk_word = unk_word
+
+    def filter_blank(self, indices):
+        if self.blank_token is None:
+            return indices
+
+        non_blank_indices = funcy.lfilter(lambda i: i != self.blank_token, indices)
+        return non_blank_indices
+
+    def __call__(self, emissions, lengths):
+        """
+        Args:
+            emissions (torch.tensor): Tensor of shape (batch, time, classes) after softmax
+            lengths (torch.tensor): Tensor of shape (batch,)
+        """
+        top_list = torch.topk(emissions, k=1, dim=-1).indices
+        top_list = top_list.squeeze(dim=-1)
+        results = [
+            [Hypothesis(tokens=self.filter_blank(top))]
+            for top in top_list
+        ]
+        return results
+
+
+def main(
+    datadir, database, num_epochs, batch_size, patience, learning_rate, weight_decay,
+    feature, target, vocab_fpath, train_seq_dict, valid_seq_dict, test_seq_dict, model_params,
+    loss, loss_params, num_workers=0, logits_large_margins=0.0, pretrained=False,
+    state_dict_filepath=None, checkpoint_filepath=None
+):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logging.info(f"Running on '{device.type}'")
+
+    best_model_path = os.path.join(RESULTS_DIR, "best_model.pt")
+    last_model_path = os.path.join(RESULTS_DIR, "last_model.pt")
+    save_checkpoint_path = os.path.join(RESULTS_DIR, "checkpoint.pt")
+
+    feature = Feature(feature)
+    target = Target(target)
+    criterion = Criterion[loss]
+    criterion_cls = criterion.value
+
+    default_tokens = [BLANK, UNKNOWN] if criterion == Criterion.CTC else [UNKNOWN]
+    vocabulary = {token: i for i, token in enumerate(default_tokens)}
+    with open(vocab_fpath) as f:
+        tokens = ujson.load(f)
+        for i, token in enumerate(tokens, start=len(vocabulary)):
+            vocabulary[token] = i
+
+    tokens = [k for k, v in sorted(vocabulary.items(), key=lambda t: t[1])]
+    decoder_fn = ctc_decoder if criterion == Criterion.CTC else TopKDecoder
+    decoder = decoder_fn(
+        lexicon=None,
+        tokens=tokens,
+        sil_token=SIL,
+        blank_token=BLANK if criterion == Criterion.CTC else None,
+        unk_word=UNKNOWN,
+    )
+
+    if pretrained:
+        model = DeepSpeech2.load_librispeech_model(
+            model_params["num_features"],
+            adapter_out_features=model_params.get("adapter_out_features")
+        )
+        hidden_size = model_params["rnn_hidden_size"]
+        model.classifier[-1] = nn.Linear(hidden_size, len(vocabulary))
+    else:
+        model = DeepSpeech2(num_classes=len(vocabulary), **model_params)
+
+    if state_dict_filepath is not None:
+        state_dict = torch.load(state_dict_filepath, map_location=torch.device("cpu"))
+        model.load_state_dict(state_dict)
+    model.to(device)
+
+    train_sequences = sequences_from_dict(datadir, train_seq_dict)
+    train_dataset = PhonemeRecognitionDataset(
+        datadir=datadir,
+        database=database,
+        sequences=train_sequences,
+        vocabulary=vocabulary,
+        framerate=DatasetConfig.FRAMERATE,
+        sync_shift=DatasetConfig.SYNC_SHIFT,
+        features=[feature],
+        tmp_dir=TMP_DIR,
+    )
+    train_dataloader = DataLoader(
+        train_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        worker_init_fn=set_seeds,
+        collate_fn=partial(collate_fn, features_names=[feature]),
+    )
+
+    valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
+    valid_dataset = PhonemeRecognitionDataset(
+        datadir=datadir,
+        database=database,
+        sequences=valid_sequences,
+        vocabulary=vocabulary,
+        framerate=DatasetConfig.FRAMERATE,
+        sync_shift=DatasetConfig.SYNC_SHIFT,
+        features=[feature],
+        tmp_dir=TMP_DIR,
+    )
+    valid_dataloader = DataLoader(
+        valid_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        worker_init_fn=set_seeds,
+        collate_fn=partial(collate_fn, features_names=[feature]),
+    )
+
+    loss_fn = criterion_cls(**loss_params)
+    optimizer = Adam(
+        model.parameters(),
+        lr=learning_rate,
+        weight_decay=weight_decay,
+    )
+    scheduler = CyclicLR(
+        optimizer,
+        base_lr=learning_rate / 25,
+        max_lr=learning_rate,
+        cycle_momentum=False
+    )
+
+    metrics = {
+        # "edit_distance": EditDistance(decoder),
+        "accuracy": Accuracy(len(vocabulary)),
+        "auroc": AUROC(len(vocabulary))
+    }
+
+    best_metric = np.inf
+    epochs_since_best = 0
+    epochs = range(1, num_epochs + 1)
+
+    if checkpoint_filepath is not None:
+        # TODO: Save and load the scheduler state dict when the following change is released
+        # https://github.com/Lightning-AI/lightning/issues/15901
+        checkpoint = torch.load(checkpoint_filepath, map_location=device)
+
+        model.load_state_dict(checkpoint["model"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        # scheduler.load_state_dict(checkpoint["scheduler"])
+        epoch = checkpoint["epoch"]
+        epochs = range(epoch, num_epochs + 1)
+        best_metric = checkpoint["best_metric"]
+        epochs_since_best = checkpoint["epochs_since_best"]
+        best_model_path = checkpoint["best_model_path"]
+        last_model_path = checkpoint["last_model_path"]
+
+        print(f"""
+Loaded checkpoint -- Launching training from epoch {epoch} with best metric
+so far {best_metric} seen {epochs_since_best} epochs ago.
+""")
+
+    for epoch in epochs:
+        info_train = run_epoch(
+            phase=TRAIN,
+            epoch=epoch,
+            model=model,
+            dataloader=train_dataloader,
+            logits_large_margins=logits_large_margins,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            criterion=loss_fn,
+            fn_metrics=metrics,
+            device=device,
+            feature=feature,
+            target=target,
+            use_log_prob=(criterion == Criterion.CTC),
+        )
+
+        mlflow.log_metrics(
+            {
+                f"train_{metric}": value
+                for metric, value in info_train.items()
+            },
+            step=epoch
+        )
+
+        info_valid = run_epoch(
+            phase=VALID,
+            epoch=epoch,
+            model=model,
+            dataloader=valid_dataloader,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            criterion=loss_fn,
+            fn_metrics=metrics,
+            device=device,
+            feature=feature,
+            target=target,
+            use_log_prob=(criterion == Criterion.CTC),
+        )
+
+        mlflow.log_metrics(
+            {
+                f"valid_{metric}": value
+                for metric, value in info_valid.items()
+            },
+            step=epoch
+        )
+
+        if 1 - info_valid["auroc"] < best_metric:
+            best_metric = 1 - info_valid["auroc"]
+            epochs_since_best = 0
+            torch.save(model.state_dict(), best_model_path)
+            mlflow.log_artifact(best_model_path)
+        else:
+            epochs_since_best += 1
+
+        torch.save(model.state_dict(), last_model_path)
+        mlflow.log_artifact(last_model_path)
+
+        checkpoint = {
+            "epoch": epoch,
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            # "scheduler": scheduler.state_dict(),
+            "best_metric": best_metric,
+            "epochs_since_best": epochs_since_best,
+            "best_model_path": best_model_path,
+            "last_model_path": last_model_path
+        }
+        torch.save(checkpoint, save_checkpoint_path)
+        mlflow.log_artifact(save_checkpoint_path)
+
+        print(f"""
+Finished training epoch {epoch}
+Best metric: {best_metric}, Epochs since best: {epochs_since_best}
+""")
+
+        if epochs_since_best > patience:
+            break
+
+    test_sequences = sequences_from_dict(datadir, test_seq_dict)
+    test_dataset = PhonemeRecognitionDataset(
+        datadir=datadir,
+        database=database,
+        sequences=test_sequences,
+        vocabulary=vocabulary,
+        framerate=DatasetConfig.FRAMERATE,
+        sync_shift=DatasetConfig.SYNC_SHIFT,
+        features=[feature],
+        tmp_dir=TMP_DIR,
+    )
+    test_dataloader = DataLoader(
+        test_dataset,
+        batch_size=batch_size,
+        shuffle=False,
+        num_workers=num_workers,
+        worker_init_fn=set_seeds,
+        collate_fn=partial(collate_fn, features_names=[feature]),
+    )
+
+    if pretrained:
+        best_model = DeepSpeech2.load_librispeech_model(
+            model_params["num_features"],
+            adapter_out_features=model_params.get("adapter_out_features")
+        )
+        hidden_size = model_params["rnn_hidden_size"]
+        best_model.classifier[-1] = nn.Linear(hidden_size, len(vocabulary))
+    else:
+        model = DeepSpeech2(num_classes=len(vocabulary), **model_params)
+    best_model_state_dict = torch.load(best_model_path, map_location=device)
+    best_model.load_state_dict(best_model_state_dict)
+    best_model.to(device)
+
+    info_test = run_test(
+        model=best_model,
+        dataloader=test_dataloader,
+        fn_metrics=metrics,
+        device=device,
+        feature=feature,
+        target=target,
+    )
+    print(info_test)
+
+    mlflow.log_metrics(
+        {
+            f"test_{metric}": value
+            for metric, value in info_test.items()
+        },
+        step=epoch
+    )
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", dest="config_filepath")
+    args = parser.parse_args()
+
+    with open(args.config_filepath) as f:
+        cfg = yaml.safe_load(f)
+
+    with mlflow.start_run():
+        mlflow.log_params(cfg)
+        mlflow.log_dict(cfg, "config.json")
+
+        main(**cfg)
