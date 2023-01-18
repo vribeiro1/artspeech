@@ -8,18 +8,16 @@ import torch
 import torch.nn.functional as F
 
 from functools import lru_cache
-from glob import glob
-from tgt import read_textgrid
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
 from tqdm import tqdm
 from vt_tools import UPPER_INCISOR
 from vt_shape_gen.helpers import load_articulator_array
 
+from database_collector import GottingenDatabaseCollector
 from phoneme_to_articulation.tail_clipper import TailClipper
 from phoneme_to_articulation.transforms import Normalize
 from settings import BASE_DIR, DatasetConfig
-from video import Video
 
 phoneme_weights = {
     "l": 3,
@@ -41,75 +39,14 @@ def cached_load_articulator_array(filepath, norm_value):
     return torch.from_numpy(load_articulator_array(filepath, norm_value)).type(torch.float)
 
 
-def collect_data(datadir, sequences, sync_shift, framerate):
-    data = []
-    for subject, sequence in tqdm(sequences, desc="Collecting data"):
-        seq_dir = os.path.join(datadir, subject, sequence)
-
-        # Collect all of the articulators files
-        articulators_filepaths = glob(os.path.join(seq_dir, "inference_contours", "*.npy"))
-        # Since each frame have more than one articulator, we extract the frame ids and remove
-        # repetitions.
-        articulators_basenames = map(os.path.basename, articulators_filepaths)
-        articulators_filenames = map(lambda s: s.split(".")[0], articulators_basenames)
-        frame_ids = sorted(set(map(lambda s: s.split("_")[0], articulators_filenames)))
-
-        wav_filepath = os.path.join(seq_dir, f"vol_{subject}_{sequence}.wav")
-
-        video = Video(
-            frames_filepaths=frame_ids[sync_shift:],
-            audio_filepath=wav_filepath,
-            framerate=framerate
-        )
-
-        textgrid_filepath = os.path.join(seq_dir, f"vol_{subject}_{sequence}.textgrid")
-        textgrid = read_textgrid(textgrid_filepath)
-        phone_tier = textgrid.get_tier_by_name("PhonTier")
-        sentence_tier = textgrid.get_tier_by_name("SentenceTier")
-
-        for sentence_interval in sentence_tier.intervals:
-            sentence_phone_intervals = filter(lambda phone: (
-                phone.start_time >= sentence_interval.start_time and
-                phone.end_time <= sentence_interval.end_time
-            ), phone_tier)
-
-            sentence_phone_intervals = sorted(
-                sentence_phone_intervals,
-                key=lambda interval: interval.start_time
-            )
-
-            sentence_phonemes = []
-            sentence_frame_ids = []
-            for phone_interval in sentence_phone_intervals:
-                _, phoneme_frame_ids = video.get_frames_interval(phone_interval.start_time, phone_interval.end_time)
-                repeated_phoneme = [phone_interval.text] * len(phoneme_frame_ids)
-
-                sentence_frame_ids.extend(phoneme_frame_ids)
-                sentence_phonemes.extend(repeated_phoneme)
-
-            start_str = "%.04f" % sentence_interval.start_time
-            end_str = "%.04f" % sentence_interval.end_time
-            sentence_name = f"vol_{subject}_{sequence}-{start_str}_{end_str}"
-
-            data.append({
-                "subject": subject,
-                "sequence": sequence,
-                "sentence_name": sentence_name,
-                "n_frames": len(sentence_frame_ids),
-                "frame_ids": sentence_frame_ids,
-                "phonemes": sentence_phonemes
-            })
-
-    return data
-
-
 class PrincipalComponentsAutoencoderDataset(Dataset):
     def __init__(self, datadir, sequences, articulator, sync_shift, framerate, clip_tails=True):
         self.datadir = datadir
         self.articulator = articulator
         self.clip_tails = clip_tails
 
-        sentence_data = collect_data(datadir, sequences, sync_shift, framerate)
+        collector = GottingenDatabaseCollector(datadir)
+        sentence_data = collector.collect_data(sequences, sync_shift, framerate)
         data = []
         for sentence in sentence_data:
             for frame_id, phoneme in zip(sentence["frame_ids"], sentence["phonemes"]):

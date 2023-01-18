@@ -5,17 +5,15 @@ import os
 import torch
 
 from functools import lru_cache
-from glob import glob
-from tgt.io import read_textgrid
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
 from tqdm import tqdm
 from vt_shape_gen.helpers import load_articulator_array
 from vt_tools import UPPER_INCISOR
 
+from database_collector import GottingenDatabaseCollector
 from phoneme_to_articulation.tail_clipper import TailClipper
 from settings import DatasetConfig
-from video import Video
 
 phonemes_per_TV = {
     "LA": lambda p: p in ["p", "b", "m"],
@@ -63,72 +61,6 @@ def cached_load_articulator_array(filepath, norm_value):
     return torch.from_numpy(load_articulator_array(filepath, norm_value)).type(torch.float)
 
 
-def collect_data(datadir, sequences, sync_shift, framerate, required_articulators):
-    data = []
-    for subject, sequence in tqdm(sequences, desc="Collecting data"):
-        seq_dir = os.path.join(datadir, subject, sequence)
-
-        # Collect all of the articulators files
-        articulators_filepaths = glob(os.path.join(seq_dir, "inference_contours", "*.npy"))
-        # Since each frame have more than one articulator, we extract the frame ids and remove
-        # repetitions.
-        articulators_basenames = map(os.path.basename, articulators_filepaths)
-        articulators_filenames = map(lambda s: s.split(".")[0], articulators_basenames)
-        frame_ids = sorted(set(map(lambda s: s.split("_")[0], articulators_filenames)))
-
-        wav_filepath = os.path.join(seq_dir, f"vol_{subject}_{sequence}.wav")
-
-        video = Video(
-            frames_filepaths=frame_ids[sync_shift:],
-            audio_filepath=wav_filepath,
-            framerate=framerate
-        )
-
-        textgrid_filepath = os.path.join(seq_dir, f"vol_{subject}_{sequence}.textgrid")
-        textgrid = read_textgrid(textgrid_filepath)
-        phone_tier = textgrid.get_tier_by_name("PhonTier")
-        sentence_tier = textgrid.get_tier_by_name("SentenceTier")
-
-        for sentence_interval in sentence_tier.intervals:
-            sentence_phone_intervals = funcy.lfilter(lambda phone: (
-                phone.start_time >= sentence_interval.start_time and
-                phone.end_time <= sentence_interval.end_time
-            ), phone_tier)
-
-            sentence_phonemes = []
-            sentence_frame_ids = []
-            for phone_interval in sentence_phone_intervals:
-                _, phoneme_frame_ids = video.get_frames_interval(phone_interval.start_time, phone_interval.end_time)
-                repeated_phoneme = [phone_interval.text] * len(phoneme_frame_ids)
-
-                sentence_frame_ids.extend(phoneme_frame_ids)
-                sentence_phonemes.extend(repeated_phoneme)
-
-            has_all_required_articulators = all([
-                all([
-                    os.path.exists(
-                        os.path.join(seq_dir, "inference_contours", f"{frame_id}_{articulator}.npy")
-                    ) for articulator in required_articulators
-                ]) for frame_id in sentence_frame_ids
-            ])
-
-            start_str = "%.04f" % sentence_interval.start_time
-            end_str = "%.04f" % sentence_interval.end_time
-            sentence_name = f"vol_{subject}_{sequence}-{start_str}_{end_str}"
-
-            data.append({
-                "subject": subject,
-                "sequence": sequence,
-                "sentence_name": sentence_name,
-                "n_frames": len(sentence_frame_ids),
-                "frame_ids": sentence_frame_ids,
-                "phonemes": sentence_phonemes,
-                "has_all": has_all_required_articulators
-            })
-
-    return data
-
-
 class ArtSpeechDataset(Dataset):
     def __init__(
         self, datadir, sequences, vocabulary, articulators, n_samples=50,
@@ -143,7 +75,8 @@ class ArtSpeechDataset(Dataset):
         self.clip_tails = clip_tails
         self.TVs = TVs or []
 
-        data = collect_data(datadir, sequences, sync_shift, framerate, articulators)
+        collector = GottingenDatabaseCollector(datadir)
+        data = collector.collect_data(sequences, sync_shift, framerate, articulators)
         self.data = funcy.lfilter(lambda d: d["has_all"], data)
 
     def prepare_articulator_array(self, subject, sequence, frame_id, articulator):
