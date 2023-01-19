@@ -135,12 +135,13 @@ class DeepSpeech2(nn.Module):
             ) for _ in range(num_rnn_layers)
         ])
 
-        self.classifier = nn.Sequential(
+        self.feature_extractor = nn.Sequential(
             nn.Linear(rnn_hidden_size, rnn_hidden_size),
             nn.GELU(),
-            nn.Dropout(dropout),
-            nn.Linear(rnn_hidden_size, num_classes)
         )
+
+        self.dropout = nn.Dropout(dropout)
+        self.classifier = nn.Linear(rnn_hidden_size, num_classes)
 
     @staticmethod
     def get_noise_logits(x, factor):
@@ -153,11 +154,15 @@ class DeepSpeech2(nn.Module):
         out = norm_fn(x, dim=-1)
         return out
 
-    def forward(self, x, lengths):
+    def forward(self, x, lengths, return_features=False):
         """
         Args:
-            x (torch.tensor): torch.tensor of shape (B, C, D, T)
-            lengths (torch.tensor): torch.tensor of shape (B,)
+            x (torch.tensor): Tensor of shape (B, C, D, T)
+            lengths (torch.tensor): Tensor of shape (B,)
+
+        Return:
+            outputs (torch.tensor): Tensor of shape (batch_size, time, classes)
+            features (torch.tensor): Tensor of shape (batch_size, time, dim)
         """
         if self.adapter is not None:
             x = self.adapter(x)
@@ -173,8 +178,14 @@ class DeepSpeech2(nn.Module):
         for recurrent_layer in self.recurrent_layers:
             out = recurrent_layer(out, lengths)
         out = out.permute(1, 0, 2)  # batch, time, features
-        out = self.classifier(out)
-        return out
+
+        features = self.feature_extractor(out)
+        out = self.classifier(self.dropout(features))
+
+        if return_features:
+            return out, features
+        else:
+            return out
 
     @classmethod
     def load_librispeech_model(cls, num_features=80, adapter_out_features=None):

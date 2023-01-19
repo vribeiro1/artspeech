@@ -173,7 +173,7 @@ def main(
             adapter_out_features=model_params.get("adapter_out_features")
         )
         hidden_size = model_params["rnn_hidden_size"]
-        model.classifier[-1] = nn.Linear(hidden_size, len(vocabulary))
+        model.classifier = nn.Linear(hidden_size, len(vocabulary))
     else:
         model = DeepSpeech2(num_classes=len(vocabulary), **model_params)
 
@@ -371,7 +371,7 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
             adapter_out_features=model_params.get("adapter_out_features")
         )
         hidden_size = model_params["rnn_hidden_size"]
-        best_model.classifier[-1] = nn.Linear(hidden_size, len(vocabulary))
+        best_model.classifier = nn.Linear(hidden_size, len(vocabulary))
     else:
         model = DeepSpeech2(num_classes=len(vocabulary), **model_params)
     best_model_state_dict = torch.load(best_model_path, map_location=device)
