@@ -1,15 +1,36 @@
 import pdb
+import matplotlib.pyplot as plt
 import numpy as np
+import os
 import torch
+import torch.nn as nn
 
+from enum import Enum
 from tqdm import tqdm
+from sklearn.manifold import TSNE
 
-from phoneme_recognition.datasets import Feature, Target
-from settings import TRAIN
+from phoneme_recognition.metrics import CrossEntropyLoss
+from settings import BASE_DIR, TRAIN
 
 SIL = "#"
 UNKNOWN = "<unk>"
 BLANK = "<blank>"
+
+class Criterion(Enum):
+    CE = CrossEntropyLoss
+    CTC = nn.CTCLoss
+
+
+class Feature(Enum):
+    MELSPEC = "melspec"
+    VOCAL_TRACT = "vocal_tract"
+    AIR_COLUMN = "air_column"
+
+
+class Target(Enum):
+    CTC = "ctc_target"
+    ACOUSTIC = "acoustic_target"
+    ARTICULATORY = "articulatory_target"
 
 
 def run_epoch(

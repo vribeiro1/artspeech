@@ -1,7 +1,6 @@
 import pdb
 
 import argparse
-import funcy
 import logging
 import mlflow
 import numpy as np
@@ -12,8 +11,6 @@ import torch.nn as nn
 import ujson
 import yaml
 
-from collections import namedtuple
-from enum import Enum
 from functools import partial
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
@@ -21,8 +18,18 @@ from torch.utils.data import DataLoader
 from torchaudio.models.decoder import ctc_decoder
 
 from helpers import set_seeds, sequences_from_dict
-from phoneme_recognition import run_epoch, run_test, SIL, BLANK, UNKNOWN
-from phoneme_recognition.datasets import Feature, Target, PhonemeRecognitionDataset, collate_fn
+from phoneme_recognition import (
+    run_epoch,
+    run_test,
+    Criterion,
+    Feature,
+    Target,
+    SIL,
+    BLANK,
+    UNKNOWN
+)
+from phoneme_recognition.datasets import  PhonemeRecognitionDataset, collate_fn
+from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC
 from settings import DatasetConfig, BASE_DIR, TRAIN, VALID, TEST
@@ -32,104 +39,6 @@ TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
 RESULTS_DIR = os.path.join(TMP_DIR, "results")
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
-
-Hypothesis = namedtuple("Hypothesis", ["tokens"])
-
-
-class CrossEntropyLoss(nn.Module):
-    def __init__(self, *args, class_weights=None, **kwargs):
-        super().__init__()
-
-        if class_weights is None:
-            class_weights = {}
-        else:
-            if isinstance(class_weights, str):
-                with open(class_weights) as f:
-                    class_weights = ujson.load(f)
-
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # Add a 1.0 weight for the unknown class
-        weight = torch.tensor(
-            [1.0] +
-            [w for _, w in sorted(
-                class_weights.items(),
-                key=lambda t: t[0]
-            )]
-        ).to(device)
-        self.ce = nn.CrossEntropyLoss(*args, weight=weight, **kwargs)
-
-    @staticmethod
-    def get_pad_mask(inputs, lengths):
-        if len(inputs.shape) == 2:
-            bs, time = inputs.shape
-        elif len(inputs.shape) == 3:
-            bs, time, _ = inputs.shape
-        else:
-            raise Exception("invalid inputs")
-
-        cumsum = torch.cumsum(torch.ones((bs, time)), dim=1)
-        lengths = lengths.repeat(time, 1).T
-        pad_mask = (cumsum <= lengths).type(torch.long)
-        pad_mask = pad_mask.to(inputs.device)
-        return pad_mask
-
-    def forward(self, inputs, targets, inputs_lengths, targets_lengths):
-        inputs = inputs.permute(1, 0, 2)
-        bs, time, classes = inputs.shape
-
-        inputs_pad_mask = self.get_pad_mask(inputs, inputs_lengths)
-        inputs_pad_mask = torch.flatten(inputs_pad_mask, start_dim=0, end_dim=1)
-        inputs = torch.flatten(inputs, start_dim=0, end_dim=1)
-        inputs = inputs[inputs_pad_mask == 1]
-
-        targets_pad_mask = self.get_pad_mask(targets, targets_lengths)
-        targets_pad_mask = torch.flatten(targets_pad_mask, start_dim=0, end_dim=1)
-        targets = torch.flatten(targets, start_dim=0, end_dim=1)
-        targets = targets[targets_pad_mask == 1]
-        out = self.ce(inputs, targets)
-
-        return out
-
-
-class Criterion(Enum):
-    CE = CrossEntropyLoss
-    CTC = nn.CTCLoss
-
-
-class TopKDecoder:
-    def __init__(
-        self,
-        tokens,
-        sil_token=None,
-        blank_token=None,
-        unk_word=None,
-        **kwargs,
-    ):
-        self.num_tokens = len(tokens)
-        self.sil_token = sil_token
-        self.blank_token = blank_token
-        self.unk_word = unk_word
-
-    def filter_blank(self, indices):
-        if self.blank_token is None:
-            return indices
-
-        non_blank_indices = funcy.lfilter(lambda i: i != self.blank_token, indices)
-        return non_blank_indices
-
-    def __call__(self, emissions, lengths):
-        """
-        Args:
-            emissions (torch.tensor): Tensor of shape (batch, time, classes) after softmax
-            lengths (torch.tensor): Tensor of shape (batch,)
-        """
-        top_list = torch.topk(emissions, k=1, dim=-1).indices
-        top_list = top_list.squeeze(dim=-1)
-        results = [
-            [Hypothesis(tokens=self.filter_blank(top))]
-            for top in top_list
-        ]
-        return results
 
 
 def main(

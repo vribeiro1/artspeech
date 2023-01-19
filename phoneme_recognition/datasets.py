@@ -29,6 +29,7 @@ from vt_tools import (
 )
 
 from database_collector import DATABASE_COLLECTORS
+from phoneme_recognition import Feature, Target
 from phoneme_to_articulation.tail_clipper import TailClipper
 from settings import BASE_DIR
 from vocal_tract_loader import VocalTractShapeLoader
@@ -52,17 +53,6 @@ ARTICULATORS = [
 def dynamic_range_compression(x, C=1, clip_val=1e-5):
     return torch.log(torch.clamp(x, min=clip_val) * C)
 
-
-class Feature(Enum):
-    MELSPEC = "melspec"
-    VOCAL_TRACT = "vocal_tract"
-    AIR_COLUMN = "air_column"
-
-
-class Target(Enum):
-    CTC = "ctc_target"
-    ACOUSTIC = "acoustic_target"
-    ARTICULATORY = "articulatory_target"
 
 class PhonemeRecognitionDataset(Dataset):
     def __init__(
