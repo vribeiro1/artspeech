@@ -12,8 +12,17 @@ from torch.utils.data import DataLoader
 from torchaudio.models.decoder import ctc_decoder
 
 from helpers import set_seeds, sequences_from_dict
-from phoneme_recognition import run_test, SIL, BLANK, UNKNOWN
-from phoneme_recognition.datasets import Feature, PhonemeRecognitionDataset, collate_fn
+from phoneme_recognition import (
+    run_test,
+    Criterion,
+    Feature,
+    Target,
+    SIL,
+    BLANK,
+    UNKNOWN
+)
+from phoneme_recognition.datasets import PhonemeRecognitionDataset, collate_fn
+from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_recognition.metrics import EditDistance
 from settings import DatasetConfig, BASE_DIR
@@ -33,28 +42,35 @@ def main(
     vocab_fpath,
     pretrained,
     feature,
+    loss,
     model_params,
+    target,
     state_dict_filepath,
-    num_workers=0
+    num_workers=0,
+    save_dir=None,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
 
-    vocabulary = {
-        BLANK: 0,
-        UNKNOWN: 1
-    }
+    feature = Feature(feature)
+    target = Target(target)
+    criterion = Criterion[loss]
+    criterion_cls = criterion.value
+
+    default_tokens = [BLANK, UNKNOWN] if criterion == Criterion.CTC else [UNKNOWN]
+    vocabulary = {token: i for i, token in enumerate(default_tokens)}
     with open(vocab_fpath) as f:
         tokens = ujson.load(f)
-        for i, token in enumerate(tokens, start=2):
+        for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
 
     tokens = [k for k, v in sorted(vocabulary.items(), key=lambda t: t[1])]
-    decoder = ctc_decoder(
+    decoder_fn = ctc_decoder if criterion == Criterion.CTC else TopKDecoder
+    decoder = decoder_fn(
         lexicon=None,
         tokens=tokens,
         sil_token=SIL,
-        blank_token=BLANK,
+        blank_token=BLANK if criterion == Criterion.CTC else None,
         unk_word=UNKNOWN,
     )
 
@@ -64,15 +80,13 @@ def main(
             adapter_out_features=model_params.get("adapter_out_features")
         )
         hidden_size = model_params["rnn_hidden_size"]
-        model.classifier[-1] = nn.Linear(hidden_size, len(vocabulary))
+        model.classifier = nn.Linear(hidden_size, len(vocabulary))
     else:
         model = DeepSpeech2(num_classes=len(vocabulary), **model_params)
 
     state_dict = torch.load(state_dict_filepath, map_location=torch.device("cpu"))
     model.load_state_dict(state_dict)
     model.to(device)
-
-    feature = Feature(feature)
 
     sequences = sequences_from_dict(datadir, seq_dict)
     dataset = PhonemeRecognitionDataset(
@@ -103,7 +117,9 @@ def main(
         dataloader=dataloader,
         fn_metrics=metrics,
         device=device,
-        feature=feature
+        feature=feature,
+        target=target,
+        save_dir=save_dir
     )
     print(info_test)
 

@@ -294,6 +294,7 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
         device=device,
         feature=feature,
         target=target,
+        save_dir=RESULTS_DIR
     )
     print(info_test)
 
