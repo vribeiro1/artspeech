@@ -1,5 +1,7 @@
 import pdb
 import torch
+import torch.nn as nn
+import ujson
 
 from torchmetrics.classification import MulticlassAccuracy, MulticlassAUROC
 from torchmetrics.functional import word_error_rate
@@ -87,8 +89,8 @@ class EditDistance:
 
 
 class Accuracy:
-    def __init__(self, num_classes):
-        self.accuracy = MulticlassAccuracy(num_classes=num_classes)
+    def __init__(self, num_classes, average="macro"):
+        self.accuracy = MulticlassAccuracy(num_classes=num_classes, average=average)
 
     @staticmethod
     def get_pad_mask(inputs, lengths):
@@ -106,8 +108,6 @@ class Accuracy:
         return pad_mask
 
     def __call__(self, emissions, targets, inputs_lengths, targets_lengths):
-        emissions = emissions  # (B, T, C)
-
         emissions = emissions.detach().cpu()
         emissions_pad_mask = self.get_pad_mask(emissions, inputs_lengths)
         emissions_pad_mask = torch.flatten(emissions_pad_mask, start_dim=0, end_dim=1)
@@ -125,8 +125,8 @@ class Accuracy:
 
 
 class AUROC:
-    def __init__(self, num_classes):
-        self.auroc = MulticlassAUROC(num_classes=num_classes)
+    def __init__(self, num_classes, average="macro"):
+        self.auroc = MulticlassAUROC(num_classes=num_classes, average=average)
 
     @staticmethod
     def get_pad_mask(inputs, lengths):
