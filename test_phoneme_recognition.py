@@ -24,7 +24,7 @@ from phoneme_recognition import (
 from phoneme_recognition.datasets import PhonemeRecognitionDataset, collate_fn
 from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
-from phoneme_recognition.metrics import EditDistance
+from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC
 from settings import DatasetConfig, BASE_DIR
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
@@ -94,8 +94,7 @@ def main(
         database=database,
         sequences=sequences,
         vocabulary=vocabulary,
-        framerate=DatasetConfig.FRAMERATE,
-        sync_shift=DatasetConfig.SYNC_SHIFT,
+        dataset_config=DatasetConfig,
         features=[feature],
         tmp_dir=TMP_DIR,
     )
@@ -109,7 +108,10 @@ def main(
     )
 
     metrics = {
-        "edit_distance": EditDistance(decoder),
+        # "edit_distance": EditDistance(decoder),
+        "accuracy": Accuracy(len(vocabulary)),
+        "accuracy_per_class": Accuracy(len(vocabulary), average=None),
+        "auroc": AUROC(len(vocabulary))
     }
 
     info_test = run_test(

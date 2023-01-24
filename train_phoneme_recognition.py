@@ -97,8 +97,7 @@ def main(
         database=database,
         sequences=train_sequences,
         vocabulary=vocabulary,
-        framerate=DatasetConfig.FRAMERATE,
-        sync_shift=DatasetConfig.SYNC_SHIFT,
+        dataset_config=DatasetConfig,
         features=[feature],
         tmp_dir=TMP_DIR,
     )
@@ -117,8 +116,7 @@ def main(
         database=database,
         sequences=valid_sequences,
         vocabulary=vocabulary,
-        framerate=DatasetConfig.FRAMERATE,
-        sync_shift=DatasetConfig.SYNC_SHIFT,
+        dataset_config=DatasetConfig,
         features=[feature],
         tmp_dir=TMP_DIR,
     )
@@ -184,7 +182,6 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             optimizer=optimizer,
             scheduler=scheduler,
             criterion=loss_fn,
-            fn_metrics=metrics,
             device=device,
             feature=feature,
             target=target,
@@ -260,8 +257,7 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
         database=database,
         sequences=test_sequences,
         vocabulary=vocabulary,
-        framerate=DatasetConfig.FRAMERATE,
-        sync_shift=DatasetConfig.SYNC_SHIFT,
+        dataset_config=DatasetConfig,
         features=[feature],
         tmp_dir=TMP_DIR,
     )
@@ -297,6 +293,10 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
         save_dir=RESULTS_DIR
     )
     print(info_test)
+
+    mlflow.log_artifact()
+    mlflow.log_artifact(os.path.join(RESULTS_DIR, "confusion_matrix.pdf"))
+    mlflow.log_artifact(os.path.join(RESULTS_DIR, "model_features.pdf"))
 
     mlflow.log_metrics(
         {

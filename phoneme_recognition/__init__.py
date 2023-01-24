@@ -2,12 +2,14 @@ import pdb
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import seaborn as sns
 import torch
 import torch.nn as nn
 
 from enum import Enum
 from tqdm import tqdm
 from sklearn.manifold import TSNE
+from sklearn.metrics import confusion_matrix
 
 from phoneme_recognition.metrics import CrossEntropyLoss
 from settings import TRAIN
@@ -15,6 +17,22 @@ from settings import TRAIN
 SIL = "#"
 UNKNOWN = "<unk>"
 BLANK = "<blank>"
+
+PHONETIC_FAMILIES = {
+    "fricatives": ["f", "v", "S", "Z", "s"],
+    "plosives": [
+        "p", "b", "b-trille", "t",
+        "d", "n", "k", "g"
+    ],
+    "laterals": ["l"],
+    "nasals": ["m", "U~/", "a~", "o~"],
+    "vowels": [
+        "a", "e", "i", "ih",
+        "o", "oh", "u", "uh",
+        "y", "yh", "E", "E/",
+        "O", "O/", "2", "9"
+    ]
+}
 
 class Criterion(Enum):
     CE = CrossEntropyLoss
@@ -129,9 +147,26 @@ def run_test(
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    vocabulary = dataloader.dataset.vocabulary
+    model_predictions = torch.zeros(size=(0,))
     model_features = torch.zeros(size=(0, 128))
     model_targets = torch.zeros(size=(0,))
-    metrics_values = {metric_name: [] for metric_name in fn_metrics}
+
+    averaged_metrics = [
+        metric_name for metric_name in fn_metrics
+        if "_per_class" not in metric_name
+    ]
+    per_class_metrics = [
+        metric_name for metric_name in fn_metrics
+        if "_per_class" in metric_name
+    ]
+
+    metrics_values = {metric_name: [] for metric_name in averaged_metrics}
+    for metric_name in per_class_metrics:
+        metrics_values[metric_name] = {}
+        for i in range(len(vocabulary)):
+            metrics_values[metric_name][i] = []
+
     progress_bar = tqdm(dataloader, desc=f"Running test")
     for batch in progress_bar:
         inputs = batch[feature.value]
@@ -141,38 +176,69 @@ def run_test(
 
         inputs = inputs.to(device)
         targets = targets.to(device)
-
         with torch.set_grad_enabled(False):
             outputs, features = model(inputs, input_lengths, return_features=True)
-
         outputs = model.get_normalized_outputs(outputs, use_log_prob=False)
-        for metric_name, fn_metric in fn_metrics.items():
+
+        for metric_name in averaged_metrics:
+            fn_metric = fn_metrics[metric_name]
             metric_val = fn_metric(outputs, targets, input_lengths, target_lengths)
             metrics_values[metric_name].append(metric_val.item())
 
-        bs, time, dim = features.shape
+        for metric_name in per_class_metrics:
+            fn_metric = fn_metrics[metric_name]
+            metric_val = fn_metric(outputs, targets, input_lengths, target_lengths)
+            for i in range(len(vocabulary)):
+                metrics_values[metric_name][i].append(metric_val[i].item())
+
         features = features.detach().cpu()
         features = [feat[:length] for feat, length in zip(features, input_lengths)]
+        model_features = torch.cat([model_features] + features, dim=0)
+
         targets = targets.detach().cpu()
         targets = [tgt[:length] for tgt, length in zip(targets, target_lengths)]
-        model_features = torch.cat([model_features] + features, dim=0)
         model_targets = torch.cat([model_targets] + targets, dim=0)
+
+        outputs = outputs.detach().cpu()
+        predictions = torch.topk(outputs, k=1, dim=-1).indices
+        predictions = [pred[:length] for pred, length in zip(predictions, input_lengths)]
+        model_predictions = torch.cat([model_predictions] + predictions, dim=0)
 
     if save_dir is not None:
         save_filepath = os.path.join(save_dir, "model_features.pdf")
+
+        class_map = {}
+        for family, tokens in PHONETIC_FAMILIES.items():
+            for token in tokens:
+                class_map[token] = vocabulary[token]
+
         plot_features(
             features=model_features.numpy(),
             targets=model_targets.numpy(),
-            vocabulary=dataloader.dataset.vocabulary,
+            class_map=class_map,
             max_items_per_class=100,
             save_filepath=save_filepath,
         )
 
+        save_filepath = os.path.join(save_dir, "confusion_matrix.pdf")
+        plot_confusion_matrix(
+            predictions=model_predictions.numpy(),
+            targets=model_targets.numpy(),
+            save_filepath=save_filepath,
+            vocabulary=vocabulary,
+            groups=PHONETIC_FAMILIES,
+            normalize="true",
+        )
+
     info = {}
     info.update({
-        metric_name: np.mean(values)
-        for metric_name, values in  metrics_values.items()
+        metric_name: np.mean(metrics_values[metric_name])
+        for metric_name in averaged_metrics
     })
+    for metric_name in per_class_metrics:
+        info[metric_name] = {}
+        for i in range(len(vocabulary)):
+            info[metric_name][i] = np.mean(metrics_values[metric_name][i])
 
     return info
 
@@ -201,13 +267,93 @@ def plot_features(
     tsne = TSNE(n_components=2)
     tsne_features = tsne.fit_transform(plot_features)  # (N, 2)
 
-    cmap = plt.get_cmap("seismic")
-    colors = [c / len(class_map) for c in plot_targets]
-
+    cmap = plt.get_cmap("hsv")
     fig, ax = plt.subplots(figsize=(10, 10))
-    scatter = ax.scatter(*tsne_features.T, alpha=0.7, c=colors, cmap="seismic")
+
+    for class_, i in sorted(class_map.items(), key=lambda t: t[1]):
+        features = tsne_features[plot_targets == i]
+        if len(features) == 0:
+            continue
+
+        color = cmap(i / len(class_map))
+        scatter = ax.scatter(
+            *features.T,
+            alpha=0.7,
+            c=[color] * len(features),
+            label=class_
+        )
+
     ax.xaxis.set_ticklabels([])
     ax.yaxis.set_ticklabels([])
+    handles, labels = ax.get_legend_handles_labels()
+
+    plt.tight_layout()
+    plt.savefig(save_filepath)
+
+    fig_legend = plt.figure(figsize=(10, 5))
+    axi = fig_legend.add_subplot(111)
+
+    axi.legend(
+        handles,
+        labels,
+        loc="center",
+        ncol=5,
+        fontsize=22,
+        markerscale=2,
+    )
+    axi.axis("off")
+    fig_legend.canvas.draw()
+
+    filename, _ = os.path.basename(save_filepath).split(".")
+    fig_filepath = os.path.join(
+        os.path.dirname(save_filepath),
+        f"{filename}_legend.pdf"
+    )
+    plt.tight_layout()
+    fig_legend.savefig(fig_filepath)
+
+
+def plot_confusion_matrix(
+    predictions,
+    targets,
+    save_filepath,
+    vocabulary,
+    groups=None,
+    normalize=None
+):
+    vocabulary_transposed = {i: token for token, i in vocabulary.items()}
+    target_tokens = [vocabulary_transposed.get(i.item(), UNKNOWN) for i in targets.astype(np.int)]
+    predicted_tokens = [vocabulary_transposed.get(i.item(), UNKNOWN) for i in predictions.astype(np.int)]
+
+    if groups is not None:
+        groups_transposed = {}
+        for group_name, symbols in groups.items():
+            for symbol in symbols:
+                groups_transposed[symbol] = group_name
+
+        target_tokens = [groups_transposed.get(symbol, "other") for symbol in target_tokens]
+        predicted_tokens = [groups_transposed.get(symbol, "other") for symbol in predicted_tokens]
+
+    labels = sorted(groups.keys()) + ["other"]
+    conf_mtx = confusion_matrix(target_tokens, predicted_tokens, normalize=normalize, labels=labels)
+
+    fig, ax = plt.subplots(figsize=(10, 10))
+    sns.heatmap(
+        conf_mtx,
+        xticklabels=labels,
+        yticklabels=labels,
+        annot=True,
+        cbar=False,
+        square=True,
+        ax=ax,
+        fmt=".3f",
+        annot_kws={"fontsize": 22}
+    )
+
+    ax.set_xlabel("Predicted Phonemes", fontsize=28)
+    ax.set_ylabel("True Phonemes", fontsize=28)
+    ax.tick_params(axis="both", which="major", labelsize=24)
+
 
     plt.tight_layout()
     plt.savefig(save_filepath)
