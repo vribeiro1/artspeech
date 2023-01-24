@@ -32,7 +32,7 @@ from database_collector import DATABASE_COLLECTORS
 from phoneme_recognition import Feature, Target
 from phoneme_to_articulation.tail_clipper import TailClipper
 from settings import BASE_DIR
-from vocal_tract_loader import VocalTractShapeLoader
+from vocal_tract_loader import VocalTractShapeLoader, cached_load_articulator_array
 
 ARTICULATORS = [
     # ARYTENOID_MUSCLE,
@@ -61,8 +61,7 @@ class PhonemeRecognitionDataset(Dataset):
         database: str,
         sequences,
         vocabulary,
-        framerate: int,
-        sync_shift: int,
+        dataset_config,
         features: List[Feature],
         sample_rate: Optional[int] = 16000,
         n_fft: Optional[int] = 1024,
@@ -79,6 +78,7 @@ class PhonemeRecognitionDataset(Dataset):
         super().__init__()
 
         self.datadir = datadir
+        self.dataset_config = dataset_config
         self.vocabulary = vocabulary
         self.sil_token = sil_token
         self.blank_token = blank_token
@@ -138,11 +138,34 @@ class PhonemeRecognitionDataset(Dataset):
 
         return melspec, melspec_length
 
+    def get_coord_system_reference(self, subject, sequence, frame_id):
+        reference_filepath = os.path.join(
+            self.datadir,
+            subject,
+            sequence,
+            "inference_contours",
+            f"{frame_id}_{UPPER_INCISOR}.npy"
+        )
+        reference_array = cached_load_articulator_array(
+            reference_filepath,
+            norm_value=self.dataset_config.RES
+        ).T
+
+        reference = reference_array[:, -1]
+        reference = reference.unsqueeze(dim=-1)
+        return reference
+
     def load_air_column(self, subject, sequence, frame_ids, skip_missing=False):
         sentence_targets = torch.zeros(size=(0, 2, 2, 100))
         for frame_id in frame_ids:
+            coord_system_reference = self.get_coord_system_reference(subject, sequence, frame_id)
             filepath = os.path.join(self.datadir, subject, sequence, "air_column", f"{frame_id}.npy")
             air_column_array = torch.from_numpy(np.load(filepath)).type(torch.float)
+
+            air_column_array = air_column_array - coord_system_reference
+            air_column_array[..., 0, :] = air_column_array[..., 0, :] + 0.3
+            air_column_array[..., 1, :] = air_column_array[..., 1, :] + 0.3
+
             air_column_array = air_column_array.unsqueeze(dim=0)
             sentence_targets = torch.cat([sentence_targets, air_column_array], dim=0)
         sentence_length = len(frame_ids)
