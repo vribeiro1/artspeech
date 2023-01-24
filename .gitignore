@@ -14,6 +14,8 @@
 *.zip
 *.pkl
 *.npy
+*.stderr
+*.stdout
 
 .ipynb_checkpoints
 __pycache__
