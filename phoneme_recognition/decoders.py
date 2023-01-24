@@ -36,7 +36,7 @@ class TopKDecoder:
         top_list = torch.topk(emissions, k=1, dim=-1).indices
         top_list = top_list.squeeze(dim=-1)
         results = [
-            [Hypothesis(tokens=self.filter_blank(top))]
+            [Hypothesis(tokens=self.filter_blank(torch.unique_consecutive(top)))]
             for top in top_list
         ]
         return results
