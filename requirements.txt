@@ -11,6 +11,8 @@ PyYAML
 sacred
 scikit-learn
 scikit-image
+seaborn
+shap
 shapely
 statsmodels
 tensorboardX
