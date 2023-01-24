@@ -108,7 +108,7 @@ def main(
     )
 
     metrics = {
-        # "edit_distance": EditDistance(decoder),
+        "edit_distance": EditDistance(decoder),
         "accuracy": Accuracy(len(vocabulary)),
         "accuracy_per_class": Accuracy(len(vocabulary), average=None),
         "auroc": AUROC(len(vocabulary))
@@ -123,7 +123,11 @@ def main(
         target=target,
         save_dir=save_dir
     )
-    print(info_test)
+
+    if save_dir is not None:
+        info_test_filepath = os.path.join(save_dir, "info_test.json")
+        with open(info_test_filepath, "w") as f:
+            ujson.dump(info_test, f)
 
 
 if __name__ == "__main__":

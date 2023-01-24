@@ -143,7 +143,7 @@ def main(
     )
 
     metrics = {
-        # "edit_distance": EditDistance(decoder),
+        "edit_distance": EditDistance(decoder),
         "accuracy": Accuracy(len(vocabulary)),
         "auroc": AUROC(len(vocabulary))
     }
@@ -292,9 +292,12 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
         target=target,
         save_dir=RESULTS_DIR
     )
-    print(info_test)
 
-    mlflow.log_artifact()
+    info_test_filepath = os.path.join(RESULTS_DIR, "info_test.json")
+    with open(info_test_filepath, "w") as f:
+        ujson.dump(info_test, f)
+
+    mlflow.log_artifact(info_test_filepath)
     mlflow.log_artifact(os.path.join(RESULTS_DIR, "confusion_matrix.pdf"))
     mlflow.log_artifact(os.path.join(RESULTS_DIR, "model_features.pdf"))
 
