@@ -347,7 +347,8 @@ def plot_confusion_matrix(
         square=True,
         ax=ax,
         fmt=".3f",
-        annot_kws={"fontsize": 22}
+        annot_kws={"fontsize": 22},
+        cmap="coolwarm",
     )
 
     ax.set_xlabel("Predicted Phonemes", fontsize=28)
