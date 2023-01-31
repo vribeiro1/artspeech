@@ -20,25 +20,26 @@ from phoneme_to_articulation.principal_components.losses import MultiArtRegulari
 from phoneme_to_articulation.principal_components.models import MultiArticulatorAutoencoder
 from settings import BASE_DIR, TRAIN, VALID, TEST
 
-RESULTS_DIR = os.path.join(BASE_DIR, "results")
+TMPFILES = os.path.join(BASE_DIR, "tmp")
+TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
+RESULTS_DIR = os.path.join(TMP_DIR, "results")
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
-
-TMP_DIR = tempfile.mkdtemp(dir=RESULTS_DIR)
 
 
 def main(
     datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
     train_seq_dict, valid_seq_dict, test_seq_dict, articulators_indices_dict,
-    hidden_blocks, hidden_features, clip_tails=True, state_dict_fpath=None
+    hidden_blocks, hidden_features, dropout, clip_tails=True, state_dict_fpath=None,
+    num_workers=0
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
 
-    best_encoders_path = os.path.join(TMP_DIR, "best_encoders.pt")
-    best_decoders_path = os.path.join(TMP_DIR, "best_decoders.pt")
-    last_encoders_path = os.path.join(TMP_DIR, "last_encoders.pt")
-    last_decoders_path = os.path.join(TMP_DIR, "last_decoders.pt")
+    best_encoders_path = os.path.join(RESULTS_DIR, "best_encoders.pt")
+    best_decoders_path = os.path.join(RESULTS_DIR, "best_decoders.pt")
+    last_encoders_path = os.path.join(RESULTS_DIR, "last_encoders.pt")
+    last_decoders_path = os.path.join(RESULTS_DIR, "last_decoders.pt")
 
     articulators = sorted(articulators_indices_dict.keys())
 
@@ -46,7 +47,7 @@ def main(
         in_features=100,
         indices_dict=articulators_indices_dict,
         hidden_blocks=hidden_blocks,
-        hidden_features=hidden_features
+        hidden_features=hidden_features,
     )
 
     autoencoder = MultiArticulatorAutoencoder(**model_kwargs)
@@ -55,7 +56,6 @@ def main(
         autoencoder.load_state_dict(state_dict)
     autoencoder.to(device)
 
-    num_workers = 5
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
         datadir=datadir,
@@ -90,7 +90,7 @@ def main(
         worker_init_fn=set_seeds
     )
 
-    loss_fn = MultiArtRegularizedLatentsMSELoss(alpha=1e-2, indices_dict=articulators_indices_dict)
+    loss_fn = MultiArtRegularizedLatentsMSELoss(alpha=0.01, indices_dict=articulators_indices_dict)
     optimizer = Adam(autoencoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
     scheduler = OneCycleLR(
         optimizer,
@@ -180,7 +180,7 @@ def main(
     best_autoencoder.decoders.load_state_dict(best_decoders_state_dict)
     best_autoencoder.to(device)
 
-    test_outputs_dir = os.path.join(TMP_DIR, "test_outputs")
+    test_outputs_dir = os.path.join(RESULTS_DIR, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
