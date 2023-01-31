@@ -48,6 +48,7 @@ def main(
         indices_dict=articulators_indices_dict,
         hidden_blocks=hidden_blocks,
         hidden_features=hidden_features,
+        dropout=dropout,
     )
 
     autoencoder = MultiArticulatorAutoencoder(**model_kwargs)

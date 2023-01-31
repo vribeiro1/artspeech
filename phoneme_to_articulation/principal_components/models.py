@@ -7,12 +7,13 @@ from vt_tools import *
 
 
 class HiddenBlock(nn.Module):
-    def __init__(self, hidden_features):
+    def __init__(self, hidden_features, dropout=0.0):
         super().__init__()
 
         self.block = nn.Sequential(
             nn.Linear(in_features=hidden_features, out_features=hidden_features),
-            nn.LeakyReLU()
+            nn.LeakyReLU(),
+            nn.Dropout(dropout),
         )
 
     def forward(self, x):
@@ -20,7 +21,7 @@ class HiddenBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, in_features, n_components, hidden_blocks=1, hidden_features=64):
+    def __init__(self, in_features, n_components, hidden_blocks=1, hidden_features=64, dropout=0.0):
         super().__init__()
 
         self.input_layer = nn.Sequential(
@@ -29,7 +30,7 @@ class Encoder(nn.Module):
         )
 
         self.hidden_layers = nn.ModuleList([
-            HiddenBlock(hidden_features=hidden_features)
+            HiddenBlock(hidden_features=hidden_features, dropout=dropout)
             for _ in range(hidden_blocks)]
         )
 
@@ -48,7 +49,7 @@ class Encoder(nn.Module):
 
 
 class Decoder(nn.Module):
-    def __init__(self, n_components, out_features, hidden_blocks=1, hidden_features=64):
+    def __init__(self, n_components, out_features, hidden_blocks=1, hidden_features=64, dropout=0.0):
         super().__init__()
 
         self.input_layer = nn.Sequential(
@@ -57,7 +58,7 @@ class Decoder(nn.Module):
         )
 
         self.hidden_layers = nn.ModuleList([
-            HiddenBlock(hidden_features=hidden_features)
+            HiddenBlock(hidden_features=hidden_features, dropout=dropout)
             for _ in range(hidden_blocks)]
         )
 
@@ -76,7 +77,7 @@ class Decoder(nn.Module):
 
 
 class Autoencoder(nn.Module):
-    def __init__(self, in_features, n_components, hidden_blocks=1, hidden_features=64):
+    def __init__(self, in_features, n_components, hidden_blocks=1, hidden_features=64, dropout=0.0):
         super().__init__()
 
         self.latent_size = n_components
@@ -85,14 +86,16 @@ class Autoencoder(nn.Module):
             in_features=in_features,
             n_components=n_components,
             hidden_blocks=hidden_blocks,
-            hidden_features=hidden_features
+            hidden_features=hidden_features,
+            dropout=dropout
         )
 
         self.decoder = Decoder(
             n_components=n_components,
             out_features=in_features,
             hidden_blocks=hidden_blocks,
-            hidden_features=hidden_features
+            hidden_features=hidden_features,
+            dropout=dropout
         )
 
     def forward(self, x):
@@ -163,7 +166,7 @@ class PrincipalComponentsArtSpeech(nn.Module):
 
 
 class MultiArticulatorAutoencoder(nn.Module):
-    def __init__(self, in_features, indices_dict, hidden_blocks=1, hidden_features=64):
+    def __init__(self, in_features, indices_dict, hidden_blocks=1, hidden_features=64, dropout=0.0):
         super().__init__()
 
         self.indices_dict = indices_dict
