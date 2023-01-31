@@ -46,7 +46,7 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         self.clip_tails = clip_tails
 
         collector = GottingenDatabaseCollector(datadir)
-        sentence_data = collector.collect_data(sequences, sync_shift, framerate)
+        sentence_data = collector.collect_data(sequences)
         data = []
         for sentence in sentence_data:
             for frame_id, phoneme in zip(sentence["frame_ids"], sentence["phonemes"]):
@@ -102,7 +102,6 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         articulator_array = articulator_array - coord_system_reference
         articulator_array[0, :] = articulator_array[0, :] + 0.3
         articulator_array[1, :] = articulator_array[1, :] + 0.3
-
         articulator_norm = normalize_fn(articulator_array)
 
         return articulator_norm

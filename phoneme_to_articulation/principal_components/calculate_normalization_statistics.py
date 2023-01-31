@@ -75,9 +75,7 @@ def main(cfg):
     save_to = cfg["save_to"]
 
     collector = GottingenDatabaseCollector(datadir)
-    sync_shift = DatasetConfig.SYNC_SHIFT
-    framerate = DatasetConfig.FRAMERATE
-    sentence_data = collector.collect_data(sequences, sync_shift, framerate)
+    sentence_data = collector.collect_data(sequences)
     data = []
     for sentence in sentence_data:
         for frame_id, phoneme in zip(sentence["frame_ids"], sentence["phonemes"]):
