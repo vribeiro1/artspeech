@@ -99,7 +99,7 @@ class MultiArtRegularizedLatentsMSELoss(nn.Module):
         mse = mse.mean()
 
         cov_features = torch.tensor([
-            torch.cov(latents.T[indices]).square().sum()
+            torch.cov(latents.T[indices]).square().sum() - torch.cov(latents.T[indices]).diag().square().sum()
             for _, indices in self.indices_dict.items()
         ]).sum()
 
