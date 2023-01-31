@@ -1,3 +1,5 @@
+import pdb
+
 import torch
 import torch.nn as nn
 
@@ -95,7 +97,8 @@ class MultiArtRegularizedLatentsMSELoss(nn.Module):
     def forward(self, outputs, latents, target, sample_weights=None):
         mse = self.mse(outputs, target)
         if sample_weights is not None:
-            mse = (sample_weights * mse.T).T
+            mse = mse.permute(2, 1, 0)
+            mse = (sample_weights * mse).permute(2, 1, 0)
         mse = mse.mean()
 
         cov_features = torch.tensor([
