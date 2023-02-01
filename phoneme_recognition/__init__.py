@@ -1,4 +1,5 @@
 import pdb
+import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -19,20 +20,62 @@ UNKNOWN = "<unk>"
 BLANK = "<blank>"
 
 PHONETIC_FAMILIES = {
-    "fricatives": ["f", "v", "S", "Z", "s"],
-    "plosives": [
-        "p", "b", "b-trille", "t",
-        "d", "n", "k", "g"
+    "fricatives": [
+        "f",
+        "v",
+        "S",
+        "Z",
+        "s",
+        "z"
     ],
-    "laterals": ["l"],
-    "nasals": ["m", "U~/", "a~", "o~"],
+    "plosives": [
+        "p",
+        "b",
+        "t",
+        "d",
+        "k",
+        "g"
+    ],
+    "laterals": [
+        "l"
+    ],
+    "nasals": [
+        "m",
+        "n",
+        "U~/",
+        "a~",
+        "o~"
+    ],
     "vowels": [
-        "a", "e", "i", "ih",
-        "o", "oh", "u", "uh",
-        "y", "yh", "E", "E/",
-        "O", "O/", "2", "9"
-    ]
+        "a",
+        "e",
+        "i",
+        "o",
+        "u",
+        "y",
+        "E",
+        "E/",
+        "O",
+        "O/",
+        "2",
+        "9",
+        "@",
+    ],
+    "semi vowels": [
+        "w",
+        "j",
+        "H"
+    ],
 }
+
+PHONETIC_PLACES_OF_ARTICULATION = {
+    0: ["i", "j", "e", "E", "E/", "a", "O", "O/", "o", "u", "w"],
+    1: ["y", "H", "2", "9", "@"],
+    2: ["U~/", "o~", "a~", "m", "n"],
+    3: ["p", "b", "t", "d", "l", "k", "g"],
+    4: ["f", "v", "s", "z", "S", "Z"],
+}
+
 
 class Criterion(Enum):
     CE = CrossEntropyLoss
@@ -218,6 +261,7 @@ def run_test(
             class_map=class_map,
             max_items_per_class=100,
             save_filepath=save_filepath,
+            plot_groups=PHONETIC_PLACES_OF_ARTICULATION,
         )
 
         save_filepath = os.path.join(save_dir, "confusion_matrix.pdf")
@@ -248,7 +292,8 @@ def plot_features(
     targets,
     class_map,
     max_items_per_class,
-    save_filepath
+    save_filepath,
+    plot_groups
 ):
     plot_features = np.zeros(shape=(0, 128))
     plot_targets = np.zeros(shape=(0,))
@@ -269,35 +314,41 @@ def plot_features(
 
     cmap = plt.get_cmap("hsv")
     fig, ax = plt.subplots(figsize=(10, 10))
-
-    for class_, i in sorted(class_map.items(), key=lambda t: t[1]):
-        features = tsne_features[plot_targets == i]
-        if len(features) == 0:
+    num_groups = len(plot_groups)
+    for group, classes in plot_groups.items():
+        group_features = np.zeros(shape=(0, 2))
+        for class_ in classes:
+            i = class_map[class_]
+            group_features = np.concatenate([
+                group_features,
+                tsne_features[plot_targets == i]
+            ])
+        if len(group_features) == 0:
             continue
 
-        color = cmap(i / len(class_map))
+        color = cmap(group / num_groups)
+        label = " ".join(classes)
         scatter = ax.scatter(
-            *features.T,
+            *group_features.T,
             alpha=0.7,
-            c=[color] * len(features),
-            label=class_
+            c=[color] * len(group_features),
+            label=label
         )
 
     ax.xaxis.set_ticklabels([])
     ax.yaxis.set_ticklabels([])
     handles, labels = ax.get_legend_handles_labels()
-
     plt.tight_layout()
     plt.savefig(save_filepath)
 
-    fig_legend = plt.figure(figsize=(10, 5))
+    fig_legend = plt.figure(figsize=(5, 3))
     axi = fig_legend.add_subplot(111)
 
     axi.legend(
         handles,
         labels,
         loc="center",
-        ncol=5,
+        ncol=1,
         fontsize=22,
         markerscale=2,
     )
@@ -337,7 +388,7 @@ def plot_confusion_matrix(
     labels = sorted(groups.keys()) + ["other"]
     conf_mtx = confusion_matrix(target_tokens, predicted_tokens, normalize=normalize, labels=labels)
 
-    fig, ax = plt.subplots(figsize=(10, 10))
+    fig, ax = plt.subplots(figsize=(15, 15))
     sns.heatmap(
         conf_mtx,
         xticklabels=labels,
