@@ -54,11 +54,7 @@ def plot_array(outputs, targets, references, save_to, phoneme=None, tag=None):
     plt.close()
 
 
-def plot_autoencoder_outputs(datadir, frame_ids, outputs, inputs, phonemes, denorm_fn, outputs_dir, multiarticulator=True):
-    if not multiarticulator:
-        inputs = inputs.unsqueeze(dim=1)
-        outputs = outputs.unsqueeze(dim=1)
-
+def plot_autoencoder_outputs(datadir, frame_ids, outputs, inputs, phonemes, denorm_fn, outputs_dir):
     for frame_id, output, target, phoneme in zip(frame_ids, outputs, inputs, phonemes):
         subject, sequence, inumber = frame_id.split("_")
 
@@ -70,10 +66,10 @@ def plot_autoencoder_outputs(datadir, frame_ids, outputs, inputs, phonemes, deno
 
         articulators = sorted(denorm_fn.keys())
         denorm_targets = torch.zeros(size=(len(articulators), 2, 50), device=target.device, dtype=target.dtype)
-        denorm_outputs = torch.zeros(size=(len(articulators), 2, 50), device=target.device, dtype=target.dtype)
+        derm_outputs = torch.zeros(size=(len(articulators), 2, 50), device=target.device, dtype=target.dtype)
         for i, articulator in enumerate(articulators):
-            denorm_targets[i] = denorm_fn[articulator](target[i].reshape(2, 50))
-            denorm_outputs[i] = denorm_fn[articulator](output[i].reshape(2, 50))
+            denorm_targets[i] = denorm_fn[articulator].inverse(target[i].reshape(2, 50))
+            denorm_outputs[i] = denorm_fn[articulator].inverse(output[i].reshape(2, 50))
 
         denorm_targets = denorm_targets.detach().cpu()
         denorm_outputs = denorm_outputs.detach().cpu()
@@ -145,12 +141,11 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir=None, 
                 plot_autoencoder_outputs(
                     dataloader.dataset.datadir,
                     frame_ids,
-                    outputs,
-                    inputs,
+                    outputs.unsqueeze(dim=1),
+                    inputs.unsqueeze(dim=1),
                     phonemes,
                     {TONGUE: dataloader.dataset.normalize.inverse},
                     outputs_dir=epoch_outputs_dir,
-                    multiarticulator=False
                 )
 
             all_latents = torch.concat([all_latents, latents], dim=0)
@@ -218,7 +213,6 @@ def run_multiart_autoencoder_test(epoch, model, dataloader, criterion, outputs_d
                     phonemes,
                     dataloader.dataset.normalize,
                     outputs_dir=epoch_outputs_dir,
-                    multiarticulator=True
                 )
 
     mean_loss = np.mean(losses)
