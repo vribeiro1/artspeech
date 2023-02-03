@@ -11,6 +11,7 @@ class Encode(nn.Module):
         self.encoder.load_state_dict(encoder_state_dict)
         self.encoder.to(device)
         self.encoder.eval()
+        self.encoder = self.encoder.detach()
 
         for parameter in self.encoder.parameters():
             parameter.requires_grad = False
@@ -28,6 +29,7 @@ class Decode(nn.Module):
         self.decoder.load_state_dict(decoder_state_dict)
         self.decoder.to(device)
         self.decoder.eval()
+        self.decoder = self.decoder.detach()
 
         for parameter in self.decoder.parameters():
             parameter.requires_grad = False
