@@ -312,12 +312,18 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", dest="config_filepath")
+    parser.add_argument("--experiment", dest="experiment_name", default="phoneme_recognition")
+    parser.add_argument("--run", dest="run_name", default=None)
     args = parser.parse_args()
 
     with open(args.config_filepath) as f:
         cfg = yaml.safe_load(f)
 
-    with mlflow.start_run():
+    experiment = mlflow.set_experiment(args.experiment_name)
+    with mlflow.start_run(
+        experiment_id=experiment.experiment_id,
+        run_name=args.run_name
+    ):
         mlflow.log_params(cfg)
         mlflow.log_dict(cfg, "config.json")
 
