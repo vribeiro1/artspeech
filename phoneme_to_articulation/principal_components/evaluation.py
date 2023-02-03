@@ -66,10 +66,10 @@ def plot_autoencoder_outputs(datadir, frame_ids, outputs, inputs, phonemes, deno
 
         articulators = sorted(denorm_fn.keys())
         denorm_targets = torch.zeros(size=(len(articulators), 2, 50), device=target.device, dtype=target.dtype)
-        derm_outputs = torch.zeros(size=(len(articulators), 2, 50), device=target.device, dtype=target.dtype)
+        denorm_outputs = torch.zeros(size=(len(articulators), 2, 50), device=target.device, dtype=target.dtype)
         for i, articulator in enumerate(articulators):
-            denorm_targets[i] = denorm_fn[articulator].inverse(target[i].reshape(2, 50))
-            denorm_outputs[i] = denorm_fn[articulator].inverse(output[i].reshape(2, 50))
+            denorm_targets[i] = denorm_fn[articulator](target[i].reshape(2, 50))
+            denorm_outputs[i] = denorm_fn[articulator](output[i].reshape(2, 50))
 
         denorm_targets = denorm_targets.detach().cpu()
         denorm_outputs = denorm_outputs.detach().cpu()
@@ -91,6 +91,7 @@ def plot_cov_matrix(cov_matrix, saves_dir):
         cbar=False,
         xticklabels=[i + 1 for i in range(n_components)],
         yticklabels=[i + 1 for i in range(n_components)],
+        fmt=".3f",
         annot_kws={
             "fontsize": 16
         }
@@ -99,9 +100,95 @@ def plot_cov_matrix(cov_matrix, saves_dir):
     plt.tick_params(axis="both", which="major", labelsize=18)
     plt.tight_layout()
     plt.savefig(os.path.join(saves_dir, f"covariance_matrix.pdf"))
+    plt.savefig(os.path.join(saves_dir, f"covariance_matrix.png"))
 
 
-def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir=None, plots_dir=None, fn_metrics=None, device=None):
+def run_autoencoder_test(
+    epoch,
+    model,
+    dataloader,
+    criterion,
+    outputs_dir=None,
+    plots_dir=None,
+    fn_metrics=None,
+    device=None
+):
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if fn_metrics is None:
+        fn_metrics={}
+
+    plot_outputs = outputs_dir is not None
+    if plot_outputs:
+        epoch_outputs_dir = os.path.join(outputs_dir, str(epoch))
+        if not os.path.exists(epoch_outputs_dir):
+            os.makedirs(epoch_outputs_dir)
+
+    model.eval()
+
+    all_latents = torch.zeros(size=(0, model.latent_size))
+    losses = []
+    metrics_values = {metric_name: [] for metric_name in fn_metrics}
+    progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
+    for frame_ids, inputs, sample_weigths, phonemes in progress_bar:
+        inputs = inputs.to(device)
+        sample_weigths = sample_weigths.to(device)
+
+        with torch.set_grad_enabled(False):
+            outputs, latents = model(inputs)
+            loss = criterion(
+                outputs, latents, inputs, sample_weigths
+            )
+
+            for metric_name, fn_metric in fn_metrics.items():
+                metric_val = fn_metric(outputs, inputs)
+                metric_val = metric_val.flatten()
+                metrics_values[metric_name].extend([val.item() for val in metric_val])
+
+            losses.append(loss.item())
+            progress_bar.set_postfix(loss=np.mean(losses))
+
+            if plot_outputs:
+                plot_autoencoder_outputs(
+                    dataloader.dataset.datadir,
+                    frame_ids,
+                    outputs.unsqueeze(dim=1),
+                    inputs.unsqueeze(dim=1),
+                    phonemes,
+                    {TONGUE: dataloader.dataset.normalize.inverse},
+                    outputs_dir=epoch_outputs_dir,
+                )
+
+            latents = latents.detach().cpu()
+            all_latents = torch.concat([all_latents, latents], dim=0)
+
+    cov_latents = torch.cov(latents.T)
+    cov_latents = cov_latents.detach().cpu()
+    if plots_dir:
+        plot_cov_matrix(cov_latents, plots_dir)
+
+    mean_loss = np.mean(losses)
+    info = {
+        "loss": mean_loss,
+    }
+    info.update({
+        metric_name: np.mean(values)
+        for metric_name, values in  metrics_values.items()
+    })
+
+    return info
+
+
+def run_multiart_autoencoder_test(
+    epoch,
+    model,
+    dataloader,
+    criterion,
+    outputs_dir=None,
+    plots_dir=None,
+    fn_metrics=None,
+    device=None
+):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if fn_metrics is None:
@@ -141,79 +228,18 @@ def run_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir=None, 
                 plot_autoencoder_outputs(
                     dataloader.dataset.datadir,
                     frame_ids,
-                    outputs.unsqueeze(dim=1),
-                    inputs.unsqueeze(dim=1),
-                    phonemes,
-                    {TONGUE: dataloader.dataset.normalize.inverse},
-                    outputs_dir=epoch_outputs_dir,
-                )
-
-            all_latents = torch.concat([all_latents, latents], dim=0)
-
-    cov_latents = torch.cov(latents.T)
-    cov_main_diag = cov_latents.diag().abs().sum() / cov_latents.abs().sum()
-    cov_latents = cov_latents.detach().cpu()
-    if plots_dir:
-        plot_cov_matrix(cov_latents, plots_dir)
-
-    mean_loss = np.mean(losses)
-    info = {
-        "loss": mean_loss,
-        "cov_main_diag": cov_main_diag.item()
-    }
-    info.update({
-        metric_name: np.mean(values)
-        for metric_name, values in  metrics_values.items()
-    })
-
-    return info
-
-
-def run_multiart_autoencoder_test(epoch, model, dataloader, criterion, outputs_dir=None, fn_metrics=None, device=None):
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if fn_metrics is None:
-        fn_metrics={}
-
-    plot_outputs = outputs_dir is not None
-    if plot_outputs:
-        epoch_outputs_dir = os.path.join(outputs_dir, str(epoch))
-        if not os.path.exists(epoch_outputs_dir):
-            os.makedirs(epoch_outputs_dir)
-
-    model.eval()
-
-    losses = []
-    metrics_values = {metric_name: [] for metric_name in fn_metrics}
-    progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
-    for frame_ids, inputs, sample_weigths, phonemes in progress_bar:
-        inputs = inputs.to(device)
-        sample_weigths = sample_weigths.to(device)
-
-        with torch.set_grad_enabled(False):
-            outputs, latents = model(inputs)
-            loss = criterion(
-                outputs, latents, inputs, sample_weigths
-            )
-
-            for metric_name, fn_metric in fn_metrics.items():
-                metric_val = fn_metric(outputs, inputs)
-                metric_val = metric_val.flatten()
-                metrics_values[metric_name].extend([val.item() for val in metric_val])
-
-            losses.append(loss.item())
-            progress_bar.set_postfix(loss=np.mean(losses))
-
-            if plot_outputs:
-                plot_autoencoder_outputs(
-                    dataloader.dataset.datadir,
-                    frame_ids,
                     outputs,
                     inputs,
                     phonemes,
-                    dataloader.dataset.normalize,
+                    dataloader.dataset.normalize.inverse,
                     outputs_dir=epoch_outputs_dir,
                 )
+            all_latents = torch.concat([all_latents, latents], dim=0)
+
+    cov_latents = torch.cov(latents.T)
+    cov_latents = cov_latents.detach().cpu()
+    if plots_dir:
+        plot_cov_matrix(cov_latents, plots_dir)
 
     mean_loss = np.mean(losses)
     info = {
@@ -224,8 +250,15 @@ def run_multiart_autoencoder_test(epoch, model, dataloader, criterion, outputs_d
 
 
 def run_phoneme_to_PC_test(
-    epoch, model, decoder_state_dict_fpath, n_components, dataloader, criterion, outputs_dir,
-    fn_metrics=None, device=None
+    epoch,
+    model,
+    decoder_state_dict_fpath,
+    n_components,
+    dataloader,
+    criterion,
+    outputs_dir,
+    fn_metrics=None,
+    device=None
 ):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
