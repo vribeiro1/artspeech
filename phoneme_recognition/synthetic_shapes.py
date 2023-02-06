@@ -37,7 +37,7 @@ ARTICULATORS = [
 ]
 
 
-class GeneratedPhonemeRecognitionDataset(Dataset):
+class SyntheticPhonemeRecognitionDataset(Dataset):
     def __init__(self, datadir, vocabulary, **kwargs):
         self.datadir = datadir
         self.vocabulary = vocabulary
