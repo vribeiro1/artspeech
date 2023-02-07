@@ -8,7 +8,7 @@ import torch
 import yaml
 
 from torch.optim import Adam
-from torch.optim.lr_scheduler import OneCycleLR
+from torch.optim.lr_scheduler import CyclicLR
 from torch.utils.data import DataLoader
 
 from helpers import set_seeds, sequences_from_dict
@@ -20,11 +20,11 @@ from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistanc
 from phoneme_to_articulation.principal_components.models import Autoencoder
 from settings import DatasetConfig, BASE_DIR, TRAIN, VALID, TEST
 
-RESULTS_DIR = os.path.join(BASE_DIR, "results")
+TMPFILES = os.path.join(BASE_DIR, "tmp")
+TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
+RESULTS_DIR = os.path.join(TMP_DIR, "results")
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
-
-TMP_DIR = tempfile.mkdtemp(dir=RESULTS_DIR)
 
 
 def reconstruction_error(outputs, targets, denorm_fn, px_space=1, res=1):
@@ -44,28 +44,40 @@ def reconstruction_error(outputs, targets, denorm_fn, px_space=1, res=1):
 
 
 def main(
-    datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
-    train_seq_dict, valid_seq_dict, test_seq_dict, articulator, n_components,
-    clip_tails=True, state_dict_fpath=None, alpha=1e-1
+    datadir,
+    n_epochs,
+    batch_size,
+    patience,
+    learning_rate,
+    weight_decay,
+    train_seq_dict,
+    valid_seq_dict,
+    test_seq_dict,
+    articulator,
+    model_params,
+    clip_tails=True,
+    encoder_state_dict_fpath=None,
+    decoder_state_dict_fpath=None,
+    alpha=1.,
+    num_workers=0
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
 
-    best_encoder_path = os.path.join(TMP_DIR, "best_encoder.pt")
-    best_decoder_path = os.path.join(TMP_DIR, "best_decoder.pt")
-    last_encoder_path = os.path.join(TMP_DIR, "last_encoder.pt")
-    last_decoder_path = os.path.join(TMP_DIR, "last_decoder.pt")
+    best_encoder_path = os.path.join(RESULTS_DIR, "best_encoder.pt")
+    best_decoder_path = os.path.join(RESULTS_DIR, "best_decoder.pt")
+    last_encoder_path = os.path.join(RESULTS_DIR, "last_encoder.pt")
+    last_decoder_path = os.path.join(RESULTS_DIR, "last_decoder.pt")
 
-    autoencoder = Autoencoder(
-        in_features=100,
-        n_components=n_components
-    )
-    if state_dict_fpath is not None:
-        state_dict = torch.load(state_dict_fpath, map_location=device)
-        autoencoder.load_state_dict(state_dict)
+    autoencoder = Autoencoder(**model_params)
+    if encoder_state_dict_fpath is not None:
+        encoder_state_dict = torch.load(encoder_state_dict_fpath, map_location=device)
+        autoencoder.encoder.load_state_dict(encoder_state_dict)
+    if decoder_state_dict_fpath is not None:
+        decoder_state_dict = torch.load(decoder_state_dict_fpath, map_location=device)
+        autoencoder.decoder.load_state_dict(decoder_state_dict)
     autoencoder.to(device)
 
-    num_workers = 5
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsAutoencoderDataset(
         datadir=datadir,
@@ -102,12 +114,11 @@ def main(
 
     loss_fn = RegularizedLatentsMSELoss(alpha=alpha)
     optimizer = Adam(autoencoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = OneCycleLR(
+    scheduler = CyclicLR(
         optimizer,
+        base_lr=learning_rate / 25,
         max_lr=learning_rate,
-        steps_per_epoch=int(len(train_dataloader)),
-        epochs=n_epochs,
-        anneal_strategy="linear"
+        cycle_momentum=False
     )
 
     metrics = {
@@ -121,8 +132,29 @@ def main(
 
     best_metric = np.inf
     epochs_since_best = 0
-
     epochs = range(1, n_epochs + 1)
+
+    if checkpoint_filepath is not None:
+        # TODO: Save and load the scheduler state dict when the following change is released
+        # https://github.com/Lightning-AI/lightning/issues/15901
+        checkpoint = torch.load(checkpoint_filepath, map_location=device)
+
+        autoencoder.encoder.load_state_dict(checkpoint["encoder"])
+        autoencoder.decoder.load_state_dict(checkpoint["decoder"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        # scheduler.load_state_dict(checkpoint["scheduler"])
+        epoch = checkpoint["epoch"]
+        epochs = range(epoch, num_epochs + 1)
+        best_metric = checkpoint["best_metric"]
+        epochs_since_best = checkpoint["epochs_since_best"]
+        best_model_path = checkpoint["best_model_path"]
+        last_model_path = checkpoint["last_model_path"]
+
+        print(f"""
+Loaded checkpoint -- Launching training from epoch {epoch} with best metric
+so far {best_metric} seen {epochs_since_best} epochs ago.
+""")
+
     for epoch in epochs:
         info_train = run_autoencoder_epoch(
             phase=TRAIN,
@@ -172,6 +204,25 @@ def main(
         mlflow.log_artifact(last_encoder_path)
         mlflow.log_artifact(last_decoder_path)
 
+        checkpoint = {
+            "epoch": epoch,
+            "encoder": autoencoder.encoder.state_dict(),
+            "decoder": autoencoder.decoder.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            # "scheduler": scheduler.state_dict(),
+            "best_metric": best_metric,
+            "epochs_since_best": epochs_since_best,
+            "best_model_path": best_model_path,
+            "last_model_path": last_model_path
+        }
+        torch.save(checkpoint, save_checkpoint_path)
+        mlflow.log_artifact(save_checkpoint_path)
+
+        print(f"""
+Finished training epoch {epoch}
+Best metric: {best_metric}, Epochs since best: {epochs_since_best}
+""")
+
         if epochs_since_best > patience:
             break
 
@@ -192,10 +243,7 @@ def main(
         worker_init_fn=set_seeds
     )
 
-    best_autoencoder = Autoencoder(
-        in_features=100,
-        n_components=n_components
-    )
+    best_autoencoder = Autoencoder(**model_params)
     best_encoder_state_dict = torch.load(best_encoder_path, map_location=device)
     best_autoencoder.encoder.load_state_dict(best_encoder_state_dict)
     best_decoder_state_dict = torch.load(best_decoder_path, map_location=device)
@@ -232,12 +280,18 @@ if __name__ == "__main__":
     if __name__ == "__main__":
         parser = argparse.ArgumentParser()
         parser.add_argument("--config", dest="config_filepath")
+        parser.add_argument("--experiment", dest="experiment_name", default="principal_components_autoencoder")
+        parser.add_argument("--run", dest="run_name", default=None)
         args = parser.parse_args()
 
     with open(args.config_filepath) as f:
         cfg = yaml.safe_load(f)
 
-    with mlflow.start_run():
+    experiment = mlflow.set_experiment(args.experiment_name)
+    with mlflow.start_run(
+        experiment_id=experiment.experiment_id,
+        run_name=args.run_name
+    ):
         mlflow.log_params(cfg)
         mlflow.log_dict(cfg, "config.json")
 
