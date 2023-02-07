@@ -7,12 +7,17 @@ from vt_tools import *
 
 
 class HiddenBlock(nn.Module):
-    def __init__(self, hidden_features, dropout=0.0):
+    def __init__(
+        self,
+        hidden_features,
+        dropout=0.0
+    ):
         super().__init__()
 
         self.block = nn.Sequential(
+            nn.LayerNorm(hidden_features),
             nn.Linear(in_features=hidden_features, out_features=hidden_features),
-            nn.LeakyReLU(),
+            nn.ReLU(),
             nn.Dropout(dropout),
         )
 
@@ -21,10 +26,18 @@ class HiddenBlock(nn.Module):
 
 
 class Encoder(nn.Module):
-    def __init__(self, in_features, n_components, hidden_blocks=1, hidden_features=64, dropout=0.0):
+    def __init__(
+        self,
+        in_features,
+        num_components,
+        hidden_blocks=1,
+        hidden_features=64,
+        dropout=0.0
+    ):
         super().__init__()
 
         self.input_layer = nn.Sequential(
+            nn.LayerNorm(in_features),
             nn.Linear(in_features=in_features, out_features=hidden_features),
             nn.ReLU()
         )
@@ -34,7 +47,10 @@ class Encoder(nn.Module):
             for _ in range(hidden_blocks)]
         )
 
-        self.output_layer = nn.Linear(in_features=hidden_features, out_features=n_components)
+        self.output_layer = nn.Linear(
+            in_features=hidden_features,
+            out_features=num_components,
+        )
 
     def forward(self, x):
         out_input = self.input_layer(x)
@@ -44,16 +60,23 @@ class Encoder(nn.Module):
             out_hidden = hidden_layer(out_hidden)
 
         out = self.output_layer(out_hidden)
-
         return out
 
 
 class Decoder(nn.Module):
-    def __init__(self, n_components, out_features, hidden_blocks=1, hidden_features=64, dropout=0.0):
+    def __init__(
+        self,
+        num_components,
+        out_features,
+        hidden_blocks=1,
+        hidden_features=64,
+        dropout=0.0
+    ):
         super().__init__()
 
         self.input_layer = nn.Sequential(
-            nn.Linear(in_features=n_components, out_features=hidden_features),
+            nn.LayerNorm(num_components),
+            nn.Linear(in_features=num_components, out_features=hidden_features),
             nn.ReLU()
         )
 
@@ -62,7 +85,10 @@ class Decoder(nn.Module):
             for _ in range(hidden_blocks)]
         )
 
-        self.output_layer = nn.Linear(in_features=hidden_features, out_features=out_features)
+        self.output_layer = nn.Linear(
+            in_features=hidden_features,
+            out_features=out_features,
+        )
 
     def forward(self, x):
         out_input = self.input_layer(x)
@@ -72,26 +98,32 @@ class Decoder(nn.Module):
             out_hidden = hidden_layer(out_hidden)
 
         out = self.output_layer(out_hidden)
-
         return out
 
 
 class Autoencoder(nn.Module):
-    def __init__(self, in_features, n_components, hidden_blocks=1, hidden_features=64, dropout=0.0):
+    def __init__(
+        self,
+        in_features,
+        num_components,
+        hidden_blocks=1,
+        hidden_features=64,
+        dropout=0.0
+    ):
         super().__init__()
 
-        self.latent_size = n_components
+        self.latent_size = num_components
 
         self.encoder = Encoder(
             in_features=in_features,
-            n_components=n_components,
+            num_components=num_components,
             hidden_blocks=hidden_blocks,
             hidden_features=hidden_features,
             dropout=dropout
         )
 
         self.decoder = Decoder(
-            n_components=n_components,
+            num_components=num_components,
             out_features=in_features,
             hidden_blocks=hidden_blocks,
             hidden_features=hidden_features,
@@ -105,7 +137,11 @@ class Autoencoder(nn.Module):
 
 
 class ArticulatorPrincipalComponentsPredictor(nn.Module):
-    def __init__(self, in_features, n_components):
+    def __init__(
+        self,
+        in_features,
+        num_components
+    ):
         super().__init__()
 
         self.linear = nn.Sequential(
@@ -119,7 +155,7 @@ class ArticulatorPrincipalComponentsPredictor(nn.Module):
             nn.Linear(in_features=256, out_features=128),
             nn.ReLU(),
             nn.LayerNorm(128),
-            nn.Linear(in_features=128, out_features=n_components)
+            nn.Linear(in_features=128, out_features=num_components)
         )
 
     def forward(self, inputs):
@@ -128,11 +164,25 @@ class ArticulatorPrincipalComponentsPredictor(nn.Module):
 
 
 class PrincipalComponentsArtSpeech(nn.Module):
-    def __init__(self, vocab_size, n_components, embed_dim=64, hidden_size=128, gru_dropout=0.):
+    def __init__(
+        self,
+        vocab_size,
+        num_components,
+        embed_dim=64,
+        hidden_size=128,
+        gru_dropout=0.
+    ):
         super().__init__()
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.rnn = nn.GRU(embed_dim, hidden_size, num_layers=2, bidirectional=True, dropout=gru_dropout, batch_first=True)
+        self.rnn = nn.GRU(
+            embed_dim,
+            hidden_size,
+            num_layers=2,
+            bidirectional=True,
+            dropout=gru_dropout,
+            batch_first=True
+        )
 
         self.linear = nn.Sequential(
             nn.Linear(2 * hidden_size, hidden_size),
@@ -141,7 +191,7 @@ class PrincipalComponentsArtSpeech(nn.Module):
 
         self.predictor = ArticulatorPrincipalComponentsPredictor(
             in_features=hidden_size,
-            n_components=n_components
+            num_components=num_components
         )
 
     def forward(self, x, lengths):
@@ -151,7 +201,7 @@ class PrincipalComponentsArtSpeech(nn.Module):
         lengths (list): Lengths of the input sequences sorted in decreasing order.
 
         Return:
-        (torch.tensor): Torch tensor of shape (bs, seq_len, n_components).
+        (torch.tensor): Torch tensor of shape (bs, seq_len, num_components).
         """
         embed = self.embedding(x)
 
@@ -166,17 +216,24 @@ class PrincipalComponentsArtSpeech(nn.Module):
 
 
 class MultiArticulatorAutoencoder(nn.Module):
-    def __init__(self, in_features, indices_dict, hidden_blocks=1, hidden_features=64, dropout=0.0):
+    def __init__(
+        self,
+        in_features,
+        indices_dict,
+        hidden_blocks=1,
+        hidden_features=64,
+        dropout=0.0
+    ):
         super().__init__()
 
         self.indices_dict = indices_dict
-        self.shared_latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
+        self.latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
         self.sorted_articulators = sorted(self.indices_dict.keys())
 
         self.encoders = nn.ModuleDict({
             articulator: Encoder(
                 in_features=in_features,
-                n_components=len(indices),
+                num_components=len(indices),
                 hidden_blocks=hidden_blocks,
                 hidden_features=hidden_features
             )
@@ -185,7 +242,7 @@ class MultiArticulatorAutoencoder(nn.Module):
 
         self.decoders = nn.ModuleDict({
             articulator: Decoder(
-                n_components=len(indices),
+                num_components=len(indices),
                 out_features=in_features,
                 hidden_blocks=hidden_blocks,
                 hidden_features=hidden_features
@@ -202,7 +259,7 @@ class MultiArticulatorAutoencoder(nn.Module):
 
         articulators_latent_space = {
             articulator: -torch.inf * torch.ones(
-                size=(bs, self.shared_latent_size),
+                size=(bs, self.latent_size),
                 dtype=torch.float, device=x.device
             ) for articulator in self.sorted_articulators
         }
