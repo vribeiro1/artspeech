@@ -15,10 +15,9 @@ class HiddenBlock(nn.Module):
         super().__init__()
 
         self.block = nn.Sequential(
-            nn.LayerNorm(hidden_features),
             nn.Linear(in_features=hidden_features, out_features=hidden_features),
             nn.ReLU(),
-            nn.Dropout(dropout),
+            nn.Dropout(dropout, inplace=True),
         )
 
     def forward(self, x):
@@ -37,7 +36,6 @@ class Encoder(nn.Module):
         super().__init__()
 
         self.input_layer = nn.Sequential(
-            nn.LayerNorm(in_features),
             nn.Linear(in_features=in_features, out_features=hidden_features),
             nn.ReLU()
         )
@@ -75,7 +73,6 @@ class Decoder(nn.Module):
         super().__init__()
 
         self.input_layer = nn.Sequential(
-            nn.LayerNorm(num_components),
             nn.Linear(in_features=num_components, out_features=hidden_features),
             nn.ReLU()
         )
