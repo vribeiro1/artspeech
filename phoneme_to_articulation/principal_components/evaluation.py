@@ -162,7 +162,7 @@ def run_autoencoder_test(
             latents = latents.detach().cpu()
             all_latents = torch.concat([all_latents, latents], dim=0)
 
-    cov_latents = torch.cov(latents.T)
+    cov_latents = torch.cov(all_latents.T)
     cov_latents = cov_latents.detach().cpu()
     if plots_dir:
         plot_cov_matrix(cov_latents, plots_dir)
@@ -236,7 +236,7 @@ def run_multiart_autoencoder_test(
                 )
             all_latents = torch.concat([all_latents, latents], dim=0)
 
-    cov_latents = torch.cov(latents.T)
+    cov_latents = torch.cov(all_latents.T)
     cov_latents = cov_latents.detach().cpu()
     if plots_dir:
         plot_cov_matrix(cov_latents, plots_dir)

@@ -134,7 +134,7 @@ def run_epoch(
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
-            outputs = model(inputs, input_lengths)
+            outputs = model(inputs)
             if training and logits_large_margins > 0.0:
                 outputs = model.get_noise_logits(outputs, logits_large_margins)
             norm_outputs = model.get_normalized_outputs(outputs, use_log_prob=use_log_prob)
@@ -220,7 +220,7 @@ def run_test(
         inputs = inputs.to(device)
         targets = targets.to(device)
         with torch.set_grad_enabled(False):
-            outputs, features = model(inputs, input_lengths, return_features=True)
+            outputs, features = model(inputs, return_features=True)
         outputs = model.get_normalized_outputs(outputs, use_log_prob=False)
 
         for metric_name in averaged_metrics:

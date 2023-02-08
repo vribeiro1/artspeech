@@ -64,7 +64,7 @@ class RecurrentBlock(nn.Module):
         self.layer_norm = nn.LayerNorm(input_size)
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x, lengths):
+    def forward(self, x):
         out = self.layer_norm(x)
         out = F.gelu(out)
         out, _ = self.rnn(out)
@@ -154,11 +154,10 @@ class DeepSpeech2(nn.Module):
         out = norm_fn(x, dim=-1)
         return out
 
-    def forward(self, x, lengths, return_features=False):
+    def forward(self, x, return_features=False):
         """
         Args:
             x (torch.tensor): Tensor of shape (B, C, D, T)
-            lengths (torch.tensor): Tensor of shape (B,)
 
         Return:
             outputs (torch.tensor): Tensor of shape (batch_size, time, classes)
@@ -176,7 +175,7 @@ class DeepSpeech2(nn.Module):
         out = out.permute(2, 0, 1)  # time, batch_size, features
         out = self.linear(out)
         for recurrent_layer in self.recurrent_layers:
-            out = recurrent_layer(out, lengths)
+            out = recurrent_layer(out)
         out = out.permute(1, 0, 2)  # batch, time, features
 
         features = self.feature_extractor(out)

@@ -42,10 +42,27 @@ if not os.path.exists(RESULTS_DIR):
 
 
 def main(
-    datadir, database, num_epochs, batch_size, patience, learning_rate, weight_decay,
-    feature, target, vocab_fpath, train_seq_dict, valid_seq_dict, test_seq_dict, model_params,
-    loss, loss_params, num_workers=0, logits_large_margins=0.0, pretrained=False,
-    state_dict_filepath=None, checkpoint_filepath=None
+    datadir,
+    database,
+    num_epochs,
+    batch_size,
+    patience,
+    learning_rate,
+    weight_decay,
+    feature,
+    target,
+    vocab_fpath,
+    train_seq_dict,
+    valid_seq_dict,
+    test_seq_dict,
+    model_params,
+    loss,
+    loss_params,
+    num_workers=0,
+    logits_large_margins=0.0,
+    pretrained=False,
+    state_dict_filepath=None,
+    checkpoint_filepath=None,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
@@ -245,7 +262,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
 
         print(f"""
 Finished training epoch {epoch}
-Best metric: {best_metric}, Epochs since best: {epochs_since_best}
+Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
 """)
 
         if epochs_since_best > patience:
@@ -290,7 +307,7 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
         device=device,
         feature=feature,
         target=target,
-        save_dir=RESULTS_DIR
+        save_dir=RESULTS_DIR,
     )
 
     info_test_filepath = os.path.join(RESULTS_DIR, "info_test.json")

@@ -88,7 +88,7 @@ def main(cfg):
 
     for articulator in articulators:
         articulator_arrays = torch.zeros(0, 2, 50)
-        for item in tqdm(data):
+        for item in tqdm(data, desc=articulator):
             subject = item["subject"]
             sequence = item["sequence"]
             frame_id = item["frame_id"]

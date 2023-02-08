@@ -107,6 +107,16 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         return articulator_norm
 
     def __getitem__(self, index):
+        """
+
+        Return:
+            frame_name (str): unique reference to the frame, created by concatenating the subject,
+                sequence and frame number
+            articulator (torch.tensor): tensor of shape (2 * D,), where D is the dimension of the
+                articulator array.
+            weight (float): phoneme weight
+            phoneme (str): phoneme
+        """
         item = self.data.iloc[index]
         phoneme = item["phoneme"]
 

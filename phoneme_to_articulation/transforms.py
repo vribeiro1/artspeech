@@ -17,8 +17,7 @@ class Normalize:
         """
         mean = self.mean.clone().to(x.device)
         std = self.std.clone().to(x.device)
-
-        x_norm = (x[..., :, :] - mean) / std
+        x_norm = (x - mean) / std
         return x_norm
 
     def inverse(self, x_norm):
@@ -30,6 +29,5 @@ class Normalize:
         """
         mean = self.mean.clone().to(x_norm.device)
         std = self.std.clone().to(x_norm.device)
-
-        x = (x_norm[..., :, :] * std) + mean
+        x = (x_norm * std) + mean
         return x

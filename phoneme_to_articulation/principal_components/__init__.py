@@ -5,7 +5,17 @@ from tqdm import tqdm
 from settings import TRAIN, VALID, TEST
 
 
-def run_autoencoder_epoch(phase, epoch, model, dataloader, optimizer, criterion, scheduler=None, fn_metrics=None, device=None):
+def run_autoencoder_epoch(
+    phase,
+    epoch,
+    model,
+    dataloader,
+    optimizer,
+    criterion,
+    scheduler=None,
+    fn_metrics=None,
+    device=None
+):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if fn_metrics is None:
