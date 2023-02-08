@@ -58,6 +58,7 @@ def main(
     clip_tails=True,
     encoder_state_dict_fpath=None,
     decoder_state_dict_fpath=None,
+    checkpoint_filepath=None,
     alpha=1.,
     num_workers=0
 ):
@@ -68,6 +69,7 @@ def main(
     best_decoder_path = os.path.join(RESULTS_DIR, "best_decoder.pt")
     last_encoder_path = os.path.join(RESULTS_DIR, "last_encoder.pt")
     last_decoder_path = os.path.join(RESULTS_DIR, "last_decoder.pt")
+    save_checkpoint_path = os.path.join(RESULTS_DIR, "checkpoint.pt")
 
     autoencoder = Autoencoder(**model_params)
     if encoder_state_dict_fpath is not None:
@@ -212,8 +214,10 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             # "scheduler": scheduler.state_dict(),
             "best_metric": best_metric,
             "epochs_since_best": epochs_since_best,
-            "best_model_path": best_model_path,
-            "last_model_path": last_model_path
+            "best_encoder_path": best_encoder_path,
+            "best_decoder_path": best_decoder_path,
+            "last_encoder_path": last_encoder_path,
+            "last_decoder_path": last_decoder_path,
         }
         torch.save(checkpoint, save_checkpoint_path)
         mlflow.log_artifact(save_checkpoint_path)
@@ -262,7 +266,7 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
         model=best_autoencoder,
         dataloader=test_dataloader,
         criterion=loss_fn,
-        outputs_dir=test_outputs_dir,
+        # outputs_dir=test_outputs_dir,
         plots_dir=plots_dir,
         fn_metrics=metrics,
         device=device
