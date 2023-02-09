@@ -343,5 +343,4 @@ if __name__ == "__main__":
     ):
         mlflow.log_params(cfg)
         mlflow.log_dict(cfg, "config.json")
-
         main(**cfg)
