@@ -53,10 +53,9 @@ def evaluate_autoencoder(cfg):
     sequences = sequences_from_dict(datadir, sequences_dict)
     dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
         datadir=datadir,
+        dataset_config=DatasetConfig,
         sequences=sequences,
         articulators=articulators,
-        sync_shift=DatasetConfig.SYNC_SHIFT,
-        framerate=DatasetConfig.FRAMERATE
     )
 
     dataloader = DataLoader(
@@ -212,10 +211,9 @@ def main(cfg):
     articulators = sorted(cfg["articulators_indices_dict"].keys())
     test_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
         datadir=cfg["datadir"],
+        dataset_config=DatasetConfig,
         sequences=test_sequences,
         articulators=articulators,
-        sync_shift=DatasetConfig.SYNC_SHIFT,
-        framerate=DatasetConfig.FRAMERATE,
         clip_tails=cfg["clip_tails"]
     )
     test_dataloader = DataLoader(
@@ -251,14 +249,17 @@ def main(cfg):
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
-    loss_fn = MultiArtRegularizedLatentsMSELoss(alpha=1e-2, indices_dict=cfg["articulators_indices_dict"])
+    loss_fn = MultiArtRegularizedLatentsMSELoss(
+        indices_dict=cfg["articulators_indices_dict"],
+        alpha=0.1,
+    )
 
     info_test = run_multiart_autoencoder_test(
         epoch=0,
         model=best_autoencoder,
         dataloader=test_dataloader,
         criterion=loss_fn,
-        # outputs_dir=test_outputs_dir,
+        outputs_dir=test_outputs_dir,
         device=device
     )
 

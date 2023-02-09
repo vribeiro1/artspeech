@@ -8,7 +8,7 @@ import torch
 import yaml
 
 from torch.optim import Adam
-from torch.optim.lr_scheduler import OneCycleLR
+from torch.optim.lr_scheduler import CyclicLR
 from torch.utils.data import DataLoader
 from vt_tools import *
 
@@ -18,7 +18,7 @@ from phoneme_to_articulation.principal_components.dataset import PrincipalCompon
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import MultiArtRegularizedLatentsMSELoss
 from phoneme_to_articulation.principal_components.models import MultiArticulatorAutoencoder
-from settings import BASE_DIR, TRAIN, VALID, TEST
+from settings import BASE_DIR, DatasetConfig, TRAIN, VALID, TEST
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
@@ -28,9 +28,19 @@ if not os.path.exists(RESULTS_DIR):
 
 
 def main(
-    datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
-    train_seq_dict, valid_seq_dict, test_seq_dict, articulators_indices_dict,
-    hidden_blocks, hidden_features, dropout, clip_tails=True, state_dict_fpath=None,
+    datadir,
+    n_epochs,
+    batch_size,
+    patience,
+    learning_rate,
+    weight_decay,
+    train_seq_dict,
+    valid_seq_dict,
+    test_seq_dict,
+    model_params,
+    alpha,
+    clip_tails=True,
+    state_dict_fpath=None,
     num_workers=0
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -41,17 +51,10 @@ def main(
     last_encoders_path = os.path.join(RESULTS_DIR, "last_encoders.pt")
     last_decoders_path = os.path.join(RESULTS_DIR, "last_decoders.pt")
 
+    articulators_indices_dict = model_params["indices_dict"]
     articulators = sorted(articulators_indices_dict.keys())
 
-    model_kwargs = dict(
-        in_features=100,
-        indices_dict=articulators_indices_dict,
-        hidden_blocks=hidden_blocks,
-        hidden_features=hidden_features,
-        dropout=dropout,
-    )
-
-    autoencoder = MultiArticulatorAutoencoder(**model_kwargs)
+    autoencoder = MultiArticulatorAutoencoder(**model_params)
     if state_dict_fpath is not None:
         state_dict = torch.load(state_dict_fpath, map_location=device)
         autoencoder.load_state_dict(state_dict)
@@ -60,10 +63,9 @@ def main(
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
         datadir=datadir,
+        dataset_config=DatasetConfig,
         sequences=train_sequences,
         articulators=articulators,
-        sync_shift=0,
-        framerate=55,
         clip_tails=clip_tails
     )
     train_dataloader = DataLoader(
@@ -77,10 +79,9 @@ def main(
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
         datadir=datadir,
+        dataset_config=DatasetConfig,
         sequences=valid_sequences,
         articulators=articulators,
-        sync_shift=0,
-        framerate=55,
         clip_tails=clip_tails
     )
     valid_dataloader = DataLoader(
@@ -91,14 +92,16 @@ def main(
         worker_init_fn=set_seeds
     )
 
-    loss_fn = MultiArtRegularizedLatentsMSELoss(alpha=0.01, indices_dict=articulators_indices_dict)
+    loss_fn = MultiArtRegularizedLatentsMSELoss(
+        indices_dict=articulators_indices_dict,
+        alpha=alpha,
+    )
     optimizer = Adam(autoencoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = OneCycleLR(
+    scheduler = CyclicLR(
         optimizer,
+        base_lr=learning_rate / 25,
         max_lr=learning_rate,
-        steps_per_epoch=int(len(train_dataloader)),
-        epochs=n_epochs,
-        anneal_strategy="linear"
+        cycle_momentum=False
     )
 
     best_metric = np.inf
@@ -158,10 +161,9 @@ def main(
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
         datadir=datadir,
+        dataset_config=DatasetConfig,
         sequences=test_sequences,
         articulators=articulators,
-        sync_shift=0,
-        framerate=55,
         clip_tails=clip_tails
     )
     test_dataloader = DataLoader(
@@ -191,6 +193,7 @@ def main(
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
+        plots_dir=RESULTS_DIR,
         device=device
     )
 

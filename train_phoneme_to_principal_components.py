@@ -24,7 +24,7 @@ from phoneme_to_articulation.principal_components.evaluation import run_phoneme_
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
 from phoneme_to_articulation.principal_components.metrics import DecoderEuclideanDistance, DecoderMeanP2CPDistance
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
-from settings import BASE_DIR, TRAIN, VALID, TEST
+from settings import BASE_DIR, TRAIN, VALID, TEST, DatasetConfig
 
 ex = Experiment()
 fs_observer = FileStorageObserver.create(
@@ -145,6 +145,7 @@ def main(
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsPhonemeToArticulationDataset(
         datadir=datadir,
+        dataset_config=DatasetConfig,
         sequences=train_sequences,
         vocabulary=vocabulary,
         articulator=articulator,
@@ -164,6 +165,7 @@ def main(
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = PrincipalComponentsPhonemeToArticulationDataset(
         datadir=datadir,
+        dataset_config=DatasetConfig,
         sequences=valid_sequences,
         vocabulary=vocabulary,
         articulator=articulator,
@@ -246,6 +248,7 @@ def main(
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = PrincipalComponentsPhonemeToArticulationDataset(
         datadir=datadir,
+        dataset_config=DatasetConfig,
         sequences=test_sequences,
         vocabulary=vocabulary,
         articulator=articulator,

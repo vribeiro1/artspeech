@@ -14,6 +14,7 @@ from phoneme_to_articulation.principal_components.dataset import (
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_PC_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
+from settings import DatasetConfig
 
 
 def main(cfg):
@@ -26,6 +27,7 @@ def main(cfg):
     test_sequences = sequences_from_dict(cfg["datadir"], cfg["test_seq_dict"])
     test_dataset = PrincipalComponentsPhonemeToArticulationDataset(
         datadir=cfg["datadir"],
+        dataset_config=DatasetConfig,
         sequences=test_sequences,
         vocabulary=vocabulary,
         articulator=cfg["articulator"],

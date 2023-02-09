@@ -83,10 +83,9 @@ def main(
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsAutoencoderDataset(
         datadir=datadir,
+        dataset_config=DatasetConfig,
         sequences=train_sequences,
         articulator=articulator,
-        sync_shift=0,
-        framerate=55,
         clip_tails=clip_tails
     )
     train_dataloader = DataLoader(
@@ -100,10 +99,9 @@ def main(
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = PrincipalComponentsAutoencoderDataset(
         datadir=datadir,
+        dataset_config=DatasetConfig,
         sequences=valid_sequences,
         articulator=articulator,
-        sync_shift=0,
-        framerate=55,
         clip_tails=clip_tails
     )
     valid_dataloader = DataLoader(
@@ -233,10 +231,9 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = PrincipalComponentsAutoencoderDataset(
         datadir=datadir,
+        dataset_config=DatasetConfig,
         sequences=test_sequences,
         articulator=articulator,
-        sync_shift=0,
-        framerate=55,
         clip_tails=clip_tails
     )
     test_dataloader = DataLoader(
