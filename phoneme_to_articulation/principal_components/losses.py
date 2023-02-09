@@ -10,8 +10,13 @@ from phoneme_to_articulation.principal_components.transforms import Encode, Deco
 
 class AutoencoderLoss(nn.Module):
     def __init__(
-        self, in_features, n_components, encoder_state_dict_fpath, decoder_state_dict_fpath, device,
-        alpha=1., beta=1.
+        self,
+        in_features,
+        n_components,
+        encoder_state_dict_fpath,
+        decoder_state_dict_fpath, device,
+        alpha=1.,
+        beta=1.
     ):
         super().__init__()
 
@@ -37,7 +42,13 @@ class AutoencoderLoss(nn.Module):
         self.mse = nn.MSELoss()
         self.euclidean = EuclideanDistance()
 
-    def forward(self, outputs_pcs, targets_shapes, references, critical_mask):
+    def forward(
+        self,
+        outputs_pcs,
+        targets_shapes,
+        references,
+        critical_mask
+    ):
         bs, seq_len, _, _, n_samples = targets_shapes.shape
         encoder_inputs = targets_shapes.squeeze(dim=2).reshape(bs, seq_len, 2 * n_samples)
         target_pcs = torch.tanh(self.encode(encoder_inputs))
@@ -68,42 +79,61 @@ class AutoencoderLoss(nn.Module):
 
 
 class RegularizedLatentsMSELoss(nn.Module):
-    def __init__(self, alpha):
+    def __init__(
+        self,
+        alpha
+    ):
         super().__init__()
-
         self.alpha = alpha
         self.mse = nn.MSELoss(reduction="none")
 
-    def forward(self, outputs, latents, target, sample_weights=None):
+    def forward(
+        self,
+        outputs,
+        latents,
+        target,
+        sample_weights=None
+    ):
         mse = self.mse(outputs, target)
         if sample_weights is not None:
             mse = (sample_weights * mse.T).T
         mse = mse.mean()
 
         cov_mtx = torch.cov(latents.T)
-        cov_loss = cov_mtx.square().sum() - cov_mtx.diag().square().sum()
+        diag = cov_mtx.diag()
+        cov_loss = cov_mtx.square().sum() - diag.square().sum()
 
         return mse + self.alpha * cov_loss
 
 
 class MultiArtRegularizedLatentsMSELoss(nn.Module):
-    def __init__(self, alpha, indices_dict):
+    def __init__(
+        self,
+        alpha,
+        indices_dict
+    ):
         super().__init__()
 
         self.alpha = alpha
         self.mse = nn.MSELoss(reduction="none")
         self.indices_dict = indices_dict
 
-    def forward(self, outputs, latents, target, sample_weights=None):
+    def forward(
+        self,
+        outputs,
+        latents,
+        target,
+        sample_weights=None
+    ):
         mse = self.mse(outputs, target)
         if sample_weights is not None:
             mse = mse.permute(2, 1, 0)
             mse = (sample_weights * mse).permute(2, 1, 0)
         mse = mse.mean()
 
-        cov_features = torch.tensor([
+        cov_loss = torch.tensor([
             torch.cov(latents.T[indices]).square().sum() - torch.cov(latents.T[indices]).diag().square().sum()
             for _, indices in self.indices_dict.items()
         ]).sum()
 
-        return mse + self.alpha * cov_features
+        return mse + self.alpha * cov_loss
