@@ -225,13 +225,19 @@ def run_multiart_autoencoder_test(
             progress_bar.set_postfix(loss=np.mean(losses))
 
             if plot_outputs:
+                denorm_fn = {
+                    articulator: norm_fn.inverse
+                    for articulator, norm_fn
+                    in dataloader.dataset.normalize.items()
+                }
+
                 plot_autoencoder_outputs(
                     dataloader.dataset.datadir,
                     frame_ids,
                     outputs,
                     inputs,
                     phonemes,
-                    dataloader.dataset.normalize.inverse,
+                    denorm_fn,
                     outputs_dir=epoch_outputs_dir,
                 )
             all_latents = torch.concat([all_latents, latents], dim=0)
