@@ -14,7 +14,20 @@ from functools import partial
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from tgt import read_textgrid
-from vt_tools import COLORS
+from tqdm import tqdm
+from vt_tools import (
+    ARYTENOID_MUSCLE,
+    EPIGLOTTIS,
+    LOWER_INCISOR,
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE_MIDLINE,
+    THYROID_CARTILAGE,
+    TONGUE,
+    UPPER_INCISOR,
+    UPPER_LIP,
+    VOCAL_FOLDS
+)
 from vt_tools.bs_regularization import regularize_Bsplines
 
 from vt_shape_gen.vocal_tract_tube import generate_vocal_tract_tube
@@ -131,21 +144,19 @@ def save_vocal_tract_shape(outputs, phonemes, save_to, regularize_outputs=True):
         plt.close()
 
 
-def save_contours(outputs, save_to, regularize_outputs=True):
+def save_contours(outputs, save_to, articulators, regularize_outputs=True):
     filepaths = []
     np_outputs = outputs.detach().cpu().numpy()
     for i_frame, frame_outputs in enumerate(np_outputs):
         articul_dicts = {}
         for i_articul, articul_arr in enumerate(frame_outputs):
-            articulator = list(COLORS.keys())[i_articul]
-
+            articulator = articulators[i_articul]
             if regularize_outputs:
                 reg_X, reg_Y = regularize_Bsplines(articul_arr.T, 3)
                 articul_arr = np.array([reg_X, reg_Y])
 
-            filepath = os.path.join(save_to, f"{i_frame}_{articulator}.npy")
+            filepath = os.path.join(save_to, f"{'%04d' % i_frame}_{articulator}.npy")
             np.save(filepath, articul_arr)
-
             articul_dicts[articulator] = filepath
 
         filepaths.append(articul_dicts)
@@ -170,6 +181,7 @@ if __name__ == "__main__":
         tokens = json.load(f)
         vocabulary = {token: i for i, token in enumerate(tokens)}
 
+    textgrid_filename, _ = os.path.basename(args.textgrid_filepath).split(".")
     textgrid = read_textgrid(args.textgrid_filepath, args.textgrid_encoding)
     phonetic_sequences = get_phonetic_sequences(textgrid)
 
@@ -196,7 +208,11 @@ if __name__ == "__main__":
     else:
         raise Exception(f"Unavailable method '{args.method}'")
 
-    for i, (inputs, phonemes) in enumerate(zip(sentences_numerized, phonetic_sequences)):
+    progress_bar = tqdm(
+        enumerate(zip(sentences_numerized, phonetic_sequences), start=1),
+        total=len(phonetic_sequences)
+    )
+    for i, (inputs, phonemes) in progress_bar:
         inputs = inputs.unsqueeze(dim=0).to(device)
         _, seq_len = inputs.shape
         lengths = torch.tensor([seq_len], dtype=torch.long).cpu()
@@ -206,9 +222,12 @@ if __name__ == "__main__":
         elif args.method == "mean-contour":
             outputs = model(phonemes)
 
-        save_sentence_dir = os.path.join(args.save_to, str(i))
+        save_sentence_dir = os.path.join(args.save_to, textgrid_filename, "%04d" % i)
         if not os.path.exists(save_sentence_dir):
             os.makedirs(save_sentence_dir)
+
+        with open(os.path.join(save_sentence_dir, "target_sequence.txt"), "w") as f:
+            f.write(" ".join(phonemes))
 
         save_contours_dir = os.path.join(save_sentence_dir, "contours")
         if not os.path.exists(save_contours_dir):
@@ -221,7 +240,24 @@ if __name__ == "__main__":
         if not os.path.exists(xarticul_dir):
             os.makedirs(xarticul_dir)
 
-        articulators_dicts = save_contours(outputs.squeeze(dim=0), save_contours_dir)
+        articulators = sorted([
+            ARYTENOID_MUSCLE,
+            EPIGLOTTIS,
+            LOWER_INCISOR,
+            LOWER_LIP,
+            PHARYNX,
+            SOFT_PALATE_MIDLINE,
+            THYROID_CARTILAGE,
+            TONGUE,
+            UPPER_INCISOR,
+            UPPER_LIP,
+            VOCAL_FOLDS
+        ])
+        articulators_dicts = save_contours(
+            outputs.squeeze(dim=0),
+            save_contours_dir,
+            articulators
+        )
         for i_frame, articuls_dict in enumerate(articulators_dicts):
             internal_wall, external_wall = generate_vocal_tract_tube(articuls_dict)
 
