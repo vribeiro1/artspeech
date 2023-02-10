@@ -29,10 +29,7 @@ ORDER_STR = {
 }
 
 
-def evaluate_autoencoder(cfg):
-    datadir = cfg["datadir"]
-    exp_dir = cfg["exp_dir"]
-
+def evaluate_autoencoder(datadir, exp_dir):
     config_filepath = os.path.join(exp_dir, "config.json")
     encoders_filepath = os.path.join(exp_dir, "best_encoders.pt")
     decoders_filepath = os.path.join(exp_dir, "best_decoders.pt")
@@ -45,7 +42,8 @@ def evaluate_autoencoder(cfg):
         config = ujson.load(f)
     sequences_dict = config["test_seq_dict"]
 
-    articulators_indices_dict = config["articulators_indices_dict"]
+    model_params = config["model_params"]
+    articulators_indices_dict = model_params["indices_dict"]
     articulators = sorted(articulators_indices_dict.keys())
     n_articulators = len(articulators)
     latent_size = max(funcy.flatten(articulators_indices_dict.values())) + 1
@@ -60,21 +58,14 @@ def evaluate_autoencoder(cfg):
 
     dataloader = DataLoader(
         dataset,
-        batch_size=cfg["batch_size"],
+        batch_size=config["batch_size"],
         shuffle=False,
-        worker_init_fn=set_seeds
+        worker_init_fn=set_seeds,
+        num_workers=config.get("num_workers", 0)
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    model_kwargs = dict(
-        in_features=100,
-        indices_dict=articulators_indices_dict,
-        hidden_blocks=2,
-        hidden_features=32
-    )
-
-    autoencoder = MultiArticulatorAutoencoder(**model_kwargs)
+    autoencoder = MultiArticulatorAutoencoder(**model_params)
     encoders_state_dict = torch.load(encoders_filepath, map_location=device)
     autoencoder.encoders.load_state_dict(encoders_state_dict)
     decoders_state_dict = torch.load(decoders_filepath, map_location=device)
@@ -84,7 +75,6 @@ def evaluate_autoencoder(cfg):
     autoencoder.eval()
 
     p2cp_fn = MeanP2CPDistance(reduction="none")
-
     data_p2cp = torch.zeros(size=(0, n_articulators))
     data_latents = torch.zeros(size=(0, latent_size))
     data_reconstructions = torch.zeros(size=(0, n_articulators, 2, 50))
@@ -202,40 +192,35 @@ def evaluate_autoencoder(cfg):
     plt.savefig(os.path.join(saves_dir, "legend.png"))
 
 
-def main(cfg):
+def main(
+    datadir,
+    exp_dir,
+    batch_size,
+    model_params,
+    seq_dict,
+    save_to,
+    clip_tails=True,
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    exp_dir = cfg["exp_dir"]
-    test_sequences = sequences_from_dict(cfg["datadir"], cfg["test_seq_dict"])
-
-    articulators = sorted(cfg["articulators_indices_dict"].keys())
+    articulators_indices_dict = model_params["indices_dict"]
+    test_sequences = sequences_from_dict(datadir, seq_dict)
+    articulators = sorted(articulators_indices_dict.keys())
     test_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
-        datadir=cfg["datadir"],
+        datadir=datadir,
         dataset_config=DatasetConfig,
         sequences=test_sequences,
         articulators=articulators,
-        clip_tails=cfg["clip_tails"]
+        clip_tails=clip_tails
     )
     test_dataloader = DataLoader(
         test_dataset,
-        batch_size=cfg["batch_size"],
+        batch_size=batch_size,
         shuffle=False,
         worker_init_fn=set_seeds
     )
 
-    articulators_indices_dict = cfg["articulators_indices_dict"]
-    hidden_blocks = cfg["hidden_blocks"]
-    hidden_features = cfg["hidden_features"]
-
-    model_kwargs = dict(
-        in_features=100,
-        indices_dict=articulators_indices_dict,
-        hidden_blocks=hidden_blocks,
-        hidden_features=hidden_features
-    )
-
-    best_autoencoder = MultiArticulatorAutoencoder(**model_kwargs)
-
+    best_autoencoder = MultiArticulatorAutoencoder(**model_params)
     encoders_filepath = os.path.join(exp_dir, "best_encoders.pt")
     best_encoders_state_dict = torch.load(encoders_filepath, map_location=device)
     best_autoencoder.encoders.load_state_dict(best_encoders_state_dict)
@@ -245,12 +230,15 @@ def main(cfg):
     best_autoencoder.decoders.load_state_dict(best_decoders_state_dict)
     best_autoencoder.to(device)
 
-    test_outputs_dir = os.path.join(cfg["save_to"], "test_outputs")
+    test_outputs_dir = os.path.join(save_to, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
+    plots_dir = os.path.join(save_to, "plots")
+    if not os.path.exists(plots_dir):
+        os.makedirs(plots_dir)
 
     loss_fn = MultiArtRegularizedLatentsMSELoss(
-        indices_dict=cfg["articulators_indices_dict"],
+        indices_dict=articulators_indices_dict,
         alpha=0.1,
     )
 
@@ -259,11 +247,12 @@ def main(cfg):
         model=best_autoencoder,
         dataloader=test_dataloader,
         criterion=loss_fn,
-        outputs_dir=test_outputs_dir,
+        # outputs_dir=test_outputs_dir,
+        plots_dir=plots_dir,
         device=device
     )
 
-    with open(os.path.join(cfg["save_to"], "test_results.json"), "w") as f:
+    with open(os.path.join(save_to, "test_results.json"), "w") as f:
         ujson.dump(info_test, f)
 
 
@@ -275,5 +264,8 @@ if __name__ == "__main__":
     with open(args.cfg_filepath) as f:
         cfg = yaml.safe_load(f.read())
 
-    main(cfg)
-    evaluate_autoencoder(cfg)
+    main(**cfg)
+
+    datadir = cfg["datadir"]
+    exp_dir = cfg["exp_dir"]
+    evaluate_autoencoder(datadir, exp_dir)
