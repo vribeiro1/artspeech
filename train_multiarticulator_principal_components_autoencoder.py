@@ -18,6 +18,7 @@ from phoneme_to_articulation.principal_components.dataset import PrincipalCompon
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import MultiArtRegularizedLatentsMSELoss
 from phoneme_to_articulation.principal_components.models import MultiArticulatorAutoencoder
+from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistance
 from settings import BASE_DIR, DatasetConfig, TRAIN, VALID, TEST
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
@@ -25,6 +26,27 @@ TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
 RESULTS_DIR = os.path.join(TMP_DIR, "results")
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
+
+
+def reconstruction_error(outputs, targets, denorm_fn_dict, px_space=1, res=1):
+    p2cp_fn = MeanP2CPDistance(reduction="mean")
+
+    batch_size, num_articulators, n_features = outputs.shape
+    outputs = outputs.reshape(batch_size, num_articulators, 2, n_features // 2)
+    targets = targets.reshape(batch_size, num_articulators, 2, n_features // 2)
+
+    p2cps = []
+    for i, (_, denorm_fn) in enumerate(denorm_fn_dict.items()):
+        outputs[:, i, :] = denorm_fn(outputs[:, i, :])
+        targets[:, i, :] = denorm_fn(targets[:, i, :])
+
+        p2cp = p2cp_fn(
+            outputs[:, i, :].permute(0, 2, 1),
+            targets[:, i, :].permute(0, 2, 1)
+        )
+        p2cp_mm = p2cp * px_space * res
+        p2cps.append(p2cp_mm.item())
+    return np.mean(p2cps)
 
 
 def main(
@@ -87,7 +109,7 @@ def main(
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=batch_size,
-        shuffle=False,
+        shuffle=True,
         num_workers=num_workers,
         worker_init_fn=set_seeds
     )
@@ -103,6 +125,20 @@ def main(
         max_lr=learning_rate,
         cycle_momentum=False
     )
+
+    denorm_fn_dict = {
+        articulator: denorm_fn.inverse
+        for articulator, denorm_fn
+        in train_dataset.normalize.items()
+    }
+    metrics = {
+        "p2cp_mm": lambda outputs, targets: reconstruction_error(
+            outputs, targets,
+            denorm_fn_dict=denorm_fn_dict,
+            px_space=DatasetConfig.PIXEL_SPACING,
+            res=DatasetConfig.RES
+        )
+    }
 
     best_metric = np.inf
     epochs_since_best = 0
@@ -131,6 +167,7 @@ def main(
             dataloader=valid_dataloader,
             optimizer=optimizer,
             criterion=loss_fn,
+            fn_metrics=metrics,
             device=device
         )
 
@@ -138,8 +175,8 @@ def main(
             f"valid_{metric}": value for metric, value in info_valid.items()
         }, step=epoch)
 
-        if info_valid["loss"] < best_metric:
-            best_metric = info_valid["loss"]
+        if info_valid["p2cp_mm"] < best_metric:
+            best_metric = info_valid["p2cp_mm"]
             epochs_since_best = 0
             torch.save(autoencoder.encoders.state_dict(), best_encoders_path)
             torch.save(autoencoder.decoders.state_dict(), best_decoders_path)
@@ -154,6 +191,11 @@ def main(
 
         mlflow.log_artifact(last_encoders_path)
         mlflow.log_artifact(last_decoders_path)
+
+        print(f"""
+Finished training epoch {epoch}
+Best metric: {best_metric}, Epochs since best: {epochs_since_best}
+""")
 
         if epochs_since_best > patience:
             break
@@ -175,7 +217,7 @@ def main(
     )
 
     best_autoencoder = MultiArticulatorAutoencoder(
-        **model_kwargs
+        **model_params
     )
     best_encoders_state_dict = torch.load(best_encoders_path, map_location=device)
     best_autoencoder.encoders.load_state_dict(best_encoders_state_dict)
