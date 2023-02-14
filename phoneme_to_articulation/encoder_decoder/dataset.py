@@ -38,10 +38,10 @@ def pad_sequence_collate_fn(batch):
 
     phonemes = [batch[i][3] for i in sentences_sorted_indices]
 
-    critical_masks = [item[5].T for item in batch]
-    padded_critical_masks = pad_sequence(critical_masks, batch_first=True)
-    padded_critical_masks = padded_critical_masks[sentences_sorted_indices]
-    padded_critical_masks = padded_critical_masks.permute(0, 2, 1)
+    # critical_masks = [item[5].T for item in batch]
+    # padded_critical_masks = pad_sequence(critical_masks, batch_first=True)
+    # padded_critical_masks = padded_critical_masks[sentences_sorted_indices]
+    # padded_critical_masks = padded_critical_masks.permute(0, 2, 1)
 
     sentence_frames = [batch[i][6] for i in sentences_sorted_indices]
 
@@ -51,7 +51,7 @@ def pad_sequence_collate_fn(batch):
         padded_sentence_targets,
         len_sentences_sorted,
         phonemes,
-        padded_critical_masks,
+        # padded_critical_masks,
         sentence_frames
     )
 
@@ -76,7 +76,7 @@ class ArtSpeechDataset(Dataset):
         self.TVs = TVs or []
 
         collector = GottingenDatabaseCollector(datadir)
-        data = collector.collect_data(sequences, sync_shift, framerate, articulators)
+        data = collector.collect_data(sequences, articulators)
         self.data = funcy.lfilter(lambda d: d["has_all"], data)
 
     def prepare_articulator_array(self, subject, sequence, frame_id, articulator):

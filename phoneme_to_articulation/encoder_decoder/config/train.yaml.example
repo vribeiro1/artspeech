@@ -1,0 +1,36 @@
+datadir: /srv/storage/talc3@talc-data.nancy/multispeech/calcul/users/vsouzaribeiro/datasets/Gottingen_Database
+num_epochs: 300
+batch_size: 32
+patience: 20
+learning_rate: 0.0001
+weight_decay: 0.000001
+train_seq_dict:
+    "8066": []
+    "8067": []
+    "8068":
+        - "0020"
+        - "0021"
+        - "0024"
+        - "0028"
+valid_seq_dict:
+    "8068":
+        - "0006"
+        - "0008"
+test_seq_dict:
+    "8068":
+        - "0014"
+        - "0017"
+vocab_filepath: /srv/storage/talc3@talc-data.nancy/multispeech/calcul/users/vsouzaribeiro/datasets/Gottingen_Database/vocabulary.json
+articulators:
+    - arytenoid-muscle
+    - epiglottis
+    - lower-incisor
+    - lower-lip
+    - pharynx
+    - soft-palate
+    - thyroid-cartilage
+    - tongue
+    - upper-incisor
+    - upper-lip
+    - vocal-folds
+clip_tails: true

@@ -22,7 +22,7 @@ class DatabaseCollector:
         self.save_audio_dir = save_audio_dir
 
     @staticmethod
-    def _has_all_articulators(frame_ids, required_articulators):
+    def _has_all_articulators(sequence_dir, frame_ids, required_articulators):
         if required_articulators is None:
             return True
 
@@ -154,7 +154,11 @@ class DatabaseCollector:
                     "frame_ids": sentence_frame_ids,
                     "phonemes_with_time": sentence_phonemes_with_time,
                     "phonemes": sentence_phonemes,
-                    "has_all": self._has_all_articulators(sentence_frame_ids, required_articulators)
+                    "has_all": self._has_all_articulators(
+                        sequence_dir,
+                        sentence_frame_ids,
+                        required_articulators
+                    ),
                 })
 
         return data
