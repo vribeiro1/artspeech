@@ -74,6 +74,7 @@ class PhonemeRecognitionDataset(Dataset):
         blank_token: Optional[str] = None,
         unknown_token: Optional[str] = "<unk>",
         tmp_dir: Optional[str] = None,
+        voiced_tokens=None,
     ):
         super().__init__()
 
@@ -85,6 +86,7 @@ class PhonemeRecognitionDataset(Dataset):
         self.unknown_token = unknown_token
         self.sample_rate = sample_rate
         self.features = features
+        self.voiced_tokens = voiced_tokens or []
 
         self.melspectrogram = transforms.MelSpectrogram(
             sample_rate=sample_rate,
@@ -233,6 +235,13 @@ class PhonemeRecognitionDataset(Dataset):
         sample[Target.ARTICULATORY.value] = articulatory_target
         sample[f"{Target.ARTICULATORY.value}_length"] = articulatory_target_length
 
+        # Voicing information
+        voicing = torch.tensor(
+            [phoneme in self.voiced_tokens for phoneme in phonemes],
+            dtype=torch.float
+        )
+        sample["voicing"] = voicing
+
         # CTC targets
         ctc_phonemes = [k for k, _ in groupby(phonemes)]
         ctc_tokens = [
@@ -282,6 +291,10 @@ def collate_fn(batch: List[Dict], features_names: List[Feature]):
 
     collated_batch[Target.ARTICULATORY.value] = articulatory_targets
     collated_batch[f"{Target.ARTICULATORY.value}_length"] = articulatory_target_lengths
+
+    voicing = [item["voicing"] for item in batch]
+    voicing = pad_sequence(voicing, batch_first=True, padding_value=-1)
+    collated_batch["voicing"] = voicing
 
     ctc_targets = [item[Target.CTC.value] for item in batch]
     ctc_targets = pad_sequence(ctc_targets, batch_first=True, padding_value=-1)

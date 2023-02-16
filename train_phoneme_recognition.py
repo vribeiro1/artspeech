@@ -51,7 +51,7 @@ def main(
     weight_decay,
     feature,
     target,
-    vocab_fpath,
+    vocab_filepath,
     train_seq_dict,
     valid_seq_dict,
     test_seq_dict,
@@ -61,6 +61,7 @@ def main(
     num_workers=0,
     logits_large_margins=0.0,
     pretrained=False,
+    voicing_filepath=None,
     state_dict_filepath=None,
     checkpoint_filepath=None,
 ):
@@ -78,10 +79,15 @@ def main(
 
     default_tokens = [BLANK, UNKNOWN] if criterion == Criterion.CTC else [UNKNOWN]
     vocabulary = {token: i for i, token in enumerate(default_tokens)}
-    with open(vocab_fpath) as f:
+    with open(vocab_filepath) as f:
         tokens = ujson.load(f)
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
+    if voicing_filepath is not None:
+        with open(voicing_filepath) as f:
+            voiced_tokens = ujson.load(f)
+    else:
+        voiced_tokens = None
 
     tokens = [k for k, v in sorted(vocabulary.items(), key=lambda t: t[1])]
     decoder_fn = ctc_decoder if criterion == Criterion.CTC else TopKDecoder
@@ -117,6 +123,7 @@ def main(
         dataset_config=DatasetConfig,
         features=[feature],
         tmp_dir=TMP_DIR,
+        voiced_tokens=voiced_tokens,
     )
     train_dataloader = DataLoader(
         train_dataset,
@@ -136,6 +143,7 @@ def main(
         dataset_config=DatasetConfig,
         features=[feature],
         tmp_dir=TMP_DIR,
+        voiced_tokens=voiced_tokens,
     )
     valid_dataloader = DataLoader(
         valid_dataset,
@@ -202,6 +210,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             device=device,
             feature=feature,
             target=target,
+            use_voicing=(voicing_filepath is not None),
             use_log_prob=(criterion == Criterion.CTC),
         )
 
@@ -225,6 +234,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             device=device,
             feature=feature,
             target=target,
+            use_voicing=(voicing_filepath is not None),
             use_log_prob=(criterion == Criterion.CTC),
         )
 
@@ -236,8 +246,8 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             step=epoch
         )
 
-        if 1 - info_valid["auroc"] < best_metric:
-            best_metric = 1 - info_valid["auroc"]
+        if 1 - info_valid["accuracy"] < best_metric:
+            best_metric = 1 - info_valid["accuracy"]
             epochs_since_best = 0
             torch.save(model.state_dict(), best_model_path)
             mlflow.log_artifact(best_model_path)
@@ -277,6 +287,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         dataset_config=DatasetConfig,
         features=[feature],
         tmp_dir=TMP_DIR,
+        voiced_tokens=voiced_tokens,
     )
     test_dataloader = DataLoader(
         test_dataset,
@@ -307,6 +318,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         device=device,
         feature=feature,
         target=target,
+        use_voicing=(voicing_filepath is not None),
         save_dir=RESULTS_DIR,
     )
 

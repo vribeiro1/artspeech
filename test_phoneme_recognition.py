@@ -25,6 +25,7 @@ from phoneme_recognition.datasets import PhonemeRecognitionDataset, collate_fn
 from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC
+from phoneme_recognition.synthetic_shapes import SyntheticPhonemeRecognitionDataset
 from settings import DatasetConfig, BASE_DIR
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
@@ -39,13 +40,14 @@ def main(
     database,
     batch_size,
     seq_dict,
-    vocab_fpath,
+    vocab_filepath,
     pretrained,
     feature,
     loss,
     model_params,
     target,
     state_dict_filepath,
+    voicing_filepath=None,
     num_workers=0,
     save_dir=None,
 ):
@@ -59,10 +61,15 @@ def main(
 
     default_tokens = [BLANK, UNKNOWN] if criterion == Criterion.CTC else [UNKNOWN]
     vocabulary = {token: i for i, token in enumerate(default_tokens)}
-    with open(vocab_fpath) as f:
+    with open(vocab_filepath) as f:
         tokens = ujson.load(f)
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
+    if voicing_filepath is not None:
+        with open(voicing_filepath) as f:
+            voiced_tokens = ujson.load(f)
+    else:
+        voiced_tokens = None
 
     tokens = [k for k, v in sorted(vocabulary.items(), key=lambda t: t[1])]
     decoder_fn = ctc_decoder if criterion == Criterion.CTC else TopKDecoder
@@ -89,6 +96,7 @@ def main(
     model.to(device)
 
     sequences = sequences_from_dict(datadir, seq_dict)
+    # dataset = SyntheticPhonemeRecognitionDataset(
     dataset = PhonemeRecognitionDataset(
         datadir=datadir,
         database=database,
@@ -97,6 +105,7 @@ def main(
         dataset_config=DatasetConfig,
         features=[feature],
         tmp_dir=TMP_DIR,
+        voiced_tokens=voiced_tokens,
     )
     dataloader = DataLoader(
         dataset,
@@ -121,7 +130,8 @@ def main(
         device=device,
         feature=feature,
         target=target,
-        save_dir=save_dir
+        use_voicing=(voicing_filepath is not None),
+        save_dir=save_dir,
     )
 
     if save_dir is not None:

@@ -154,10 +154,13 @@ class DeepSpeech2(nn.Module):
         out = norm_fn(x, dim=-1)
         return out
 
-    def forward(self, x, return_features=False):
+    def forward(self, x, voicing=None, return_features=False):
         """
         Args:
             x (torch.tensor): Tensor of shape (B, C, D, T)
+            voicing (torch.tensor): Tensor of shape (B, T)
+            return_features (bool): if True, return the features immediately before the classifier
+                layer.
 
         Return:
             outputs (torch.tensor): Tensor of shape (batch_size, time, classes)
@@ -167,16 +170,19 @@ class DeepSpeech2(nn.Module):
             x = self.adapter(x)
 
         out = self.cnn(x)
+        if voicing is not None:
+            voicing = voicing.unsqueeze(dim=1).unsqueeze(dim=1)  # (B, 1, 1, T)
+            out += voicing
         for residual_layer in self.residual_layers:
             out = residual_layer(out)
 
         batch_size, channels, features, seq_len = out.shape
         out = out.view(batch_size, channels * features, seq_len)
-        out = out.permute(2, 0, 1)  # time, batch_size, features
+        out = out.permute(2, 0, 1)  # T, B, D
         out = self.linear(out)
         for recurrent_layer in self.recurrent_layers:
             out = recurrent_layer(out)
-        out = out.permute(1, 0, 2)  # batch, time, features
+        out = out.permute(1, 0, 2)  # B, T, D
 
         features = self.feature_extractor(out)
         out = self.classifier(self.dropout(features))

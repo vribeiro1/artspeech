@@ -19,61 +19,14 @@ SIL = "#"
 UNKNOWN = "<unk>"
 BLANK = "<blank>"
 
-PHONETIC_FAMILIES = {
-    "fricatives": [
-        "f",
-        "v",
-        "S",
-        "Z",
-        "s",
-        "z"
-    ],
-    "plosives": [
-        "p",
-        "b",
-        "t",
-        "d",
-        "k",
-        "g"
-    ],
-    "laterals": [
-        "l"
-    ],
-    "nasals": [
-        "m",
-        "n",
-        "U~/",
-        "a~",
-        "o~"
-    ],
-    "vowels": [
-        "a",
-        "e",
-        "i",
-        "o",
-        "u",
-        "y",
-        "E",
-        "E/",
-        "O",
-        "O/",
-        "2",
-        "9",
-        "@",
-    ],
-    "semi vowels": [
-        "w",
-        "j",
-        "H"
-    ],
-}
-
-PHONETIC_PLACES_OF_ARTICULATION = {
-    0: ["i", "j", "e", "E", "E/", "a", "O", "O/", "o", "u", "w"],
-    1: ["y", "H", "2", "9", "@"],
-    2: ["U~/", "o~", "a~", "m", "n"],
-    3: ["p", "b", "t", "d", "l", "k", "g"],
-    4: ["f", "v", "s", "z", "S", "Z"],
+PHONETIC_CLASSES = {
+    0: ["t", "d", "n", "l", "z", "s"],
+    1: ["p", "b", "m", "f", "v"],
+    2: ["k", "g", "Z", "S"],
+    3: ["i", "e", "E", "E/", "U~/", "j"],
+    4: ["u", "o", "O", "O/", "o~", "w"],
+    5: ["a", "a~"],
+    6: ["y", "2", "9", "H", "@"],
 }
 
 
@@ -104,6 +57,7 @@ def run_epoch(
     use_log_prob: bool,
     target: Target,
     feature: Feature = Feature.MELSPEC,
+    use_voicing: bool = False,
     logits_large_margins=0.0,
     scheduler=None,
     fn_metrics=None,
@@ -131,10 +85,15 @@ def run_epoch(
 
         inputs = inputs.to(device)
         targets = targets.to(device)
+        if use_voicing:
+            voicing = batch["voicing"]
+            voicing = voicing.to(device)
+        else:
+            voicing = None
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
-            outputs = model(inputs)
+            outputs = model(inputs, voicing)
             if training and logits_large_margins > 0.0:
                 outputs = model.get_noise_logits(outputs, logits_large_margins)
             norm_outputs = model.get_normalized_outputs(outputs, use_log_prob=use_log_prob)
@@ -184,6 +143,7 @@ def run_test(
     fn_metrics,
     target: Target,
     feature: Feature = Feature.MELSPEC,
+    use_voicing: bool = False,
     device=None,
     save_dir=None,
 ):
@@ -219,8 +179,14 @@ def run_test(
 
         inputs = inputs.to(device)
         targets = targets.to(device)
+        if use_voicing:
+            voicing = batch["voicing"]
+            voicing = voicing.to(device)
+        else:
+            voicing = None
+
         with torch.set_grad_enabled(False):
-            outputs, features = model(inputs, return_features=True)
+            outputs, features = model(inputs, voicing, return_features=True)
         outputs = model.get_normalized_outputs(outputs, use_log_prob=False)
 
         for metric_name in averaged_metrics:
@@ -251,7 +217,7 @@ def run_test(
         save_filepath = os.path.join(save_dir, "model_features.pdf")
 
         class_map = {}
-        for family, tokens in PHONETIC_FAMILIES.items():
+        for _, tokens in PHONETIC_CLASSES.items():
             for token in tokens:
                 class_map[token] = vocabulary[token]
 
@@ -261,7 +227,7 @@ def run_test(
             class_map=class_map,
             max_items_per_class=100,
             save_filepath=save_filepath,
-            plot_groups=PHONETIC_PLACES_OF_ARTICULATION,
+            plot_groups=PHONETIC_CLASSES,
         )
 
         save_filepath = os.path.join(save_dir, "confusion_matrix.pdf")
@@ -270,7 +236,7 @@ def run_test(
             targets=model_targets.numpy(),
             save_filepath=save_filepath,
             vocabulary=vocabulary,
-            groups=PHONETIC_FAMILIES,
+            groups=PHONETIC_CLASSES,
             normalize="true",
         )
 
@@ -315,18 +281,18 @@ def plot_features(
     cmap = plt.get_cmap("hsv")
     fig, ax = plt.subplots(figsize=(10, 10))
     num_groups = len(plot_groups)
-    for group, classes in plot_groups.items():
+    for group_i, (group, classes) in enumerate(plot_groups.items()):
         group_features = np.zeros(shape=(0, 2))
         for class_ in classes:
-            i = class_map[class_]
+            class_i = class_map[class_]
             group_features = np.concatenate([
                 group_features,
-                tsne_features[plot_targets == i]
+                tsne_features[plot_targets == class_i]
             ])
         if len(group_features) == 0:
             continue
 
-        color = cmap(group / num_groups)
+        color = cmap(group_i / num_groups)
         label = " ".join(classes)
         scatter = ax.scatter(
             *group_features.T,

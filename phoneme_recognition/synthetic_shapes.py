@@ -38,10 +38,17 @@ ARTICULATORS = [
 
 
 class SyntheticPhonemeRecognitionDataset(Dataset):
-    def __init__(self, datadir, vocabulary, **kwargs):
+    def __init__(
+        self,
+        datadir,
+        vocabulary,
+        voiced_tokens=None,
+        **kwargs
+    ):
         self.datadir = datadir
         self.vocabulary = vocabulary
         self.data = self._collect_data(datadir)
+        self.voiced_tokens = voiced_tokens or []
 
     @staticmethod
     def _collect_data(datadir):
@@ -112,6 +119,12 @@ class SyntheticPhonemeRecognitionDataset(Dataset):
         inputs = inputs.reshape(channels, n_walls * features, time)
         inputs = inputs.type(torch.float)
 
+        # Voicing information
+        voicing = torch.tensor(
+            [phoneme in self.voiced_tokens for phoneme in phonemes],
+            dtype=torch.float
+        )
+
         ctc_target = torch.unique_consecutive(targets)
         ctc_target_length = len(ctc_target)
 
@@ -120,6 +133,7 @@ class SyntheticPhonemeRecognitionDataset(Dataset):
             "air_column_length": time,
             "articulatory_target": targets,
             "articulatory_target_length": len(targets),
+            "voicing": voicing,
             "ctc_target": ctc_target,
             "ctc_target_length": ctc_target_length,
         }
