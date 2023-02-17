@@ -19,6 +19,17 @@ SIL = "#"
 UNKNOWN = "<unk>"
 BLANK = "<blank>"
 
+CLASSES_NAMES = {
+    0: "dental/alveolar",
+    1: "bilabial/labiodental",
+    2: "velar/palatal",
+    3: "front vowels",
+    4: "rounded vowels",
+    5: "central vowels",
+    6: "back vowels",
+    7: "other",
+}
+
 PHONETIC_CLASSES = {
     0: ["t", "d", "n", "l", "z", "s"],
     1: ["p", "b", "m", "f", "v"],
@@ -230,14 +241,25 @@ def run_test(
             plot_groups=PHONETIC_CLASSES,
         )
 
-        save_filepath = os.path.join(save_dir, "confusion_matrix.pdf")
-        plot_confusion_matrix(
+        conf_mtx = compute_confusion_matrix(
             predictions=model_predictions.numpy(),
             targets=model_targets.numpy(),
-            save_filepath=save_filepath,
             vocabulary=vocabulary,
             groups=PHONETIC_CLASSES,
             normalize="true",
+        )
+        np.save(
+            os.path.join(save_dir, "confusion_matrix.npy"),
+            conf_mtx
+        )
+
+        plot_confusion_matrix(
+            conf_mtx,
+            save_filepath=os.path.join(save_dir, "confusion_matrix.png"),
+        )
+        plot_confusion_matrix(
+            conf_mtx,
+            save_filepath=os.path.join(save_dir, "confusion_matrix.pdf"),
         )
 
     info = {}
@@ -330,13 +352,12 @@ def plot_features(
     fig_legend.savefig(fig_filepath)
 
 
-def plot_confusion_matrix(
+def compute_confusion_matrix(
     predictions,
     targets,
-    save_filepath,
     vocabulary,
     groups=None,
-    normalize=None
+    normalize=None,
 ):
     vocabulary_transposed = {i: token for token, i in vocabulary.items()}
     target_tokens = [vocabulary_transposed.get(i.item(), UNKNOWN) for i in targets.astype(np.int)]
@@ -348,17 +369,21 @@ def plot_confusion_matrix(
             for symbol in symbols:
                 groups_transposed[symbol] = group_name
 
-        target_tokens = [groups_transposed.get(symbol, "other") for symbol in target_tokens]
-        predicted_tokens = [groups_transposed.get(symbol, "other") for symbol in predicted_tokens]
+        other = max(groups_transposed.keys())
+        target_tokens = [groups_transposed.get(symbol, other) for symbol in target_tokens]
+        predicted_tokens = [groups_transposed.get(symbol, other) for symbol in predicted_tokens]
 
-    labels = sorted(groups.keys()) + ["other"]
-    conf_mtx = confusion_matrix(target_tokens, predicted_tokens, normalize=normalize, labels=labels)
+    conf_mtx = confusion_matrix(target_tokens, predicted_tokens, normalize=normalize)
+    return conf_mtx
 
+
+def plot_confusion_matrix(
+    conf_mtx,
+    save_filepath,
+):
     fig, ax = plt.subplots(figsize=(15, 15))
     sns.heatmap(
         conf_mtx,
-        xticklabels=labels,
-        yticklabels=labels,
         annot=True,
         cbar=False,
         square=True,
@@ -371,7 +396,6 @@ def plot_confusion_matrix(
     ax.set_xlabel("Predicted Phonemes", fontsize=28)
     ax.set_ylabel("True Phonemes", fontsize=28)
     ax.tick_params(axis="both", which="major", labelsize=24)
-
 
     plt.tight_layout()
     plt.savefig(save_filepath)
