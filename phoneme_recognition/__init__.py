@@ -20,13 +20,13 @@ UNKNOWN = "<unk>"
 BLANK = "<blank>"
 
 CLASSES_NAMES = {
-    0: "dental/alveolar",
-    1: "bilabial/labiodental",
-    2: "velar/palatal",
+    0: "dental",
+    1: "labial",
+    2: "palatal",
     3: "front vowels",
-    4: "rounded vowels",
-    5: "central vowels",
-    6: "back vowels",
+    4: "back vowels",
+    5: "open vowels",
+    6: "rounded vowels",
     7: "other",
 }
 
@@ -37,7 +37,7 @@ PHONETIC_CLASSES = {
     3: ["i", "e", "E", "E/", "U~/", "j"],
     4: ["u", "o", "O", "O/", "o~", "w"],
     5: ["a", "a~"],
-    6: ["y", "2", "9", "H", "@"],
+    6: ["y", "2", "9", "H"],
 }
 
 
