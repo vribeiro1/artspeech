@@ -17,7 +17,6 @@ from vt_shape_gen.helpers import load_articulator_array
 from database_collector import GottingenDatabaseCollector
 from phoneme_to_articulation.tail_clipper import TailClipper
 from phoneme_to_articulation.transforms import Normalize
-from settings import BASE_DIR
 
 phoneme_weights = {
     "l": 3,
@@ -66,8 +65,18 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
                 })
         self.data = pd.DataFrame(data)
 
-        mean = torch.from_numpy(np.load(os.path.join(BASE_DIR, "data", f"{articulator}_mean.npy")))
-        std = torch.from_numpy(np.load(os.path.join(BASE_DIR, "data", f"{articulator}_std.npy")))
+        mean_filepath = os.path.join(
+            datadir,
+            "normalization_statistics",
+            f"{articulator}_mean.npy"
+        )
+        mean = torch.from_numpy(np.load(mean_filepath))
+        std_filepath = os.path.join(
+            datadir,
+            "normalization_statistics",
+            f"{articulator}_std.npy"
+        )
+        std = torch.from_numpy(np.load(std_filepath))
         self.normalize = Normalize(mean, std)
 
     def __len__(self):
@@ -178,10 +187,18 @@ class PrincipalComponentsMultiArticulatorAutoencoderDataset(PrincipalComponentsA
 
         self.normalize = {}
         for articulator in self.articulators:
-            fp_mean = os.path.join(BASE_DIR, "data", f"{articulator}_mean.npy")
-            mean = torch.from_numpy(np.load(fp_mean))
-            fp_std = os.path.join(BASE_DIR, "data", f"{articulator}_std.npy")
-            std = torch.from_numpy(np.load(fp_std))
+            mean_filepath = os.path.join(
+                datadir,
+                "normalization_statistics",
+                f"{articulator}_mean.npy"
+            )
+            mean = torch.from_numpy(np.load(mean_filepath))
+            std_filepath = os.path.join(
+                datadir,
+                "normalization_statistics",
+                f"{articulator}_std.npy"
+            )
+            std = torch.from_numpy(np.load(std_filepath))
             self.normalize[articulator] = Normalize(mean, std)
 
     def __getitem__(self, index):
@@ -243,8 +260,18 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
         self.TVs = ["TBCD", "TTCD"]
         self.data = collect_data(datadir, sequences, sync_shift, framerate)
 
-        mean = torch.from_numpy(np.load(os.path.join(BASE_DIR, "data", f"{articulator}_mean.npy")))
-        std = torch.from_numpy(np.load(os.path.join(BASE_DIR, "data", f"{articulator}_std.npy")))
+        mean_filepath = os.path.join(
+            datadir,
+            "normalization_statistics",
+            f"{articulator}_mean.npy"
+        )
+        mean = torch.from_numpy(np.load(mean_filepath))
+        std_filepath = os.path.join(
+            datadir,
+            "normalization_statistics",
+            f"{articulator}_std.npy"
+        )
+        std = torch.from_numpy(np.load(std_filepath))
         self.normalize = Normalize(mean, std)
 
     def __len__(self):

@@ -133,7 +133,7 @@ class MultiArtRegularizedLatentsMSELoss(nn.Module):
 
         cov_loss = torch.tensor([
             torch.cov(latents.T[indices]).square().sum() - torch.cov(latents.T[indices]).diag().square().sum()
-            for _, indices in self.indices_dict.items()
+            for _, indices in self.indices_dict.items() if len(indices) > 1
         ]).sum()
 
         return mse + self.alpha * cov_loss
