@@ -133,7 +133,7 @@ class Autoencoder(nn.Module):
         return outputs, latents
 
 
-class ArticulatorPrincipalComponentsPredictor(nn.Module):
+class PrincipalComponentsPredictor(nn.Module):
     def __init__(
         self,
         in_features,
@@ -186,7 +186,7 @@ class PrincipalComponentsArtSpeech(nn.Module):
             nn.ReLU()
         )
 
-        self.predictor = ArticulatorPrincipalComponentsPredictor(
+        self.predictor = PrincipalComponentsPredictor(
             in_features=hidden_size,
             num_components=num_components
         )
@@ -212,21 +212,18 @@ class PrincipalComponentsArtSpeech(nn.Module):
         return components
 
 
-class MultiArticulatorAutoencoder(nn.Module):
+class MultiEncoder(nn.Module):
     def __init__(
         self,
-        in_features,
         indices_dict,
-        hidden_blocks=1,
-        hidden_features=64,
-        dropout=0.0
+        in_features,
+        hidden_blocks,
+        hidden_features
     ):
         super().__init__()
-
         self.indices_dict = indices_dict
         self.latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
         self.sorted_articulators = sorted(self.indices_dict.keys())
-
         self.encoders = nn.ModuleDict({
             articulator: Encoder(
                 in_features=in_features,
@@ -237,6 +234,39 @@ class MultiArticulatorAutoencoder(nn.Module):
             for articulator, indices in self.indices_dict.items()
         })
 
+    def forward(self, x):
+        bs, _, _ = x.shape
+        articulators_latent_space = {
+            articulator: -torch.inf * torch.ones(
+                size=(bs, self.latent_size),
+                dtype=torch.float, device=x.device
+            ) for articulator in self.sorted_articulators
+        }
+
+        for i, articulator in enumerate(self.sorted_articulators):
+            indices = self.indices_dict[articulator]
+            encoder = self.encoders[articulator]
+            articulators_latent_space[articulator][..., indices] = encoder(x[..., i, :])
+
+        latent_space = torch.stack([
+            articulators_latent_space[articulator] for articulator in self.sorted_articulators
+        ], dim=1)
+        latent_space, _ = torch.max(latent_space, dim=1)
+        return latent_space
+
+
+class MultiDecoder(nn.Module):
+    def __init__(
+        self,
+        indices_dict,
+        in_features,
+        hidden_blocks,
+        hidden_features
+    ):
+        super().__init__()
+        self.indices_dict = indices_dict
+        self.latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
+        self.sorted_articulators = sorted(self.indices_dict.keys())
         self.decoders = nn.ModuleDict({
             articulator: Decoder(
                 num_components=len(indices),
@@ -248,32 +278,36 @@ class MultiArticulatorAutoencoder(nn.Module):
         })
 
     def forward(self, x):
-        """
-        Args:
-        x (torch.tensor): Torch tensor of shape (bs, N_articulators, in_features)
-        """
-        bs, _, _ = x.shape
-
-        articulators_latent_space = {
-            articulator: -torch.inf * torch.ones(
-                size=(bs, self.latent_size),
-                dtype=torch.float, device=x.device
-            ) for articulator in self.sorted_articulators
-        }
-
-        for i, articulator in enumerate(self.sorted_articulators):
-            indices = self.indices_dict[articulator]
-            encoder = self.encoders[articulator]
-            articulators_latent_space[articulator][:, indices] = torch.tanh(encoder(x[:, i, :]))
-
-        latent_space = torch.stack([
-            articulators_latent_space[articulator] for articulator in self.sorted_articulators
-        ], dim=1)
-
-        shared_latent_space, _ = torch.max(latent_space, dim=1)
         outputs = torch.concat([
-            self.decoders[articulator](shared_latent_space[:, self.indices_dict[articulator]]).unsqueeze(dim=1)
+            self.decoders[articulator](x[..., self.indices_dict[articulator]]).unsqueeze(dim=1)
             for articulator in self.sorted_articulators
         ], dim=1)
 
-        return outputs, shared_latent_space
+        return outputs
+
+
+class MultiArticulatorAutoencoder(nn.Module):
+    def __init__(
+        self,
+        in_features,
+        indices_dict,
+        hidden_blocks=1,
+        hidden_features=64,
+        dropout=0.0
+    ):
+        super().__init__()
+        self.indices_dict = indices_dict
+        self.latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
+        self.sorted_articulators = sorted(self.indices_dict.keys())
+        self.encoders = MultiEncoder(indices_dict)
+        self.decoders = MultiDecoder(indices_dict)
+
+    def forward(self, x):
+        """
+        Args:
+            x (torch.tensor): Torch tensor of shape (bs, N_articulators, in_features)
+        """
+        latent_space = torch.tanh(self.encoders(x))
+        outputs = self.decoders(latent_space)
+
+        return outputs, latent_space

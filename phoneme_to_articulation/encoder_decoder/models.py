@@ -5,6 +5,7 @@ import torch.nn as nn
 
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
+
 class ArticulatorPredictor(nn.Module):
     def __init__(self, in_features, n_samples):
         super().__init__()
