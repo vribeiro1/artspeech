@@ -10,8 +10,6 @@ class Encode(nn.Module):
         encoder_state_dict = torch.load(state_dict_filepath, map_location=device)
         self.encoder.load_state_dict(encoder_state_dict)
         self.encoder.to(device)
-        self.encoder.eval()
-        self.encoder = self.encoder.detach()
 
         for parameter in self.encoder.parameters():
             parameter.requires_grad = False
@@ -28,11 +26,22 @@ class Decode(nn.Module):
         decoder_state_dict = torch.load(state_dict_filepath, map_location=device)
         self.decoder.load_state_dict(decoder_state_dict)
         self.decoder.to(device)
-        self.decoder.eval()
-        self.decoder = self.decoder.detach()
 
         for parameter in self.decoder.parameters():
             parameter.requires_grad = False
 
     def forward(self, x):
         return self.decoder(x)
+
+
+class InputTransform(nn.Module):
+    def __init__(self, transform, device, **kwargs):
+        super().__init__()
+        self.transform = transform
+        self.transform.to(device)
+
+        for parameter in self.transform.parameters():
+            parameter.requires_grad = False
+
+    def forward(self, x):
+        return self.transform(x)
