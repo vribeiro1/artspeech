@@ -3,9 +3,22 @@ import pdb
 import torch
 import torch.nn as nn
 
+from vt_tools import (
+    LOWER_LIP,
+    PHARYNX,
+    SOFT_PALATE,
+    TONGUE,
+    UPPER_LIP
+)
+
 from phoneme_to_articulation.metrics import EuclideanDistance
-from phoneme_to_articulation.principal_components.models import Encoder, Decoder
-from phoneme_to_articulation.principal_components.transforms import Encode, Decode
+from phoneme_to_articulation.principal_components.models import (
+    Encoder,
+    Decoder,
+    MultiEncoder,
+    MultiDecoder
+)
+from phoneme_to_articulation.principal_components.transforms import Encode, Decode, InputTransform
 
 
 class AutoencoderLoss(nn.Module):
@@ -14,7 +27,8 @@ class AutoencoderLoss(nn.Module):
         in_features,
         n_components,
         encoder_state_dict_fpath,
-        decoder_state_dict_fpath, device,
+        decoder_state_dict_fpath,
+        device,
         alpha=1.,
         beta=1.
     ):
@@ -49,6 +63,13 @@ class AutoencoderLoss(nn.Module):
         references,
         critical_mask
     ):
+        """
+        Args:
+            outputs_pcs (torch.tensor): tensor of shape
+            targets_shapes (torch.tensor): tensor of shape (B, T, 1, 2, D)
+            references (torch.tensor): tensor of shape
+            critical_masks (torch.tensor): tensor of shape
+        """
         bs, seq_len, _, _, n_samples = targets_shapes.shape
         encoder_inputs = targets_shapes.squeeze(dim=2).reshape(bs, seq_len, 2 * n_samples)
         target_pcs = torch.tanh(self.encode(encoder_inputs))
@@ -76,6 +97,117 @@ class AutoencoderLoss(nn.Module):
         mean_min_critical_loss = min_critical_loss[critical_mask == 1].mean()
 
         return mse_loss + self.alpha * euclidean_loss + self.beta * mean_min_critical_loss
+
+
+class AutoencoderLoss2(nn.Module):
+    """
+    AutoencoderLoss adapted for the case of multiple articulators.
+    """
+    TV_TO_ARTICULATOR_MAP = {
+        "LA": [LOWER_LIP, UPPER_LIP],
+        "VEL": [SOFT_PALATE, PHARYNX]
+    }
+    def __init__(
+        self,
+        indices_dict,
+        TVs,
+        in_features,
+        hidden_blocks,
+        hidden_features,
+        encoder_state_dict_filepath,
+        decoder_state_dict_filepath,
+        device,
+        alpha=1.0,
+        beta=1.0,
+    ):
+        super().__init__()
+
+        self.alpha = alpha
+        self.beta = beta
+        self.articulators = sorted(indices_dict.keys())
+        self.articulators_indices = {
+            articulator: i
+            for i, articulator in enumerate(self.articulators)
+        }
+        self.TVs = TVs
+
+        encoder = MultiEncoder(
+            indices_dict,
+            in_features,
+            hidden_blocks,
+            hidden_features,
+        )
+        encoder_state_dict = torch.load(
+            encoder_state_dict_filepath,
+            map_location=device
+        )
+        encoder.load_state_dict(encoder_state_dict)
+        self.encode = InputTransform(
+            transform=encoder,
+            device=device
+        )
+
+        decoder = MultiDecoder(
+            indices_dict,
+            in_features,
+            hidden_blocks,
+            hidden_features,
+        )
+        decoder_state_dict = torch.load(
+            decoder_state_dict_filepath,
+            map_location=device
+        )
+        decoder.load_state_dict(decoder_state_dict)
+        self.decode = InputTransform(
+            transform=decoder,
+            device=device
+        )
+
+        self.mse = nn.MSELoss()
+        self.euclidean = EuclideanDistance()
+
+    def forward(
+        self,
+        output_pcs,
+        target_shapes,
+        critical_mask
+    ):
+        """
+        Args:
+            output_pcs (torch.tensor): tensor of shape (B, Nart, Npc)
+            target_shapes (torch.tensor): tensor of shape (B, T, Nart, 2, D)
+            critical_mask (torch.tensor): tensor of shape (B, Ntv, T)
+        """
+        bs, seq_len, num_articulators, _, num_samples = target_shapes.shape
+        encoder_inputs = target_shapes.reshape(bs * seq_len, num_articulators, 2 * num_samples)
+        target_pcs = torch.tanh(self.encode(encoder_inputs))
+        _, num_pcs = target_pcs.shape
+        target_pcs = target_pcs.reshape(bs, seq_len, num_pcs)
+
+        output_shapes = self.decode(output_pcs)
+        output_shapes = output_shapes.reshape(bs, seq_len, num_articulators, 2, num_samples)
+
+        # Mean squared error loss in the level of the principal components
+        latent_loss = self.mse(output_pcs, target_pcs)
+
+        # Euclidean distance loss in the level of the shapes
+        reconstruction_loss = self.euclidean(output_shapes, target_shapes)
+
+        # Critical loss
+        num_TVs = len(self.TVs)
+        output_shapes = output_shapes.permute(0, 1, 2, 4, 3)  # (B, T, Nart, D, 2)
+        critical_loss = torch.stack([
+            torch.cdist(
+                output_shapes[..., self.articulators_indices[self.TV_TO_ARTICULATOR_MAP[TV][0]], :, :],
+                output_shapes[..., self.articulators_indices[self.TV_TO_ARTICULATOR_MAP[TV][1]], :, :]
+            ) for TV in self.TVs
+        ], dim=0)  # (Ntvs, B, T, D, D)
+        critical_loss = critical_loss.permute(1, 0, 2, 3, 4)
+        critical_loss = critical_loss.reshape(bs, num_TVs, seq_len, num_samples * num_samples)
+        critical_loss, _ = critical_loss.min(dim=-1)
+        critical_loss = critical_loss[critical_mask == 1].mean()
+
+        return latent_loss + self.alpha * reconstruction_loss + self.beta * critical_loss
 
 
 class RegularizedLatentsMSELoss(nn.Module):
