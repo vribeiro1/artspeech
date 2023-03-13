@@ -22,7 +22,10 @@ from phoneme_to_articulation.principal_components.dataset import (
 )
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_PC_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
-from phoneme_to_articulation.principal_components.metrics import DecoderEuclideanDistance, DecoderMeanP2CPDistance
+from phoneme_to_articulation.principal_components.metrics import (
+    DecoderEuclideanDistance,
+    DecoderMeanP2CPDistance
+)
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
 from settings import BASE_DIR, TRAIN, VALID, TEST, DatasetConfig
 
@@ -39,7 +42,17 @@ fs_observer = FileStorageObserver.create(
 ex.observers.append(fs_observer)
 
 
-def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=None, writer=None, device=None):
+def run_epoch(
+    phase,
+    epoch,
+    model,
+    dataloader,
+    optimizer,
+    criterion,
+    fn_metrics=None,
+    writer=None,
+    device=None
+):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     if fn_metrics is None:
@@ -78,12 +91,10 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=
             postfixes = {
                 "loss": np.mean(losses)
             }
-
             postfixes.update({
                 metric_name: np.mean(metric_vals)
                 for metric_name, metric_vals in metrics_values.items()
             })
-
             progress_bar.set_postfix(OrderedDict(postfixes))
 
     mean_loss = np.mean(losses)
@@ -94,7 +105,6 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=
     info = {
         "loss": mean_loss
     }
-
     info.update({
         metric_name: np.mean(metric_vals)
         for metric_name, metric_vals in metrics_values.items()
@@ -105,10 +115,23 @@ def run_epoch(phase, epoch, model, dataloader, optimizer, criterion, fn_metrics=
 
 @ex.automain
 def main(
-    _run, datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
-    train_seq_dict, valid_seq_dict, test_seq_dict, articulator, n_components,
-    vocab_fpath, encoder_state_dict_fpath, decoder_state_dict_fpath,
-    clip_tails=True, state_dict_fpath=None
+    _run,
+    datadir,
+    n_epochs,
+    batch_size,
+    patience,
+    learning_rate,
+    weight_decay,
+    train_seq_dict,
+    valid_seq_dict,
+    test_seq_dict,
+    articulator,
+    num_components,
+    vocab_fpath,
+    encoder_state_dict_fpath,
+    decoder_state_dict_fpath,
+    clip_tails=True,
+    state_dict_fpath=None
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
@@ -123,7 +146,7 @@ def main(
 
     model = PrincipalComponentsArtSpeech(
         vocab_size=len(vocabulary),
-        n_components=n_components,
+        num_components=num_components,
         gru_dropout=0.2
     )
     if state_dict_fpath is not None:
@@ -133,7 +156,7 @@ def main(
 
     loss_fn = AutoencoderLoss(
         in_features=100,
-        n_components=n_components,
+        num_components=num_components,
         encoder_state_dict_fpath=encoder_state_dict_fpath,
         decoder_state_dict_fpath=decoder_state_dict_fpath,
         device=device,
@@ -188,7 +211,7 @@ def main(
     metrics = {
         "euclidean_distance": DecoderEuclideanDistance(
             decoder_filepath=decoder_state_dict_fpath,
-            n_components=n_components,
+            num_components=num_components,
             n_samples=50,
             device=device,
             reduction="mean",
@@ -197,7 +220,7 @@ def main(
 
         "mean_p2cp": DecoderMeanP2CPDistance(
             decoder_filepath=decoder_state_dict_fpath,
-            n_components=n_components,
+            num_components=num_components,
             n_samples=50,
             reduction="mean",
             device=device,
@@ -266,7 +289,7 @@ def main(
 
     best_model = PrincipalComponentsArtSpeech(
         vocab_size=len(vocabulary),
-        n_components=n_components,
+        num_components=num_components,
         gru_dropout=0.2
     )
     best_model_state_dict = torch.load(best_model_path, map_location=device)
@@ -281,7 +304,7 @@ def main(
         epoch=0,
         model=best_model,
         decoder_state_dict_fpath=decoder_state_dict_fpath,
-        n_components=n_components,
+        num_components=num_components,
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
