@@ -1,5 +1,3 @@
-import pdb
-
 import funcy
 import numpy as np
 import os
@@ -38,50 +36,7 @@ def cached_load_articulator_array(filepath, norm_value):
     return torch.from_numpy(load_articulator_array(filepath, norm_value)).type(torch.float)
 
 
-class PrincipalComponentsAutoencoderDataset(Dataset):
-    def __init__(
-        self,
-        datadir,
-        dataset_config,
-        sequences,
-        articulator,
-        clip_tails=True
-    ):
-        self.datadir = datadir
-        self.dataset_config = dataset_config
-        self.articulator = articulator
-        self.clip_tails = clip_tails
-
-        collector = GottingenDatabaseCollector(datadir)
-        sentence_data = collector.collect_data(sequences)
-        data = []
-        for sentence in sentence_data:
-            for frame_id, phoneme in zip(sentence["frame_ids"], sentence["phonemes"]):
-                data.append({
-                    "subject": sentence["subject"],
-                    "sequence": sentence["sequence"],
-                    "frame_id": frame_id,
-                    "phoneme": phoneme,
-                })
-        self.data = pd.DataFrame(data)
-
-        mean_filepath = os.path.join(
-            datadir,
-            "normalization_statistics",
-            f"{articulator}_mean.npy"
-        )
-        mean = torch.from_numpy(np.load(mean_filepath))
-        std_filepath = os.path.join(
-            datadir,
-            "normalization_statistics",
-            f"{articulator}_std.npy"
-        )
-        std = torch.from_numpy(np.load(std_filepath))
-        self.normalize = Normalize(mean, std)
-
-    def __len__(self):
-        return len(self.data)
-
+class InputLoaderMixin:
     @staticmethod
     def prepare_articulator_array(
         datadir,
@@ -128,13 +83,65 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         coord_system_reference = coord_system_reference_array.T[:, -1]
         coord_system_reference = coord_system_reference.unsqueeze(dim=-1)
 
+        coord_system_reference_array = coord_system_reference_array.T
+        coord_system_reference_array = coord_system_reference_array - coord_system_reference
+        coord_system_reference_array[0, :] = coord_system_reference_array[0, :] + 0.3
+        coord_system_reference_array[1, :] = coord_system_reference_array[1, :] + 0.3
+
         articulator_array = articulator_array.T
         articulator_array = articulator_array - coord_system_reference
         articulator_array[0, :] = articulator_array[0, :] + 0.3
         articulator_array[1, :] = articulator_array[1, :] + 0.3
-        articulator_norm = normalize_fn(articulator_array)
 
-        return articulator_norm
+        articulator_norm = normalize_fn(articulator_array)
+        coord_system_reference_array = normalize_fn(coord_system_reference_array)
+
+        return articulator_norm, coord_system_reference_array
+
+
+class PrincipalComponentsAutoencoderDataset(Dataset):
+    def __init__(
+        self,
+        datadir,
+        dataset_config,
+        sequences,
+        articulator,
+        clip_tails=True
+    ):
+        self.datadir = datadir
+        self.dataset_config = dataset_config
+        self.articulator = articulator
+        self.clip_tails = clip_tails
+
+        collector = GottingenDatabaseCollector(datadir)
+        sentence_data = collector.collect_data(sequences)
+        data = []
+        for sentence in sentence_data:
+            for frame_id, phoneme in zip(sentence["frame_ids"], sentence["phonemes"]):
+                data.append({
+                    "subject": sentence["subject"],
+                    "sequence": sentence["sequence"],
+                    "frame_id": frame_id,
+                    "phoneme": phoneme,
+                })
+        self.data = pd.DataFrame(data)
+
+        mean_filepath = os.path.join(
+            datadir,
+            "normalization_statistics",
+            f"{articulator}_mean.npy"
+        )
+        mean = torch.from_numpy(np.load(mean_filepath))
+        std_filepath = os.path.join(
+            datadir,
+            "normalization_statistics",
+            f"{articulator}_std.npy"
+        )
+        std = torch.from_numpy(np.load(std_filepath))
+        self.normalize = Normalize(mean, std)
+
+    def __len__(self):
+        return len(self.data)
 
     def __getitem__(self, index):
         """
@@ -157,7 +164,7 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         weight = torch.tensor(phoneme_weights.get(phoneme, 1), dtype=torch.float)
         frame_name = f"{subject}_{sequence}_{frame_id}"
 
-        articulator = self.prepare_articulator_array(
+        articulator, _ = InputLoaderMixin.prepare_articulator_array(
             self.datadir,
             subject,
             sequence,
@@ -213,7 +220,7 @@ class PrincipalComponentsMultiArticulatorAutoencoderDataset(PrincipalComponentsA
         frame_name = f"{subject}_{sequence}_{frame_id}"
 
         articulators = torch.stack([
-            self.prepare_articulator_array(
+            InputLoaderMixin.prepare_articulator_array(
                 self.datadir,
                 subject,
                 sequence,
@@ -222,7 +229,7 @@ class PrincipalComponentsMultiArticulatorAutoencoderDataset(PrincipalComponentsA
                 self.normalize[articulator],
                 self.dataset_config,
                 self.clip_tails,
-            )
+            )[0]
             for articulator in self.articulators
         ], dim=0)
 
@@ -256,9 +263,10 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
         self.articulator = articulator
         self.n_samples = n_samples
         self.clip_tails = clip_tails
-
         self.TVs = ["TBCD", "TTCD"]
-        self.data = collect_data(datadir, sequences, sync_shift, framerate)
+
+        collector = GottingenDatabaseCollector(datadir)
+        self.data = collector.collect_data(sequences)
 
         mean_filepath = os.path.join(
             datadir,
@@ -277,77 +285,26 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
     def __len__(self):
         return len(self.data)
 
-    def prepare_articulator_array(
-        self,
-        subject,
-        sequence,
-        frame_id
-    ):
-        fp_articulator = os.path.join(
-            self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{self.articulator}.npy"
-        )
-        articulator_array = cached_load_articulator_array(
-            fp_articulator,
-            norm_value=self.dataset_config.RES
-        )
-
-        if self.clip_tails:
-            tail_clip_refs = {}
-            for reference in TailClipper.TAIL_CLIP_REFERENCES:
-                fp_reference = os.path.join(
-                    self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
-                )
-                reference_array = cached_load_articulator_array(
-                    fp_reference,
-                    norm_value=self.dataset_config.RES
-                )
-                tail_clip_refs[reference.replace("-", "_")] = reference_array
-
-            tail_clip_method_name = f"clip_{self.articulator.replace('-', '_')}_tails"
-            tail_clip_method = getattr(TailClipper, tail_clip_method_name, None)
-            if tail_clip_method:
-                articulator_array = tail_clip_method(articulator_array, **tail_clip_refs)
-
-        fp_coord_system_reference = os.path.join(
-            self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{UPPER_INCISOR}.npy"
-        )
-        coord_system_reference_array = cached_load_articulator_array(
-            fp_coord_system_reference,
-            norm_value=self.dataset_config.RES
-        ).T
-        coord_system_reference = coord_system_reference_array[:, -1]
-        coord_system_reference = coord_system_reference.unsqueeze(dim=-1)
-
-        coord_system_reference_array = coord_system_reference_array - coord_system_reference
-        coord_system_reference_array[0, :] = coord_system_reference_array[0, :] + 0.3
-        coord_system_reference_array[1, :] = coord_system_reference_array[1, :] + 0.3
-
-        articulator_array = articulator_array.T
-        articulator_array = articulator_array - coord_system_reference
-        articulator_array[0, :] = articulator_array[0, :] + 0.3
-        articulator_array[1, :] = articulator_array[1, :] + 0.3
-
-        articulator_array = self.normalize(articulator_array)
-        coord_system_reference_array = self.normalize(coord_system_reference_array)
-
-        return articulator_array, coord_system_reference_array
-
     def __getitem__(self, index):
         item = self.data[index]
         sentence_name = item["sentence_name"]
+        subject = item["subject"]
+        sequence = item["sequence"]
+        frame_ids = item["frame_ids"]
 
         critical_mask = []
-        sentence_frames = []
         sentence_targets = torch.zeros(size=(0, 1, 2, self.n_samples))
         sentence_critical_references = torch.zeros(size=(0, len(self.TVs), 2, self.n_samples))
-        for frame_id in item["frame_ids"]:
-            subject = item["subject"]
-            sequence = item["sequence"]
-
-            articulator_array, coord_system_reference_array = self.prepare_articulator_array(
+        for frame_id in frame_ids:
+            articulator_array, coord_system_reference_array = InputLoaderMixin.prepare_articulator_array(
+                self.datadir,
                 subject,
                 sequence,
-                frame_id
+                frame_id,
+                self.articulator,
+                self.normalize,
+                self.dataset_config,
+                self.clip_tails,
             )
             articulator_array = articulator_array.unsqueeze(dim=0).unsqueeze(dim=0)
             coord_system_reference_array = coord_system_reference_array.unsqueeze(dim=0)
@@ -381,8 +338,6 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
                 critical_reference
             ])
 
-            sentence_frames.append(frame_id)
-
         sentence_targets = sentence_targets.type(torch.float)
         sentence_critical_references = sentence_critical_references.type(torch.float)
 
@@ -403,7 +358,105 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
             sentence_tokens,
             critical_mask,
             sentence_critical_references,
-            sentence_frames
+            frame_ids
+        )
+
+
+class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
+    """
+    Dataset for phoneme to principal components adapted for the multiarticulators case.
+    """
+    def __init__(
+        self,
+        datadir,
+        dataset_config,
+        sequences,
+        vocabulary,
+        articulators,
+        TV_to_phoneme_map,
+        num_samples=50,
+        clip_tails=True,
+    ):
+        self.datadir = datadir
+        self.dataset_config = dataset_config
+        self.vocabulary = vocabulary
+        self.articulators = sorted(articulators)
+        self.num_samples = num_samples
+        self.clip_tails = clip_tails
+        self.TV_to_phoneme_map = TV_to_phoneme_map
+
+        collector = GottingenDatabaseCollector(datadir)
+        self.data = collector.collect_data(sequences)
+
+        self.normalize = {}
+        for articulator in self.articulators:
+            mean_filepath = os.path.join(
+                datadir,
+                "normalization_statistics",
+                f"{articulator}_mean.npy"
+            )
+            mean = torch.from_numpy(np.load(mean_filepath))
+            std_filepath = os.path.join(
+                datadir,
+                "normalization_statistics",
+                f"{articulator}_std.npy"
+            )
+            std = torch.from_numpy(np.load(std_filepath))
+            self.normalize[articulator] = Normalize(mean, std)
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, index):
+        item = self.data[index]
+        sentence_name = item["sentence_name"]
+        subject = item["subject"]
+        sequence = item["sequence"]
+        frame_ids = item["frame_ids"]
+        tokens = item["phonemes"]
+
+        sentence_targets = torch.zeros(size=(0, len(self.articulators), 2, self.num_samples))
+        for frame_id in frame_ids:
+            frame_targets = torch.zeros(size=(0, 2, self.num_samples))
+            for articulator in self.articulators:
+                articulator_array, _ = InputLoaderMixin.prepare_articulator_array(
+                    self.datadir,
+                    subject,
+                    sequence,
+                    frame_id,
+                    articulator,
+                    self.normalize[articulator],
+                    self.dataset_config,
+                    self.clip_tails
+                )  # (2, D)
+                articulator_array = articulator_array.unsqueeze(dim=0)  # (1, 2, D)
+                frame_targets = torch.cat([frame_targets, articulator_array], dim=0)
+            frame_targets = frame_targets.unsqueeze(dim=0)  # (1, Nart, 2, D)
+            sentence_targets = torch.cat([sentence_targets, frame_targets], dim=0)
+
+        sentence_targets = sentence_targets.type(torch.float)
+        sentence_numerized = torch.tensor([
+            self.vocabulary[token] for token in tokens
+        ], dtype=torch.long)
+
+        critical_mask = torch.stack([
+            torch.tensor(
+                [
+                    int(p in self.TV_to_phoneme_map[TV])
+                    for p in item["phonemes"]
+                ],
+                dtype=torch.int
+            )
+             for TV in sorted(self.TV_to_phoneme_map.keys())
+        ])
+
+        return (
+            sentence_name,
+            sentence_numerized,
+            sentence_targets,
+            tokens,
+            critical_mask,
+            frame_ids
         )
 
 
@@ -427,11 +480,11 @@ def pad_sequence_collate_fn(batch):
     padded_critical_masks = padded_critical_masks[sentences_sorted_indices]
     padded_critical_masks = padded_critical_masks.permute(0, 2, 1)
 
-    critical_references = [item[5] for item in batch]
-    padded_critical_references = pad_sequence(critical_references, batch_first=True)
-    padded_critical_references = padded_critical_references[sentences_sorted_indices]
+    # critical_references = [item[5] for item in batch]
+    # padded_critical_references = pad_sequence(critical_references, batch_first=True)
+    # padded_critical_references = padded_critical_references[sentences_sorted_indices]
 
-    sentence_frames = [batch[i][6] for i in sentences_sorted_indices]
+    sentence_frames = [batch[i][5] for i in sentences_sorted_indices]
 
     return (
         sentences_ids,
@@ -440,6 +493,6 @@ def pad_sequence_collate_fn(batch):
         len_sentences_sorted,
         phonemes,
         padded_critical_masks,
-        padded_critical_references,
+        # padded_critical_references,
         sentence_frames
     )
