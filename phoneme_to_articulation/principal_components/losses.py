@@ -117,19 +117,22 @@ class AutoencoderLoss2(nn.Module):
         encoder_state_dict_filepath,
         decoder_state_dict_filepath,
         device,
-        alpha=1.0,
-        beta=1.0,
+        beta1=1.0,
+        beta2=1.0,
     ):
         super().__init__()
 
-        self.alpha = alpha
-        self.beta = beta
+        beta0 = 1.0
+        beta1 = beta1
+        beta2 = beta2
+        self.beta0, self.beta1, self.beta2 = self.normalize_betas([beta0, beta1, beta2])
+
         self.articulators = sorted(indices_dict.keys())
         self.articulators_indices = {
             articulator: i
             for i, articulator in enumerate(self.articulators)
         }
-        self.TVs = TVs
+        self.TVs = sorted(TVs)
 
         encoder = MultiEncoder(
             indices_dict,
@@ -165,6 +168,11 @@ class AutoencoderLoss2(nn.Module):
 
         self.mse = nn.MSELoss()
         self.euclidean = EuclideanDistance()
+
+    @staticmethod
+    def normalize_betas(betas):
+        betas = torch.softmax(torch.tensor(betas), dim=0)
+        return betas
 
     def forward(
         self,
@@ -207,7 +215,11 @@ class AutoencoderLoss2(nn.Module):
         critical_loss, _ = critical_loss.min(dim=-1)
         critical_loss = critical_loss[critical_mask == 1].mean()
 
-        return latent_loss + self.alpha * reconstruction_loss + self.beta * critical_loss
+        return (
+            self.beta0 * latent_loss +
+            self.beta1 * reconstruction_loss +
+            self.beta2 * critical_loss
+        )
 
 
 class RegularizedLatentsMSELoss(nn.Module):

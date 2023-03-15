@@ -262,6 +262,5 @@ if __name__ == "__main__":
         experiment_id=experiment.experiment_id,
         run_name=args.run_name
     ):
-        mlflow.log_params(cfg)
         mlflow.log_dict(cfg, "config.json")
         main(**cfg)

@@ -19,6 +19,7 @@ tensorboardX
 tgt
 torch
 torchaudio
+torchmetrics
 torchvision
 tqdm
 ujson

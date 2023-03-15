@@ -17,7 +17,7 @@ class HiddenBlock(nn.Module):
         self.block = nn.Sequential(
             nn.Linear(in_features=hidden_features, out_features=hidden_features),
             nn.ReLU(),
-            nn.Dropout(dropout, inplace=True),
+            nn.Dropout(dropout),
         )
 
     def forward(self, x):
@@ -37,7 +37,7 @@ class Encoder(nn.Module):
 
         self.input_layer = nn.Sequential(
             nn.Linear(in_features=in_features, out_features=hidden_features),
-            nn.ReLU()
+            nn.ReLU(),
         )
 
         self.hidden_layers = nn.ModuleList([
@@ -74,7 +74,7 @@ class Decoder(nn.Module):
 
         self.input_layer = nn.Sequential(
             nn.Linear(in_features=num_components, out_features=hidden_features),
-            nn.ReLU()
+            nn.ReLU(),
         )
 
         self.hidden_layers = nn.ModuleList([
@@ -218,7 +218,8 @@ class MultiEncoder(nn.Module):
         indices_dict,
         in_features,
         hidden_blocks,
-        hidden_features
+        hidden_features,
+        dropout=0.0,
     ):
         super().__init__()
         self.indices_dict = indices_dict
@@ -229,7 +230,8 @@ class MultiEncoder(nn.Module):
                 in_features=in_features,
                 num_components=len(indices),
                 hidden_blocks=hidden_blocks,
-                hidden_features=hidden_features
+                hidden_features=hidden_features,
+                dropout=dropout,
             )
             for articulator, indices in self.indices_dict.items()
         })
@@ -261,7 +263,8 @@ class MultiDecoder(nn.Module):
         indices_dict,
         in_features,
         hidden_blocks,
-        hidden_features
+        hidden_features,
+        dropout=0.0,
     ):
         super().__init__()
         self.indices_dict = indices_dict
@@ -272,7 +275,8 @@ class MultiDecoder(nn.Module):
                 num_components=len(indices),
                 out_features=in_features,
                 hidden_blocks=hidden_blocks,
-                hidden_features=hidden_features
+                hidden_features=hidden_features,
+                dropout=dropout,
             )
             for articulator, indices in self.indices_dict.items()
         })
@@ -293,14 +297,26 @@ class MultiArticulatorAutoencoder(nn.Module):
         indices_dict,
         hidden_blocks=1,
         hidden_features=64,
-        dropout=0.0
+        dropout=0.0,
     ):
         super().__init__()
         self.indices_dict = indices_dict
         self.latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
         self.sorted_articulators = sorted(self.indices_dict.keys())
-        self.encoders = MultiEncoder(indices_dict)
-        self.decoders = MultiDecoder(indices_dict)
+        self.encoders = MultiEncoder(
+            indices_dict=indices_dict,
+            in_features=in_features,
+            hidden_blocks=hidden_blocks,
+            hidden_features=hidden_features,
+            dropout=dropout,
+        )
+        self.decoders = MultiDecoder(
+            indices_dict=indices_dict,
+            in_features=in_features,
+            hidden_blocks=hidden_blocks,
+            hidden_features=hidden_features,
+            dropout=dropout,
+        )
 
     def forward(self, x):
         """

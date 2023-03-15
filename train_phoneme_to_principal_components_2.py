@@ -2,6 +2,7 @@ import pdb
 
 import argparse
 import logging
+import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import os
@@ -9,6 +10,7 @@ import tempfile
 import torch
 import ujson
 import yaml
+import shutil
 
 from collections import OrderedDict
 from functools import reduce
@@ -16,6 +18,7 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
+from vt_tools import COLORS
 
 from helpers import set_seeds, sequences_from_dict
 from phoneme_recognition import UNKNOWN
@@ -24,10 +27,7 @@ from phoneme_to_articulation.principal_components.dataset import (
     pad_sequence_collate_fn
 )
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
-from phoneme_to_articulation.principal_components.metrics import (
-    DecoderEuclideanDistance,
-    DecoderMeanP2CPDistance
-)
+from phoneme_to_articulation.principal_components.metrics import DecoderMeanP2CPDistance2
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
 from settings import BASE_DIR, TRAIN, VALID, TEST, GottingenConfig
 
@@ -83,7 +83,7 @@ def run_epoch(
                 loss.backward()
                 optimizer.step()
             for metric_name, fn_metric in fn_metrics.items():
-                metric_val = fn_metric(outputs, targets)
+                metric_val = fn_metric(outputs, targets, len_inputs)
                 metrics_values[metric_name].append(metric_val.item())
             losses.append(loss.item())
 
@@ -101,7 +101,7 @@ def run_epoch(
     }
     info.update({
         metric_name: np.mean(metric_values)
-        for metric_name, metric_values in fn_metrics.items()
+        for metric_name, metric_values in metrics_values.items()
     })
 
     return info
@@ -134,7 +134,7 @@ def run_test(
         len_inputs,
         phonemes,
         critical_masks,
-        sentence_frames
+        _
     ) in progress_bar:
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -144,7 +144,7 @@ def run_test(
             loss = criterion(outputs, targets, critical_masks)
 
             for metric_name, fn_metric in fn_metrics.items():
-                metric_val = fn_metric(outputs, targets)
+                metric_val = fn_metric(outputs, targets, len_inputs)
                 metrics_values[metric_name].append(metric_val.item())
             losses.append(loss.item())
 
@@ -158,31 +158,83 @@ def run_test(
         progress_bar.set_postfix(OrderedDict(postfixes))
 
         if outputs_dir is not None:
+            epoch_outputs_dir = os.path.join(outputs_dir, str(epoch))
+            if not os.path.exists(epoch_outputs_dir):
+                os.makedirs(epoch_outputs_dir)
+
             output_shapes = decode_transform(outputs)  # (B, Nart, T, 2 * D)
             output_shapes = output_shapes.permute(0, 2, 1, 3)
             bs, seq_len, num_articulators, features = output_shapes.shape
             output_shapes = output_shapes.reshape(bs, seq_len, num_articulators, 2, features // 2)
-            for sentence_id, sentence_shapes in zip(sentence_ids, output_shapes):
-                sentence_dir = os.path.join(outputs_dir, sentence_id)
+            for (
+                sentence_id,
+                sentence_shapes,
+                sentence_targets,
+                sentence_phonemes
+            ) in zip(
+                sentence_ids,
+                output_shapes,
+                targets,
+                phonemes
+            ):
+                sentence_dir = os.path.join(epoch_outputs_dir, sentence_id)
                 if not os.path.exists(sentence_dir):
                     os.makedirs(sentence_dir)
 
-                for timestep, articulators_arrays in enumerate(sentence_shapes):
-                    for i, articulator_array in enumerate(articulators_arrays):
+                plots_dir = os.path.join(sentence_dir, "plots")
+                if not os.path.exists(plots_dir):
+                    os.makedirs(plots_dir)
+
+                for (
+                    timestep,
+                    (
+                        articulators_arrays,
+                        target_arrays,
+                        phoneme
+                    )
+                ) in enumerate(zip(
+                    sentence_shapes,
+                    sentence_targets,
+                    sentence_phonemes
+                )):
+                    plt.figure(figsize=(3, 3))
+
+                    for (
+                        i,
+                        (
+                            articulator_array,
+                            target_array
+                        )
+                    ) in enumerate(zip(
+                        articulators_arrays,
+                        target_arrays
+                    )):
+                        frame = "%04d" % timestep
                         articulator_name = articulators[i]
                         denorm_fn = dataloader.dataset.normalize[articulator_name].inverse
-                        frame = "%04d" % timestep
                         articulator_array = denorm_fn(articulator_array)
                         articulator_array = articulator_array.detach().cpu().numpy()
-                        npy_filepath = os.path.join(sentence_dir, f"{frame}_{articulator_name}.npy")
-                        np.save(npy_filepath, articulator_array)
+                        target_array = denorm_fn(target_array)
+                        target_array = target_array.detach().cpu().numpy()
+
+                        plt.plot(*articulator_array, lw=2, color=COLORS[articulator_name])
+                        plt.plot(*target_array, lw=2, color="red", linestyle="--")
+                        plt.text(0.5, 0.1, phoneme, fontsize=16)
+
+                    plt.xlim([0, 1])
+                    plt.ylim([1, 0])
+                    plt.axis("off")
+                    plt.tight_layout()
+                    fig_filepath = os.path.join(plots_dir, f"{frame}.png")
+                    plt.savefig(fig_filepath)
+                    plt.close()
 
     info = {
         "loss": np.mean(losses),
     }
     info.update({
         metric_name: np.mean(metric_values)
-        for metric_name, metric_values in fn_metrics.items()
+        for metric_name, metric_values in metrics_values.items()
     })
 
     return info
@@ -205,8 +257,8 @@ def main(
     autoencoder_kwargs,
     encoder_state_dict_filepath,
     decoder_state_dict_filepath,
-    alpha=1.0,
-    beta=1.0,
+    beta1=1.0,
+    beta2=1.0,
     clip_tails=True,
     num_workers=0,
     state_dict_filepath=None,
@@ -231,18 +283,17 @@ def main(
             "b",
             "m"
         ],
-        "VEL": [
-            token
-            for token in vocabulary
-            if "~" not in token
-        ]
+        # "VEL": [
+        #     token
+        #     for token in vocabulary
+        #     if "~" not in token and token not in ["n", "m", "#", "-", UNKNOWN]
+        # ]
     }
 
-    articulators_indices_dict = indices_dict
-    articulators = sorted(articulators_indices_dict.keys())
+    articulators = sorted(indices_dict.keys())
     num_components = 1 + max(set(
         reduce(lambda l1, l2: l1 + l2,
-        articulators_indices_dict.values())
+        indices_dict.values())
     ))
     model = PrincipalComponentsArtSpeech(
         vocab_size=len(vocabulary),
@@ -254,18 +305,15 @@ def main(
         model.load_state_dict(state_dict)
     model.to(device)
 
-    TVs = [
-        "LA",
-        "VEL"
-    ]
+    TVs = sorted(TV_to_phoneme_map.keys())
     loss_fn = AutoencoderLoss2(
         indices_dict=indices_dict,
         TVs=TVs,
         device=device,
         encoder_state_dict_filepath=encoder_state_dict_filepath,
         decoder_state_dict_filepath=decoder_state_dict_filepath,
-        alpha=alpha,
-        beta=beta,
+        beta1=beta1,
+        beta2=beta2,
         **autoencoder_kwargs,
     )
     optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
@@ -278,7 +326,8 @@ def main(
         train_sequences,
         vocabulary,
         articulators,
-        TV_to_phoneme_map
+        TV_to_phoneme_map,
+        clip_tails=clip_tails,
     )
     train_dataloader = DataLoader(
         train_dataset,
@@ -296,7 +345,8 @@ def main(
         valid_sequences,
         vocabulary,
         articulators,
-        TV_to_phoneme_map
+        TV_to_phoneme_map,
+        clip_tails=clip_tails,
     )
     valid_dataloader = DataLoader(
         valid_dataset,
@@ -306,6 +356,42 @@ def main(
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn,
     )
+
+    plot_dataset = PrincipalComponentsPhonemeToArticulationDataset2(
+        datadir,
+        GottingenConfig,
+        [valid_sequences[0]],
+        vocabulary,
+        articulators,
+        TV_to_phoneme_map,
+        clip_tails=clip_tails,
+    )
+    plot_dataloader = DataLoader(
+        plot_dataset,
+        batch_size=batch_size,
+        shuffle=True,
+        num_workers=num_workers,
+        worker_init_fn=set_seeds,
+        collate_fn=pad_sequence_collate_fn,
+    )
+
+    fn_metrics = {
+        "p2cp_mean": DecoderMeanP2CPDistance2(
+            dataset_config=GottingenConfig,
+            decoder_state_dict_filepath=decoder_state_dict_filepath,
+            indices_dict=indices_dict,
+            autoencoder_kwargs=autoencoder_kwargs,
+            device=device,
+            denorm_fns=[
+                train_dataset.normalize[articulator].inverse
+                for articulator in articulators
+            ]
+        )
+    }
+
+    test_outputs_dir = os.path.join(RESULTS_DIR, "test_outputs")
+    if not os.path.exists(test_outputs_dir):
+        os.makedirs(test_outputs_dir)
 
     best_metric = np.inf
     epochs_since_best = 0
@@ -356,6 +442,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             optimizer=optimizer,
             criterion=loss_fn,
             device=device,
+            fn_metrics=fn_metrics,
         )
 
         mlflow.log_metrics(
@@ -368,8 +455,8 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
 
         scheduler.step(info_valid["loss"])
 
-        if info_valid["loss"] < best_metric:
-            best_metric = info_valid["loss"]
+        if info_valid["p2cp_mean"] < best_metric:
+            best_metric = info_valid["p2cp_mean"]
             epochs_since_best = 0
             torch.save(model.state_dict(), best_model_path)
             mlflow.log_artifact(best_model_path)
@@ -407,7 +494,8 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         test_sequences,
         vocabulary,
         articulators,
-        TV_to_phoneme_map
+        TV_to_phoneme_map,
+        clip_tails=clip_tails,
     )
     test_dataloader = DataLoader(
         test_dataset,
@@ -427,10 +515,6 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
     best_model.load_state_dict(best_model_state_dict)
     best_model.to(device)
 
-    test_outputs_dir = os.path.join(RESULTS_DIR, "test_outputs")
-    if not os.path.exists(test_outputs_dir):
-        os.makedirs(test_outputs_dir)
-
     info_test = run_test(
         epoch=0,
         model=best_model,
@@ -439,7 +523,8 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         outputs_dir=test_outputs_dir,
         decode_transform=loss_fn.decode,
         articulators=articulators,
-        device=device
+        device=device,
+        fn_metrics=fn_metrics,
     )
     mlflow.log_artifact(test_outputs_dir)
     mlflow.log_metrics(
@@ -466,6 +551,8 @@ if __name__ == "__main__":
         experiment_id=experiment.experiment_id,
         run_name=args.run_name
     ):
-        mlflow.log_params(cfg)
         mlflow.log_dict(cfg, "config.json")
-        main(**cfg)
+        try:
+            main(**cfg)
+        finally:
+            shutil.rmtree(TMP_DIR)
