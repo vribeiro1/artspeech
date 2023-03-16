@@ -292,7 +292,6 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
         sequence = item["sequence"]
         frame_ids = item["frame_ids"]
 
-        critical_mask = []
         sentence_targets = torch.zeros(size=(0, 1, 2, self.n_samples))
         sentence_critical_references = torch.zeros(size=(0, len(self.TVs), 2, self.n_samples))
         for frame_id in frame_ids:

@@ -166,19 +166,35 @@ class AutoencoderLoss2(nn.Module):
             device=device
         )
 
-        self.mse = nn.MSELoss()
-        self.euclidean = EuclideanDistance()
+        self.latent = nn.MSELoss(reduction="none")
+        self.reconstruction = EuclideanDistance(reduction="none")
 
     @staticmethod
     def normalize_betas(betas):
         betas = torch.softmax(torch.tensor(betas), dim=0)
         return betas
 
+    @staticmethod
+    def make_padding_mask(lengths):
+        """
+        Make a padding mask from a tensor lengths.
+
+        Args:
+            lengths (torch.tensor): tensor of shape (B,)
+        """
+        bs = len(lengths)
+        max_length = lengths.max()
+        mask = torch.ones(size=(bs, max_length))
+        mask = torch.cumsum(mask, dim=1)
+        mask = mask <= lengths.unsqueeze(dim=1)
+        return mask
+
     def forward(
         self,
         output_pcs,
         target_shapes,
-        critical_mask
+        lengths,
+        critical_mask,
     ):
         """
         Args:
@@ -186,6 +202,8 @@ class AutoencoderLoss2(nn.Module):
             target_shapes (torch.tensor): tensor of shape (B, T, Nart, 2, D)
             critical_mask (torch.tensor): tensor of shape (B, Ntv, T)
         """
+        padding_mask = self.make_padding_mask(lengths)
+
         bs, seq_len, num_articulators, _, num_samples = target_shapes.shape
         encoder_inputs = target_shapes.reshape(bs * seq_len, num_articulators, 2 * num_samples)
         target_pcs = torch.tanh(self.encode(encoder_inputs))
@@ -196,10 +214,14 @@ class AutoencoderLoss2(nn.Module):
         output_shapes = output_shapes.reshape(bs, seq_len, num_articulators, 2, num_samples)
 
         # Mean squared error loss in the level of the principal components
-        latent_loss = self.mse(output_pcs, target_pcs)
+        latent_loss = self.latent(output_pcs, target_pcs)
+        latent_loss = latent_loss.view(bs * seq_len, num_pcs)
+        latent_loss = latent_loss[padding_mask.view(bs * seq_len)].mean()
 
         # Euclidean distance loss in the level of the shapes
-        reconstruction_loss = self.euclidean(output_shapes, target_shapes)
+        reconstruction_loss = self.reconstruction(output_shapes, target_shapes)
+        reconstruction_loss = reconstruction_loss.view(bs * seq_len, num_articulators, num_samples)
+        reconstruction_loss = reconstruction_loss[padding_mask.view(bs * seq_len)].mean()
 
         # Critical loss
         num_TVs = len(self.TVs)

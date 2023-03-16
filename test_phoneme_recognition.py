@@ -57,7 +57,6 @@ def main(
     feature = Feature(feature)
     target = Target(target)
     criterion = Criterion[loss]
-    criterion_cls = criterion.value
 
     default_tokens = [BLANK, UNKNOWN] if criterion == Criterion.CTC else [UNKNOWN]
     vocabulary = {token: i for i, token in enumerate(default_tokens)}

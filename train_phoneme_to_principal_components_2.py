@@ -77,7 +77,7 @@ def run_epoch(
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
             outputs = model(inputs, len_inputs)
-            loss = criterion(outputs, targets, critical_masks)
+            loss = criterion(outputs, targets, len_inputs, critical_masks)
 
             if training:
                 loss.backward()
@@ -141,7 +141,7 @@ def run_test(
 
         with torch.set_grad_enabled(False):
             outputs = model(inputs, len_inputs)
-            loss = criterion(outputs, targets, critical_masks)
+            loss = criterion(outputs, targets, len_inputs, critical_masks)
 
             for metric_name, fn_metric in fn_metrics.items():
                 metric_val = fn_metric(outputs, targets, len_inputs)
@@ -350,24 +350,6 @@ def main(
     )
     valid_dataloader = DataLoader(
         valid_dataset,
-        batch_size=batch_size,
-        shuffle=True,
-        num_workers=num_workers,
-        worker_init_fn=set_seeds,
-        collate_fn=pad_sequence_collate_fn,
-    )
-
-    plot_dataset = PrincipalComponentsPhonemeToArticulationDataset2(
-        datadir,
-        GottingenConfig,
-        [valid_sequences[0]],
-        vocabulary,
-        articulators,
-        TV_to_phoneme_map,
-        clip_tails=clip_tails,
-    )
-    plot_dataloader = DataLoader(
-        plot_dataset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
