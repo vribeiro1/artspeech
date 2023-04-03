@@ -4,7 +4,7 @@ vocab_filepath: /path/to/vocabulary.json
 state_dict_fpath: /path/to/model.pth
 save_to: /path/to/save/dir
 articulators:
-  - arytenoid-muscle
+  - arytenoid-cartilage
   - epiglottis
   - hyoid-bone
   - lower-incisor

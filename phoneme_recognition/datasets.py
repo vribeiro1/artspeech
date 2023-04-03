@@ -14,7 +14,7 @@ from torch.utils.data import Dataset
 from torchaudio import transforms
 from typing import Dict, List, Optional
 from vt_tools import (
-    ARYTENOID_MUSCLE,
+    ARYTENOID_CARTILAGE,
     EPIGLOTTIS,
     LOWER_INCISOR,
     LOWER_LIP,
@@ -35,7 +35,7 @@ from settings import BASE_DIR
 from vocal_tract_loader import VocalTractShapeLoader, cached_load_articulator_array
 
 ARTICULATORS = [
-    # ARYTENOID_MUSCLE,
+    # ARYTENOID_CARTILAGE,
     # EPIGLOTTIS,
     # LOWER_INCISOR,
     LOWER_LIP,

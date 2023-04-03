@@ -16,7 +16,7 @@ from matplotlib.figure import Figure
 from tgt import read_textgrid
 from tqdm import tqdm
 from vt_tools import (
-    ARYTENOID_MUSCLE,
+    ARYTENOID_CARTILAGE,
     EPIGLOTTIS,
     LOWER_INCISOR,
     LOWER_LIP,
@@ -241,7 +241,7 @@ if __name__ == "__main__":
             os.makedirs(xarticul_dir)
 
         articulators = sorted([
-            ARYTENOID_MUSCLE,
+            ARYTENOID_CARTILAGEAGES,
             EPIGLOTTIS,
             LOWER_INCISOR,
             LOWER_LIP,

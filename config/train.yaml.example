@@ -8,7 +8,7 @@ test_filepath: /path/to/test_data_file.json.json
 vocab_filepath: /path/to/vocabulary.json
 n_keypoints: 2
 articulators:
-  - arytenoid-muscle
+  - arytenoid-cartilage
   - epiglottis
   - hyoid-bone
   - lower-incisor

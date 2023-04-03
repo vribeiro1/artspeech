@@ -6,7 +6,7 @@ from glob import glob
 from tgt.io3 import read_textgrid
 from torch.utils.data import Dataset
 from vt_tools import (
-    ARYTENOID_MUSCLE,
+    ARYTENOID_CARTILAGE,
     EPIGLOTTIS,
     LOWER_INCISOR,
     LOWER_LIP,
@@ -22,7 +22,7 @@ from vt_tools import (
 from vt_shape_gen.vocal_tract_tube import generate_vocal_tract_tube
 
 ARTICULATORS = [
-    ARYTENOID_MUSCLE,
+    ARYTENOID_CARTILAGE,
     EPIGLOTTIS,
     LOWER_INCISOR,
     LOWER_LIP,

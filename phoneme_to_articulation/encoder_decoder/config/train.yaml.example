@@ -22,7 +22,7 @@ test_seq_dict:
         - "0017"
 vocab_filepath: /srv/storage/talc3@talc-data.nancy/multispeech/calcul/users/vsouzaribeiro/datasets/Gottingen_Database/vocabulary.json
 articulators:
-    - arytenoid-muscle
+    - arytenoid-cartilage
     - epiglottis
     - lower-incisor
     - lower-lip
