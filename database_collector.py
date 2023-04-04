@@ -1,4 +1,3 @@
-import pdb
 import logging
 import torchaudio
 import os
@@ -182,17 +181,16 @@ class ArtSpeechDatabase2Collector(DatabaseCollector):
 
     def get_wav_filepath(self, subject, sequence):
         sequence_dir = self.get_sequence_dir(subject, sequence)
-        wav_filepath = os.path.join(sequence_dir, f"vol_{subject}_{sequence}.wav")
+        wav_filepath = os.path.join(sequence_dir, f"{subject}_{sequence}.wav")
         return wav_filepath
 
     def get_textgrid_filepath(self, subject, sequence):
         sequence_dir = self.get_sequence_dir(subject, sequence)
-        textgrid_filepath = os.path.join(sequence_dir, f"vol_{subject}_{sequence}.TextGrid")
+        textgrid_filepath = os.path.join(sequence_dir, f"{subject}_{sequence}_adjusted.textgrid")
         return textgrid_filepath
 
     def get_frame_ids(self, subject, sequence):
         sequence_dir = self.get_sequence_dir(subject, sequence)
-        # Collect all of the articulators files
         frame_filepaths = glob(os.path.join(sequence_dir, "NPY_MR", "*.npy"))
         frame_ids = sorted(map(lambda s: s.split(".")[0], map(os.path.basename, frame_filepaths)))
         return frame_ids

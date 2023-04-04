@@ -44,8 +44,8 @@ class InputLoaderMixin:
         sequence,
         frame_id,
         articulator,
-        normalize_fn,
         dataset_config,
+        normalize_fn=None,
         clip_tails=True
     ):
         fp_articulator = os.path.join(
@@ -93,10 +93,11 @@ class InputLoaderMixin:
         articulator_array[0, :] = articulator_array[0, :] + 0.3
         articulator_array[1, :] = articulator_array[1, :] + 0.3
 
-        articulator_norm = normalize_fn(articulator_array)
-        coord_system_reference_array = normalize_fn(coord_system_reference_array)
+        if normalize_fn is not None:
+            articulator_array = normalize_fn(articulator_array)
+            coord_system_reference_array = normalize_fn(coord_system_reference_array)
 
-        return articulator_norm, coord_system_reference_array
+        return articulator_array, coord_system_reference_array
 
 
 class PrincipalComponentsAutoencoderDataset(Dataset):
@@ -170,8 +171,8 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
             sequence,
             frame_id,
             self.articulator,
-            self.normalize,
             self.dataset_config,
+            self.normalize,
             self.clip_tails,
         )
         n, m = articulator.shape
@@ -226,8 +227,8 @@ class PrincipalComponentsMultiArticulatorAutoencoderDataset(PrincipalComponentsA
                 sequence,
                 frame_id,
                 articulator,
-                self.normalize[articulator],
                 self.dataset_config,
+                self.normalize[articulator],
                 self.clip_tails,
             )[0]
             for articulator in self.articulators
@@ -301,8 +302,8 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
                 sequence,
                 frame_id,
                 self.articulator,
-                self.normalize,
                 self.dataset_config,
+                self.normalize,
                 self.clip_tails,
             )
             articulator_array = articulator_array.unsqueeze(dim=0).unsqueeze(dim=0)
@@ -424,8 +425,8 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
                     sequence,
                     frame_id,
                     articulator,
-                    self.normalize[articulator],
                     self.dataset_config,
+                    self.normalize[articulator],
                     self.clip_tails
                 )  # (2, D)
                 articulator_array = articulator_array.unsqueeze(dim=0)  # (1, 2, D)
@@ -433,21 +434,23 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
             frame_targets = frame_targets.unsqueeze(dim=0)  # (1, Nart, 2, D)
             sentence_targets = torch.cat([sentence_targets, frame_targets], dim=0)
 
-        sentence_targets = sentence_targets.type(torch.float)
         sentence_numerized = torch.tensor([
             self.vocabulary[token] for token in tokens
         ], dtype=torch.long)
 
-        critical_mask = torch.stack([
-            torch.tensor(
-                [
-                    int(p in self.TV_to_phoneme_map[TV])
-                    for p in item["phonemes"]
-                ],
-                dtype=torch.int
-            )
-             for TV in sorted(self.TV_to_phoneme_map.keys())
-        ])
+        if len(self.TV_to_phoneme_map) > 0:
+            critical_mask = torch.stack([
+                torch.tensor(
+                    [
+                        int(p in self.TV_to_phoneme_map[TV])
+                        for p in tokens
+                    ],
+                    dtype=torch.int
+                )
+                for TV in sorted(self.TV_to_phoneme_map.keys())
+            ])
+        else:
+            critical_mask = torch.zeros(size=(0, len(tokens)))
 
         return (
             sentence_name,

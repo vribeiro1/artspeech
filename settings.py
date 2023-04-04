@@ -21,3 +21,8 @@ class GottingenConfig:
 
 
 DatasetConfig = GottingenConfig
+
+DATASET_CONFIG = {
+    "artspeech2": ArtSpeechConfig,
+    "gottingen": GottingenConfig
+}
