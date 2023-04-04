@@ -147,7 +147,8 @@ class AutoencoderLoss2(nn.Module):
         encoder.load_state_dict(encoder_state_dict)
         self.encode = InputTransform(
             transform=encoder,
-            device=device
+            device=device,
+            activation=torch.tanh
         )
 
         decoder = MultiDecoder(
@@ -163,7 +164,7 @@ class AutoencoderLoss2(nn.Module):
         decoder.load_state_dict(decoder_state_dict)
         self.decode = InputTransform(
             transform=decoder,
-            device=device
+            device=device,
         )
 
         self.latent = nn.MSELoss(reduction="none")
@@ -206,7 +207,7 @@ class AutoencoderLoss2(nn.Module):
 
         bs, seq_len, num_articulators, _, num_samples = target_shapes.shape
         encoder_inputs = target_shapes.reshape(bs * seq_len, num_articulators, 2 * num_samples)
-        target_pcs = torch.tanh(self.encode(encoder_inputs))
+        target_pcs = self.encode(encoder_inputs)
         _, num_pcs = target_pcs.shape
         target_pcs = target_pcs.reshape(bs, seq_len, num_pcs)
 
@@ -225,17 +226,20 @@ class AutoencoderLoss2(nn.Module):
 
         # Critical loss
         num_TVs = len(self.TVs)
-        output_shapes = output_shapes.permute(0, 1, 2, 4, 3)  # (B, T, Nart, D, 2)
-        critical_loss = torch.stack([
-            torch.cdist(
-                output_shapes[..., self.articulators_indices[self.TV_TO_ARTICULATOR_MAP[TV][0]], :, :],
-                output_shapes[..., self.articulators_indices[self.TV_TO_ARTICULATOR_MAP[TV][1]], :, :]
-            ) for TV in self.TVs
-        ], dim=0)  # (Ntvs, B, T, D, D)
-        critical_loss = critical_loss.permute(1, 0, 2, 3, 4)
-        critical_loss = critical_loss.reshape(bs, num_TVs, seq_len, num_samples * num_samples)
-        critical_loss, _ = critical_loss.min(dim=-1)
-        critical_loss = critical_loss[critical_mask == 1].mean()
+        if num_TVs > 0:
+            output_shapes = output_shapes.permute(0, 1, 2, 4, 3)  # (B, T, Nart, D, 2)
+            critical_loss = torch.stack([
+                torch.cdist(
+                    output_shapes[..., self.articulators_indices[self.TV_TO_ARTICULATOR_MAP[TV][0]], :, :],
+                    output_shapes[..., self.articulators_indices[self.TV_TO_ARTICULATOR_MAP[TV][1]], :, :]
+                ) for TV in self.TVs
+            ], dim=0)  # (Ntvs, B, T, D, D)
+            critical_loss = critical_loss.permute(1, 0, 2, 3, 4)
+            critical_loss = critical_loss.reshape(bs, num_TVs, seq_len, num_samples * num_samples)
+            critical_loss, _ = critical_loss.min(dim=-1)
+            critical_loss = critical_loss[critical_mask == 1].mean()
+        else:
+            critical_loss = torch.tensor(0, device=target_shapes.device, dtype=torch.float)
 
         return (
             self.beta0 * latent_loss +

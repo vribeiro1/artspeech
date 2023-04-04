@@ -35,13 +35,17 @@ class Decode(nn.Module):
 
 
 class InputTransform(nn.Module):
-    def __init__(self, transform, device, **kwargs):
+    def __init__(self, transform, device, activation=None, **kwargs):
         super().__init__()
         self.transform = transform
         self.transform.to(device)
+        self.activation = activation
 
         for parameter in self.transform.parameters():
             parameter.requires_grad = False
 
     def forward(self, x):
-        return self.transform(x)
+        output = self.transform(x)
+        if self.activation is not None:
+            output = self.activation(output)
+        return output
