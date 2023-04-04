@@ -142,6 +142,9 @@ class DatabaseCollector:
                 end_str = "%.04f" % sentence_interval.end_time
                 sentence_name = f"{subject}_{sequence}-{start_str}_{end_str}"
 
+                if len(sentence_frame_ids) == 0:
+                    continue
+
                 data.append({
                     "subject": subject,
                     "sequence": sequence,

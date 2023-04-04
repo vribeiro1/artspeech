@@ -13,11 +13,8 @@ from sklearn.manifold import TSNE
 from sklearn.metrics import confusion_matrix
 
 from phoneme_recognition.metrics import CrossEntropyLoss
-from settings import TRAIN
+from settings import TRAIN, SIL, UNKNOWN, BLANK
 
-SIL = "#"
-UNKNOWN = "<unk>"
-BLANK = "<blank>"
 
 CLASSES_NAMES = {
     0: "dental",

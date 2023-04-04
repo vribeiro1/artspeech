@@ -11,9 +11,9 @@ from tqdm import tqdm
 from vt_shape_gen.helpers import load_articulator_array
 from vt_tools import UPPER_INCISOR
 
-from database_collector import GottingenDatabaseCollector
+from database_collector import DATABASE_COLLECTORS
 from phoneme_to_articulation.tail_clipper import TailClipper
-from settings import DatasetConfig
+from settings import UNKNOWN, DATASET_CONFIG
 
 phonemes_per_TV = {
     "LA": lambda p: p in ["p", "b", "m"],
@@ -63,8 +63,14 @@ def cached_load_articulator_array(filepath, norm_value):
 
 class ArtSpeechDataset(Dataset):
     def __init__(
-        self, datadir, sequences, vocabulary, articulators, n_samples=50,
-        sync_shift=DatasetConfig.SYNC_SHIFT, framerate=DatasetConfig.FRAMERATE, clip_tails=False,
+        self,
+        datadir,
+        database_name,
+        sequences,
+        vocabulary,
+        articulators,
+        n_samples=50,
+        clip_tails=False,
         TVs=None
     ):
         self.vocabulary = vocabulary
@@ -75,16 +81,20 @@ class ArtSpeechDataset(Dataset):
         self.clip_tails = clip_tails
         self.TVs = TVs or []
 
-        collector = GottingenDatabaseCollector(datadir)
-        data = collector.collect_data(sequences, articulators)
+        collector = DATABASE_COLLECTORS[database_name](datadir)
+        data = collector.collect_data(sequences)
         self.data = funcy.lfilter(lambda d: d["has_all"], data)
+        self.dataset_config = DATASET_CONFIG[database_name]
 
     def prepare_articulator_array(self, subject, sequence, frame_id, articulator):
         fp_articulator = os.path.join(
             self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{articulator}.npy"
         )
 
-        articulator_array = cached_load_articulator_array(fp_articulator, norm_value=DatasetConfig.RES)
+        articulator_array = cached_load_articulator_array(
+            fp_articulator,
+            norm_value=self.dataset_config.RES
+        )
 
         if self.clip_tails:
             tail_clip_refs = {}
@@ -93,7 +103,10 @@ class ArtSpeechDataset(Dataset):
                     self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
                 )
 
-                reference_array = cached_load_articulator_array(fp_reference, norm_value=DatasetConfig.RES)
+                reference_array = cached_load_articulator_array(
+                    fp_reference,
+                    norm_value=self.dataset_config.RES
+                )
                 tail_clip_refs[reference.replace("-", "_")] = reference_array
 
             tail_clip_method_name = f"clip_{articulator.replace('-', '_')}_tails"
@@ -113,7 +126,7 @@ class ArtSpeechDataset(Dataset):
 
         coord_system_reference_array = cached_load_articulator_array(
             fp_coord_system_reference,
-            norm_value=DatasetConfig.RES
+            norm_value=self.dataset_config.RES
         ).T
 
         return coord_system_reference_array
@@ -169,7 +182,8 @@ class ArtSpeechDataset(Dataset):
 
         sentence_tokens = item["phonemes"]
         sentence_numerized = torch.tensor([
-            self.vocabulary[token] for token in sentence_tokens
+            self.vocabulary.get(token, self.vocabulary[UNKNOWN])
+            for token in sentence_tokens
         ], dtype=torch.long)
 
         return (

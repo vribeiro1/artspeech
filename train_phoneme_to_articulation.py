@@ -79,9 +79,7 @@ def run_epoch(
 
             losses.append(loss.item())
             progress_bar.set_postfix(
-                loss=np.mean(losses),
-                x_corr_1st=np.mean(x_corrs[0]),
-                y_corr_1st=np.mean(y_corrs[0])
+                loss=np.mean(losses)
             )
 
     mean_loss = np.mean(losses)
@@ -102,6 +100,7 @@ def run_epoch(
 
 def main(
     datadir,
+    database_name,
     num_epochs,
     batch_size,
     patience,
@@ -112,6 +111,7 @@ def main(
     test_seq_dict,
     vocab_filepath,
     articulators,
+    num_workers=0,
     clip_tails=True,
     state_dict_filepath=None,
     checkpoint_filepath=None,
@@ -147,10 +147,10 @@ def main(
         patience=10,
     )
 
-    num_workers=5
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = ArtSpeechDataset(
         datadir,
+        database_name,
         train_sequences,
         vocabulary,
         articulators,
@@ -168,6 +168,7 @@ def main(
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = ArtSpeechDataset(
         datadir,
+        database_name,
         valid_sequences,
         vocabulary,
         articulators,
@@ -275,6 +276,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = ArtSpeechDataset(
         datadir,
+        database_name,
         test_sequences,
         vocabulary,
         articulators,
@@ -345,6 +347,5 @@ if __name__ == "__main__":
         experiment_id=experiment.experiment_id,
         run_name=args.run_name
     ):
-        mlflow.log_params(cfg)
         mlflow.log_dict(cfg, "config.json")
         main(**cfg)

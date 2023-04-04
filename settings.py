@@ -1,5 +1,9 @@
 import os
 
+SIL = "#"
+UNKNOWN = "<unk>"
+BLANK = "<blank>"
+
 TRAIN = "train"
 VALID = "validation"
 TEST = "test"
@@ -10,7 +14,7 @@ class ArtSpeechConfig:
     RES = 136
     PIXEL_SPACING = 1.6176470518112
     FRAMERATE = 50
-    SYNC_SHIFT = 2
+    SYNC_SHIFT = 0
 
 
 class GottingenConfig:
