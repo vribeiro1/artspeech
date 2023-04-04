@@ -283,11 +283,6 @@ def main(
             "b",
             "m"
         ],
-        # "VEL": [
-        #     token
-        #     for token in vocabulary
-        #     if "~" not in token and token not in ["n", "m", "#", "-", UNKNOWN]
-        # ]
     }
 
     articulators = sorted(indices_dict.keys())
@@ -389,8 +384,6 @@ def main(
         epochs = range(epoch, num_epochs + 1)
         best_metric = checkpoint["best_metric"]
         epochs_since_best = checkpoint["epochs_since_best"]
-        best_model_path = checkpoint["best_model_path"]
-        last_model_path = checkpoint["last_model_path"]
 
         logging.info(f"""
 Loaded checkpoint -- Launching training from epoch {epoch} with best metric

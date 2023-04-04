@@ -130,7 +130,7 @@ def evaluate_autoencoder(datadir, exp_dir):
             latents = latents.unsqueeze(dim=0).to(device)
 
             reconstruction = torch.concat([
-                autoencoder.decoders[articulator](latents[:, autoencoder.indices_dict[articulator]]).unsqueeze(dim=1)
+                autoencoder.decoders.decoders[articulator](latents[:, autoencoder.indices_dict[articulator]]).unsqueeze(dim=1)
                 for articulator in autoencoder.sorted_articulators
             ], dim=1)
             reconstruction = reconstruction.detach().cpu()
