@@ -17,39 +17,49 @@ from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
 from phoneme_to_articulation.metrics import EuclideanDistance
 
 
-def main(cfg):
+def main(
+    datadir,
+    database_name,
+    batch_size,
+    test_seq_dict,
+    state_dict_fpath,
+    vocab_filepath,
+    articulators,
+    save_to,
+    clip_tails=True,
+    num_workers=0
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    with open(cfg["vocab_filepath"]) as f:
+    with open(vocab_filepath) as f:
         tokens = json.load(f)
         vocabulary = {token: i for i, token in enumerate(tokens)}
 
-    articulators = cfg["articulators"]
-    n_articulators = len(articulators)
-
-    test_sequences = sequences_from_dict(cfg["datadir"], cfg["test_seq_dict"])
+    num_articulators = len(articulators)
+    test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = ArtSpeechDataset(
-        cfg["datadir"],
+        datadir,
+        database_name,
         test_sequences,
         vocabulary,
         articulators,
-        clip_tails=cfg["clip_tails"]
+        clip_tails=clip_tails
     )
     test_dataloader = DataLoader(
         test_dataset,
-        batch_size=cfg["batch_size"],
+        batch_size=batch_size,
         shuffle=False,
-        num_workers=5,
+        num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn
     )
 
-    best_model = ArtSpeech(len(vocabulary), n_articulators, gru_dropout=0.2)
-    state_dict = torch.load(cfg["state_dict_fpath"], map_location=device)
+    best_model = ArtSpeech(len(vocabulary), num_articulators, gru_dropout=0.2)
+    state_dict = torch.load(state_dict_fpath, map_location=device)
     best_model.load_state_dict(state_dict)
     best_model.to(device)
 
-    test_outputs_dir = os.path.join(cfg["save_to"], "test_outputs")
+    test_outputs_dir = os.path.join(save_to, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
@@ -66,7 +76,7 @@ def main(cfg):
         regularize_out=True
     )
 
-    test_results_filepath = os.path.join(cfg["save_to"], "test_results.json")
+    test_results_filepath = os.path.join(save_to, "test_results.json")
     with open(test_results_filepath, "w") as f:
         json.dump(test_results, f)
 
@@ -82,7 +92,7 @@ def main(cfg):
         results_item[f"y_corr_{articulator}"] = test_results[articulator]["y_corr"]
 
     df = pd.DataFrame([results_item])
-    df_filepath = os.path.join(cfg["save_to"], "test_results.csv")
+    df_filepath = os.path.join(save_to, "test_results.csv")
     df.to_csv(df_filepath, index=False)
 
 
@@ -94,4 +104,4 @@ if __name__ == "__main__":
     with open(args.cfg_filepath) as f:
         cfg = yaml.safe_load(f.read())
 
-    main(cfg)
+    main(**cfg)

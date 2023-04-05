@@ -161,7 +161,7 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
     x_corrs = [[] for _ in articulators]
     y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - inference")
-    for sentences_ids, sentences, targets, lengths, phonemes, _, sentence_frames in progress_bar:
+    for i, (sentences_ids, sentences, targets, lengths, phonemes, sentence_frames) in enumerate(progress_bar):
         sentences = sentences.to(device)
         targets = targets.to(device)
 
