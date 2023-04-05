@@ -7,7 +7,13 @@ from operator import itemgetter
 
 
 class Video:
-    def __init__(self, frames_filepaths, audio_filepath, framerate=50, max_diff=0.05):
+    def __init__(
+            self,
+            frames_filepaths,
+            audio_filepath,
+            framerate=50,
+            max_diff=0.05,
+        ):
         audio, self.sample_rate = torchaudio.load(audio_filepath)
         audio = torch.mean(audio, dim=0).squeeze(dim=0)
 

@@ -8,7 +8,7 @@ from tgt.io import read_textgrid
 from tqdm import tqdm
 
 from video import Video
-from settings import BASE_DIR, ArtSpeechConfig, GottingenConfig
+from settings import BASE_DIR, ArtSpeech2Config, GottingenConfig
 
 
 class DatabaseCollector:
@@ -84,6 +84,12 @@ class DatabaseCollector:
                 logging.warning(f"Skipping {subject}/{sequence} - Empty frame sequence")
                 continue
 
+            sync_shift = abs(self.dataset_config.SYNC_SHIFT)
+            if self.dataset_config.SYNC_SHIFT >= 0:
+                frame_ids = frame_ids[sync_shift:]
+            else:
+                frame_ids = [frame_ids[0]] * (sync_shift) + frame_ids
+
             textgrid_filepath = self.get_textgrid_filepath(subject, sequence)
             if not os.path.isfile(textgrid_filepath):
                 logging.warning(f"Skipping {subject}/{sequence} - Missing textgrid")
@@ -94,10 +100,10 @@ class DatabaseCollector:
 
             wav_filepath = self.get_wav_filepath(subject, sequence)
             video = Video(
-                frames_filepaths=frame_ids[self.dataset_config.SYNC_SHIFT:],
+                frames_filepaths=frame_ids,
                 audio_filepath=wav_filepath,
                 framerate=self.dataset_config.FRAMERATE,
-                max_diff=1.0
+                max_diff=1.0,
             )
 
             for sentence_interval in sentence_tier.intervals:
@@ -167,7 +173,7 @@ class DatabaseCollector:
 
 
 class ArtSpeechDatabase2Collector(DatabaseCollector):
-    dataset_config = ArtSpeechConfig
+    dataset_config = ArtSpeech2Config
     long_sentence_tier = "LongSentenceTier"
     short_sentence_tier = "ShortSentenceTier"
 

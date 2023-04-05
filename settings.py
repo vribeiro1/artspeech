@@ -14,7 +14,14 @@ class ArtSpeechConfig:
     RES = 136
     PIXEL_SPACING = 1.6176470518112
     FRAMERATE = 50
-    SYNC_SHIFT = 0
+    SYNC_SHIFT = 2
+
+
+class ArtSpeech2Config:
+    RES = 136
+    PIXEL_SPACING = 1.6176470518112
+    FRAMERATE = 50
+    SYNC_SHIFT = -20
 
 
 class GottingenConfig:
@@ -27,6 +34,7 @@ class GottingenConfig:
 DatasetConfig = GottingenConfig
 
 DATASET_CONFIG = {
-    "artspeech2": ArtSpeechConfig,
+    "artspeech": ArtSpeechConfig,
+    "artspeech2": ArtSpeech2Config,
     "gottingen": GottingenConfig
 }
