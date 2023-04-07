@@ -376,7 +376,7 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
     """
     def __init__(
         self,
-        database_name
+        database_name,
         datadir,
         sequences,
         vocabulary,

@@ -3,6 +3,7 @@ import logging
 import mlflow
 import numpy as np
 import os
+import shutil
 import tempfile
 import torch
 import yaml
@@ -265,4 +266,7 @@ if __name__ == "__main__":
         run_name=args.run_name
     ):
         mlflow.log_dict(cfg, "config.json")
-        main(**cfg)
+        try:
+            main(**cfg)
+        finally:
+            shutil.rmtree(TMP_DIR)

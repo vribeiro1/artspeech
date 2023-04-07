@@ -3,6 +3,7 @@ import logging
 import mlflow
 import numpy as np
 import os
+import shutil
 import tempfile
 import torch
 import yaml
@@ -46,7 +47,7 @@ def reconstruction_error(outputs, targets, denorm_fn, px_space=1, res=1):
 def main(
     database_name,
     datadir,
-    n_epochs,
+    num_epochs,
     batch_size,
     patience,
     learning_rate,
@@ -134,7 +135,7 @@ def main(
 
     best_metric = np.inf
     epochs_since_best = 0
-    epochs = range(1, n_epochs + 1)
+    epochs = range(1, num_epochs + 1)
 
     if checkpoint_filepath is not None:
         # TODO: Save and load the scheduler state dict when the following change is released
@@ -149,8 +150,6 @@ def main(
         epochs = range(epoch, num_epochs + 1)
         best_metric = checkpoint["best_metric"]
         epochs_since_best = checkpoint["epochs_since_best"]
-        best_model_path = checkpoint["best_model_path"]
-        last_model_path = checkpoint["last_model_path"]
 
         print(f"""
 Loaded checkpoint -- Launching training from epoch {epoch} with best metric
@@ -294,7 +293,9 @@ if __name__ == "__main__":
         experiment_id=experiment.experiment_id,
         run_name=args.run_name
     ):
-        mlflow.log_params(cfg)
         mlflow.log_dict(cfg, "config.json")
 
-        main(**cfg)
+        try:
+            main(**cfg)
+        finally:
+            shutil.rmtree(TMP_DIR)

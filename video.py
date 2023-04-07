@@ -12,7 +12,7 @@ class Video:
             frames_filepaths,
             audio_filepath,
             framerate=50,
-            max_diff=0.05,
+            max_diff=0.0025,
         ):
         audio, self.sample_rate = torchaudio.load(audio_filepath)
         audio = torch.mean(audio, dim=0).squeeze(dim=0)
