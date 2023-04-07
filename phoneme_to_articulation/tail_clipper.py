@@ -48,7 +48,6 @@ class TailClipper:
 
         return tailless_tongue
 
-    @classmethod
     def clip_lower_lip_tails(self, lower_lip, lower_incisor, **kwargs):
         # Remove the front tail of the lower lip using the lower incisor as the reference
         ref_idx = lower_incisor[:, 1].argmax()
@@ -90,7 +89,6 @@ class TailClipper:
 
         return tailless_llip
 
-    @classmethod
     def clip_upper_lip_tails(self, upper_lip, upper_incisor, **kwargs):
         # Remove the front tail of the upper lip using the upper incisor as the reference
         ref_idx = -1
