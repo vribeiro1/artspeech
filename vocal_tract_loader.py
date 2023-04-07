@@ -48,6 +48,7 @@ class VocalTractShapeLoader:
 
         if self.clip_tails:
             tail_clip_refs = {}
+            tail_clipper = TailClipper(self.dataset_config)
             for reference in TailClipper.TAIL_CLIP_REFERENCES:
                 fp_reference = os.path.join(
                     self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
@@ -60,7 +61,7 @@ class VocalTractShapeLoader:
                 tail_clip_refs[reference.replace("-", "_")] = reference_array
 
             tail_clip_method_name = f"clip_{articulator.replace('-', '_')}_tails"
-            tail_clip_method = getattr(TailClipper, tail_clip_method_name, None)
+            tail_clip_method = getattr(tail_clipper, tail_clip_method_name, None)
 
             if tail_clip_method:
                 articulator_array = tail_clip_method(articulator_array, **tail_clip_refs)

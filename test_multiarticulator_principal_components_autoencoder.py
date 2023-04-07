@@ -19,7 +19,7 @@ from phoneme_to_articulation.principal_components.dataset import PrincipalCompon
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import MultiArtRegularizedLatentsMSELoss
 from phoneme_to_articulation.principal_components.models import MultiArticulatorAutoencoder
-from settings import DatasetConfig
+from settings import DATASET_CONFIG
 
 PINK = np.array([255, 0, 85, 255]) / 255
 BLUE = np.array([0, 139, 231, 255]) / 255
@@ -29,7 +29,7 @@ ORDER_STR = {
 }
 
 
-def evaluate_autoencoder(datadir, exp_dir):
+def evaluate_autoencoder(datadir, dataset_config, exp_dir):
     config_filepath = os.path.join(exp_dir, "config.json")
     encoders_filepath = os.path.join(exp_dir, "best_encoders.pt")
     decoders_filepath = os.path.join(exp_dir, "best_decoders.pt")
@@ -51,7 +51,7 @@ def evaluate_autoencoder(datadir, exp_dir):
     sequences = sequences_from_dict(datadir, sequences_dict)
     dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
         datadir=datadir,
-        dataset_config=DatasetConfig,
+        dataset_config=dataset_config,
         sequences=sequences,
         articulators=articulators,
     )
@@ -100,7 +100,7 @@ def evaluate_autoencoder(datadir, exp_dir):
         p2cp = p2cp_fn(
             reconstructions.permute(0, 1, 3, 2),
             targets.permute(0, 1, 3, 2)
-        ) * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES
+        ) * dataset_config.PIXEL_SPACING * dataset_config.RES
 
         data_reconstructions = torch.cat([data_reconstructions, reconstructions])
         data_latents = torch.cat([data_latents, latents])
@@ -193,6 +193,7 @@ def evaluate_autoencoder(datadir, exp_dir):
 
 
 def main(
+    database_name,
     datadir,
     exp_dir,
     batch_size,
@@ -203,12 +204,13 @@ def main(
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    dataset_config = DATASET_CONFIG[database_name]
     articulators_indices_dict = model_params["indices_dict"]
     test_sequences = sequences_from_dict(datadir, seq_dict)
     articulators = sorted(articulators_indices_dict.keys())
     test_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
         datadir=datadir,
-        dataset_config=DatasetConfig,
+        dataset_config=dataset_config,
         sequences=test_sequences,
         articulators=articulators,
         clip_tails=clip_tails
@@ -266,6 +268,9 @@ if __name__ == "__main__":
 
     main(**cfg)
 
+    database_name = cfg["database_name"]
+    dataset_config = DATASET_CONFIG[database_name]
+
     datadir = cfg["datadir"]
     exp_dir = cfg["exp_dir"]
-    evaluate_autoencoder(datadir, exp_dir)
+    evaluate_autoencoder(datadir, dataset_config, exp_dir)

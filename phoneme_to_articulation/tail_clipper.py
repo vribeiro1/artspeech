@@ -3,14 +3,14 @@ import torch.nn.functional as F
 
 from vt_tools import LOWER_INCISOR, UPPER_INCISOR, EPIGLOTTIS
 
-from settings import DatasetConfig
-
 
 class TailClipper:
     TAIL_CLIP_REFERENCES = [LOWER_INCISOR, UPPER_INCISOR, EPIGLOTTIS]
 
-    @classmethod
-    def clip_tongue_tails(cls, tongue, lower_incisor, epiglottis, **kwargs):
+    def __init__(self, dataset_config):
+        self.dataset_config = dataset_config
+
+    def clip_tongue_tails(self, tongue, lower_incisor, epiglottis, **kwargs):
         # Remove the front tail of the tongue using the lower incisor as the reference
         ref_idx = lower_incisor[:, 1].argmax()
         reference = lower_incisor[ref_idx]
@@ -36,7 +36,7 @@ class TailClipper:
         tongue_1st_half = tongue_cp[:25]
         tongue_2nd_half = tongue_cp[25:]
 
-        keep_indices = torch.where(tongue_1st_half[:, 1] < reference[1] + (10 / DatasetConfig.PIXEL_SPACING / DatasetConfig.RES))
+        keep_indices = torch.where(tongue_1st_half[:, 1] < reference[1] + (10 / self.dataset_config.PIXEL_SPACING / self.dataset_config.RES))
 
         tailless_tongue = torch.cat([
             tongue_1st_half[keep_indices],
@@ -49,7 +49,7 @@ class TailClipper:
         return tailless_tongue
 
     @classmethod
-    def clip_lower_lip_tails(cls, lower_lip, lower_incisor, **kwargs):
+    def clip_lower_lip_tails(self, lower_lip, lower_incisor, **kwargs):
         # Remove the front tail of the lower lip using the lower incisor as the reference
         ref_idx = lower_incisor[:, 1].argmax()
         reference = lower_incisor[ref_idx]
@@ -59,7 +59,7 @@ class TailClipper:
         llip_1st_half = llip_cp[:25]
         llip_2nd_half = llip_cp[25:]
 
-        keep_indices = torch.where(llip_2nd_half[:, 1] < reference[1] + (5 / DatasetConfig.PIXEL_SPACING / DatasetConfig.RES))
+        keep_indices = torch.where(llip_2nd_half[:, 1] < reference[1] + (5 / self.dataset_config.PIXEL_SPACING / self.dataset_config.RES))
 
         tailless_llip = torch.cat([
             llip_1st_half,
@@ -91,7 +91,7 @@ class TailClipper:
         return tailless_llip
 
     @classmethod
-    def clip_upper_lip_tails(cls, upper_lip, upper_incisor, **kwargs):
+    def clip_upper_lip_tails(self, upper_lip, upper_incisor, **kwargs):
         # Remove the front tail of the upper lip using the upper incisor as the reference
         ref_idx = -1
         reference = upper_incisor[ref_idx]
@@ -101,7 +101,7 @@ class TailClipper:
         ulip_1st_half = ulip_cp[:25]
         ulip_2nd_half = ulip_cp[25:]
 
-        keep_indices = torch.where(ulip_2nd_half[:, 1] > reference[1] - (10 / DatasetConfig.PIXEL_SPACING))
+        keep_indices = torch.where(ulip_2nd_half[:, 1] > reference[1] - (10 / self.dataset_config.PIXEL_SPACING))
 
         tailless_ulip = torch.cat([
             ulip_1st_half,
@@ -117,7 +117,7 @@ class TailClipper:
         ulip_1st_half = ulip_cp[:25]
         ulip_2nd_half = ulip_cp[25:]
 
-        keep_indices = torch.where(ulip_1st_half[:, 1] > reference[1] - (5 / DatasetConfig.PIXEL_SPACING))
+        keep_indices = torch.where(ulip_1st_half[:, 1] > reference[1] - (5 / self.dataset_config.PIXEL_SPACING))
 
         tailless_ulip = torch.cat([
             ulip_1st_half[keep_indices],

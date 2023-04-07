@@ -19,7 +19,7 @@ from phoneme_to_articulation.principal_components.evaluation import run_multiart
 from phoneme_to_articulation.principal_components.losses import MultiArtRegularizedLatentsMSELoss
 from phoneme_to_articulation.principal_components.models import MultiArticulatorAutoencoder
 from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistance
-from settings import BASE_DIR, DatasetConfig, TRAIN, VALID, TEST
+from settings import BASE_DIR, DATASET_CONFIG, TRAIN, VALID, TEST
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
@@ -50,6 +50,7 @@ def reconstruction_error(outputs, targets, denorm_fn_dict, px_space=1, res=1):
 
 
 def main(
+    database_name,
     datadir,
     n_epochs,
     batch_size,
@@ -82,10 +83,11 @@ def main(
         autoencoder.load_state_dict(state_dict)
     autoencoder.to(device)
 
+    dataset_config = DATASET_CONFIG[database_name]
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=DatasetConfig,
         sequences=train_sequences,
         articulators=articulators,
         clip_tails=clip_tails
@@ -101,7 +103,7 @@ def main(
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
         datadir=datadir,
-        dataset_config=DatasetConfig,
+        dataset_config=dataset_config,
         sequences=valid_sequences,
         articulators=articulators,
         clip_tails=clip_tails
@@ -135,8 +137,8 @@ def main(
         "p2cp_mm": lambda outputs, targets: reconstruction_error(
             outputs, targets,
             denorm_fn_dict=denorm_fn_dict,
-            px_space=DatasetConfig.PIXEL_SPACING,
-            res=DatasetConfig.RES
+            px_space=dataset_config.PIXEL_SPACING,
+            res=dataset_config.RES
         )
     }
 
@@ -202,8 +204,8 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
 
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=DatasetConfig,
         sequences=test_sequences,
         articulators=articulators,
         clip_tails=clip_tails

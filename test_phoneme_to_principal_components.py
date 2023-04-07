@@ -14,11 +14,13 @@ from phoneme_to_articulation.principal_components.dataset import (
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_PC_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
-from settings import DatasetConfig
+from settings import DATASET_CONFIG
 
 
 def main(cfg):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    database_name = cfg["database_name"]
+    dataset_config = DATASET_CONFIG[database_name]
 
     with open(cfg["vocab_fpath"]) as f:
         tokens = ujson.load(f)
@@ -26,8 +28,8 @@ def main(cfg):
 
     test_sequences = sequences_from_dict(cfg["datadir"], cfg["test_seq_dict"])
     test_dataset = PrincipalComponentsPhonemeToArticulationDataset(
+        database_name=database_name,
         datadir=cfg["datadir"],
-        dataset_config=DatasetConfig,
         sequences=test_sequences,
         vocabulary=vocabulary,
         articulator=cfg["articulator"],
@@ -73,6 +75,7 @@ def main(cfg):
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
+        dataset_config=dataset_config,
         device=device
     )
 

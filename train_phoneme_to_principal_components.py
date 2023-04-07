@@ -27,7 +27,7 @@ from phoneme_to_articulation.principal_components.metrics import (
     DecoderMeanP2CPDistance
 )
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
-from settings import BASE_DIR, TRAIN, VALID, TEST, DatasetConfig
+from settings import BASE_DIR, TRAIN, VALID, TEST
 
 ex = Experiment()
 fs_observer = FileStorageObserver.create(
@@ -116,6 +116,7 @@ def run_epoch(
 @ex.automain
 def main(
     _run,
+    database_name,
     datadir,
     n_epochs,
     batch_size,
@@ -167,8 +168,8 @@ def main(
 
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsPhonemeToArticulationDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=DatasetConfig,
         sequences=train_sequences,
         vocabulary=vocabulary,
         articulator=articulator,
@@ -187,8 +188,8 @@ def main(
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = PrincipalComponentsPhonemeToArticulationDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=DatasetConfig,
         sequences=valid_sequences,
         vocabulary=vocabulary,
         articulator=articulator,
@@ -270,8 +271,8 @@ def main(
 
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = PrincipalComponentsPhonemeToArticulationDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=DatasetConfig,
         sequences=test_sequences,
         vocabulary=vocabulary,
         articulator=articulator,

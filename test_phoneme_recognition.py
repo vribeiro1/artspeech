@@ -26,7 +26,7 @@ from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC
 from phoneme_recognition.synthetic_shapes import SyntheticPhonemeRecognitionDataset
-from settings import DatasetConfig, BASE_DIR
+from settings import BASE_DIR, DATASET_CONFIG
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
@@ -36,8 +36,8 @@ if not os.path.exists(RESULTS_DIR):
 
 
 def main(
+    database_name,
     datadir,
-    database,
     batch_size,
     seq_dict,
     vocab_filepath,
@@ -54,6 +54,7 @@ def main(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
 
+    dataset_config = DATASET_CONFIG[database_name]
     feature = Feature(feature)
     target = Target(target)
     criterion = Criterion[loss]
@@ -101,7 +102,7 @@ def main(
         database=database,
         sequences=sequences,
         vocabulary=vocabulary,
-        dataset_config=DatasetConfig,
+        dataset_config=dataset_config,
         features=[feature],
         tmp_dir=TMP_DIR,
         voiced_tokens=voiced_tokens,

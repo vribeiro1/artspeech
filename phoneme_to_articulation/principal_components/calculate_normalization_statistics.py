@@ -9,26 +9,27 @@ from vt_shape_gen.helpers import load_articulator_array
 from vt_tools import *
 
 from helpers import sequences_from_dict
-from database_collector import GottingenDatabaseCollector
+from database_collector import DATABASE_COLLECTORS
 from phoneme_to_articulation.tail_clipper import TailClipper
-from settings import DatasetConfig
+from settings import DATASET_CONFIG
 
 
 def load_articulator_tensor(*args, **kwargs):
     return torch.from_numpy(load_articulator_array(*args, **kwargs)).type(torch.float)
 
 
-def prepare_articulator_array(datadir, subject, sequence, frame_number, articulator):
+def prepare_articulator_array(dataset_config, datadir, subject, sequence, frame_number, articulator):
     fp_articulator = os.path.join(
         datadir, subject, sequence, "inference_contours", f"{frame_number}_{articulator}.npy"
     )
 
     articulator_array = load_articulator_tensor(
         fp_articulator,
-        norm_value=DatasetConfig.RES
+        norm_value=dataset_config.RES
     )
 
     tail_clip_refs = {}
+    tail_clipper = TailClipper(dataset_config)
     for reference in TailClipper.TAIL_CLIP_REFERENCES:
         fp_reference = os.path.join(
             datadir, subject, sequence, "inference_contours", f"{frame_number}_{reference}.npy"
@@ -36,13 +37,13 @@ def prepare_articulator_array(datadir, subject, sequence, frame_number, articula
 
         reference_array = load_articulator_tensor(
             fp_reference,
-            norm_value=DatasetConfig.RES
+            norm_value=dataset_config.RES
         )
 
         tail_clip_refs[reference.replace("-", "_")] = reference_array
 
     tail_clip_method_name = f"clip_{articulator.replace('-', '_')}_tails"
-    tail_clip_method = getattr(TailClipper, tail_clip_method_name, None)
+    tail_clip_method = getattr(tail_clipper, tail_clip_method_name, None)
 
     if tail_clip_method:
         articulator_array = tail_clip_method(articulator_array, **tail_clip_refs)
@@ -55,7 +56,7 @@ def prepare_articulator_array(datadir, subject, sequence, frame_number, articula
 
     coord_system_reference_array = load_articulator_tensor(
         fp_coord_system_reference,
-        norm_value=DatasetConfig.RES
+        norm_value=dataset_config.RES
     )
     coord_system_reference = coord_system_reference_array.T[:, -1]
     coord_system_reference = coord_system_reference.unsqueeze(dim=-1)
@@ -68,13 +69,15 @@ def prepare_articulator_array(datadir, subject, sequence, frame_number, articula
 
 
 def main(cfg):
+    database_name = cfg["database_name"]
     datadir = cfg["datadir"]
     sequences_dict = cfg["sequences_dict"]
     sequences = sequences_from_dict(datadir, sequences_dict)
     articulators = cfg["articulators"]
     save_to = cfg["save_to"]
 
-    collector = GottingenDatabaseCollector(datadir)
+    dataset_config = DATASET_CONFIG[database_name]
+    collector = DATABASE_COLLECTORS[database_name](datadir)
     sentence_data = collector.collect_data(sequences)
     data = []
     for sentence in sentence_data:
@@ -94,7 +97,7 @@ def main(cfg):
             frame_id = item["frame_id"]
 
             articulator_array = prepare_articulator_array(
-                datadir, subject, sequence, frame_id, articulator
+                dataset_config, datadir, subject, sequence, frame_id, articulator
             ).unsqueeze(dim=0)
 
             articulator_arrays = torch.concat([articulator_arrays, articulator_array], dim=0)

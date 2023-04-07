@@ -32,7 +32,7 @@ from phoneme_recognition.datasets import  PhonemeRecognitionDataset, collate_fn
 from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC
-from settings import DatasetConfig, BASE_DIR, TRAIN, VALID, TEST
+from settings import DATASET_CONFIG, BASE_DIR, TRAIN, VALID, TEST
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
@@ -42,8 +42,8 @@ if not os.path.exists(RESULTS_DIR):
 
 
 def main(
+    database_name,
     datadir,
-    database,
     num_epochs,
     batch_size,
     patience,
@@ -72,6 +72,7 @@ def main(
     last_model_path = os.path.join(RESULTS_DIR, "last_model.pt")
     save_checkpoint_path = os.path.join(RESULTS_DIR, "checkpoint.pt")
 
+    dataset_config = DATASET_CONFIG[database_name]
     feature = Feature(feature)
     target = Target(target)
     criterion = Criterion[loss]
@@ -120,7 +121,7 @@ def main(
         database=database,
         sequences=train_sequences,
         vocabulary=vocabulary,
-        dataset_config=DatasetConfig,
+        dataset_config=dataset_config,
         features=[feature],
         tmp_dir=TMP_DIR,
         voiced_tokens=voiced_tokens,
@@ -140,7 +141,7 @@ def main(
         database=database,
         sequences=valid_sequences,
         vocabulary=vocabulary,
-        dataset_config=DatasetConfig,
+        dataset_config=dataset_config,
         features=[feature],
         tmp_dir=TMP_DIR,
         voiced_tokens=voiced_tokens,
@@ -284,7 +285,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         database=database,
         sequences=test_sequences,
         vocabulary=vocabulary,
-        dataset_config=DatasetConfig,
+        dataset_config=dataset_config,
         features=[feature],
         tmp_dir=TMP_DIR,
         voiced_tokens=voiced_tokens,
@@ -355,4 +356,7 @@ if __name__ == "__main__":
     ):
         mlflow.log_params(cfg)
         mlflow.log_dict(cfg, "config.json")
-        main(**cfg)
+        try:
+            main(**cfg)
+        finally:
+            shutil.rmtree(TMP_DIR)

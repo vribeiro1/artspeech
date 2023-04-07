@@ -29,7 +29,7 @@ from phoneme_to_articulation.principal_components.dataset import (
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
 from phoneme_to_articulation.principal_components.metrics import DecoderMeanP2CPDistance2
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
-from settings import BASE_DIR, TRAIN, VALID, TEST, GottingenConfig
+from settings import BASE_DIR, TRAIN, VALID, TEST
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
@@ -241,8 +241,8 @@ def run_test(
 
 
 def main(
+    database_name,
     datadir,
-    database,
     num_epochs,
     batch_size,
     patience,
@@ -316,8 +316,8 @@ def main(
 
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsPhonemeToArticulationDataset2(
+        database_name,
         datadir,
-        GottingenConfig,
         train_sequences,
         vocabulary,
         articulators,
@@ -335,8 +335,8 @@ def main(
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = PrincipalComponentsPhonemeToArticulationDataset2(
+        database_name,
         datadir,
-        GottingenConfig,
         valid_sequences,
         vocabulary,
         articulators,
@@ -464,8 +464,8 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
 
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = PrincipalComponentsPhonemeToArticulationDataset2(
+        database_name,
         datadir,
-        GottingenConfig,
         test_sequences,
         vocabulary,
         articulators,

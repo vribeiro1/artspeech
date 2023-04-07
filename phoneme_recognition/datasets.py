@@ -30,7 +30,6 @@ from vt_tools import (
 
 from database_collector import DATABASE_COLLECTORS
 from phoneme_recognition import Feature, Target
-from phoneme_to_articulation.tail_clipper import TailClipper
 from settings import BASE_DIR
 from vocal_tract_loader import VocalTractShapeLoader, cached_load_articulator_array
 

@@ -12,9 +12,10 @@ from tqdm import tqdm
 from vt_tools import UPPER_INCISOR
 from vt_shape_gen.helpers import load_articulator_array
 
-from database_collector import GottingenDatabaseCollector
+from database_collector import DATABASE_COLLECTORS
 from phoneme_to_articulation.tail_clipper import TailClipper
 from phoneme_to_articulation.transforms import Normalize
+from settings import DATASET_CONFIG
 
 phoneme_weights = {
     "l": 3,
@@ -58,6 +59,7 @@ class InputLoaderMixin:
 
         if clip_tails:
             tail_clip_refs = {}
+            tail_clipper = TailClipper(dataset_config)
             for reference in TailClipper.TAIL_CLIP_REFERENCES:
                 fp_reference = os.path.join(
                     datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
@@ -69,7 +71,7 @@ class InputLoaderMixin:
                 tail_clip_refs[reference.replace("-", "_")] = reference_array
 
             tail_clip_method_name = f"clip_{articulator.replace('-', '_')}_tails"
-            tail_clip_method = getattr(TailClipper, tail_clip_method_name, None)
+            tail_clip_method = getattr(tail_clipper, tail_clip_method_name, None)
             if tail_clip_method:
                 articulator_array = tail_clip_method(articulator_array, **tail_clip_refs)
 
@@ -103,18 +105,18 @@ class InputLoaderMixin:
 class PrincipalComponentsAutoencoderDataset(Dataset):
     def __init__(
         self,
+        database_name,
         datadir,
-        dataset_config,
         sequences,
         articulator,
         clip_tails=True
     ):
         self.datadir = datadir
-        self.dataset_config = dataset_config
+        self.dataset_config = DATASET_CONFIG[database_name]
         self.articulator = articulator
         self.clip_tails = clip_tails
 
-        collector = GottingenDatabaseCollector(datadir)
+        collector = DATABASE_COLLECTORS[database_name](datadir)
         sentence_data = collector.collect_data(sequences)
         data = []
         for sentence in sentence_data:
@@ -184,13 +186,19 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
 class PrincipalComponentsMultiArticulatorAutoencoderDataset(PrincipalComponentsAutoencoderDataset):
     def __init__(
         self,
+        database_name,
         datadir,
-        dataset_config,
         sequences,
         articulators,
         clip_tails=True
     ):
-        super().__init__(datadir, dataset_config, sequences, articulators[0], clip_tails)
+        super().__init__(
+            database_name,
+            datadir,
+            sequences,
+            articulators[0],
+            clip_tails
+        )
         self.articulators = sorted(articulators)
 
         self.normalize = {}
@@ -248,8 +256,8 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
 
     def __init__(
         self,
+        database_name,
         datadir,
-        dataset_config,
         sequences,
         vocabulary,
         articulator,
@@ -259,14 +267,14 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
         clip_tails=True
     ):
         self.datadir = datadir
-        self.dataset_config = dataset_config
+        self.dataset_config = DATASET_CONFIG[database_name]
         self.vocabulary = vocabulary
         self.articulator = articulator
         self.n_samples = n_samples
         self.clip_tails = clip_tails
         self.TVs = ["TBCD", "TTCD"]
 
-        collector = GottingenDatabaseCollector(datadir)
+        collector = DATABASE_COLLECTORS[database_name](datadir)
         self.data = collector.collect_data(sequences)
 
         mean_filepath = os.path.join(
@@ -368,8 +376,8 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
     """
     def __init__(
         self,
+        database_name
         datadir,
-        dataset_config,
         sequences,
         vocabulary,
         articulators,
@@ -378,14 +386,14 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
         clip_tails=True,
     ):
         self.datadir = datadir
-        self.dataset_config = dataset_config
+        self.dataset_config = DATASET_CONFIG[database_name]
         self.vocabulary = vocabulary
         self.articulators = sorted(articulators)
         self.num_samples = num_samples
         self.clip_tails = clip_tails
         self.TV_to_phoneme_map = TV_to_phoneme_map
 
-        collector = GottingenDatabaseCollector(datadir)
+        collector = DATABASE_COLLECTORS[database_name](datadir)
         self.data = collector.collect_data(sequences)
 
         self.normalize = {}

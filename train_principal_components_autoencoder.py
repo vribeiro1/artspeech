@@ -18,7 +18,7 @@ from phoneme_to_articulation.principal_components.evaluation import run_autoenco
 from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss
 from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistance
 from phoneme_to_articulation.principal_components.models import Autoencoder
-from settings import DatasetConfig, BASE_DIR, TRAIN, VALID, TEST
+from settings import DATASET_CONFIG, BASE_DIR, TRAIN, VALID, TEST
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
@@ -44,6 +44,7 @@ def reconstruction_error(outputs, targets, denorm_fn, px_space=1, res=1):
 
 
 def main(
+    database_name,
     datadir,
     n_epochs,
     batch_size,
@@ -80,10 +81,11 @@ def main(
         autoencoder.decoder.load_state_dict(decoder_state_dict)
     autoencoder.to(device)
 
+    dataset_config = DATASET_CONFIG[database_name]
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsAutoencoderDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=DatasetConfig,
         sequences=train_sequences,
         articulator=articulator,
         clip_tails=clip_tails
@@ -98,8 +100,8 @@ def main(
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = PrincipalComponentsAutoencoderDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=DatasetConfig,
         sequences=valid_sequences,
         articulator=articulator,
         clip_tails=clip_tails
@@ -125,8 +127,8 @@ def main(
         "p2cp_mm": lambda outputs, targets: reconstruction_error(
             outputs, targets,
             denorm_fn=train_dataset.normalize.inverse,
-            px_space=DatasetConfig.PIXEL_SPACING,
-            res=DatasetConfig.RES
+            px_space=dataset_config.PIXEL_SPACING,
+            res=dataset_config.RES
         )
     }
 
@@ -230,8 +232,8 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
 
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = PrincipalComponentsAutoencoderDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=DatasetConfig,
         sequences=test_sequences,
         articulator=articulator,
         clip_tails=clip_tails
@@ -278,12 +280,11 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
 
 
 if __name__ == "__main__":
-    if __name__ == "__main__":
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--config", dest="config_filepath")
-        parser.add_argument("--experiment", dest="experiment_name", default="principal_components_autoencoder")
-        parser.add_argument("--run", dest="run_name", default=None)
-        args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", dest="config_filepath")
+    parser.add_argument("--experiment", dest="experiment_name", default="principal_components_autoencoder")
+    parser.add_argument("--run", dest="run_name", default=None)
+    args = parser.parse_args()
 
     with open(args.config_filepath) as f:
         cfg = yaml.safe_load(f)

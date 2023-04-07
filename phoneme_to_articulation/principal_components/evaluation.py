@@ -14,7 +14,7 @@ from vt_shape_gen.helpers import load_articulator_array
 from phoneme_to_articulation.metrics import minimal_distance, MeanP2CPDistance
 from phoneme_to_articulation.encoder_decoder.evaluation import save_outputs
 from phoneme_to_articulation.principal_components.models import Decoder
-from settings import DatasetConfig
+from settings import DATASET_CONFIG
 
 
 def plot_array(outputs, targets, references, save_to, phoneme=None, tag=None):
@@ -54,14 +54,14 @@ def plot_array(outputs, targets, references, save_to, phoneme=None, tag=None):
     plt.close()
 
 
-def plot_autoencoder_outputs(datadir, frame_ids, outputs, inputs, phonemes, denorm_fn, outputs_dir):
+def plot_autoencoder_outputs(datadir, frame_ids, outputs, inputs, phonemes, denorm_fn, res, outputs_dir):
     for frame_id, output, target, phoneme in zip(frame_ids, outputs, inputs, phonemes):
         subject, sequence, inumber = frame_id.split("_")
 
         reference_filepath = os.path.join(
             datadir, subject, sequence, "inference_contours", f"{inumber}_{UPPER_INCISOR}.npy"
         )
-        reference = load_articulator_array(reference_filepath, norm_value=DatasetConfig.RES)
+        reference = load_articulator_array(reference_filepath, norm_value=res)
         reference = torch.from_numpy((reference - reference[-1] + 0.3).T)
 
         articulators = sorted(denorm_fn.keys())
@@ -156,6 +156,7 @@ def run_autoencoder_test(
                     inputs.unsqueeze(dim=1),
                     phonemes,
                     {TONGUE: dataloader.dataset.normalize.inverse},
+                    res=dataset_config.RES,
                     outputs_dir=epoch_outputs_dir,
                 )
 
@@ -263,6 +264,7 @@ def run_phoneme_to_PC_test(
     dataloader,
     criterion,
     outputs_dir,
+    dataset_config,
     fn_metrics=None,
     device=None
 ):
@@ -403,7 +405,7 @@ def run_phoneme_to_PC_test(
                 pred_shape = pred_shape.squeeze(dim=0)
                 target_shape = target_shape.squeeze(dim=0)
 
-                p2cp_mm = p2cp * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES
+                p2cp_mm = p2cp * dataset_config.PIXEL_SPACING * dataset_config.RES
                 p2cp_mm_str ="%0.3f mm" % p2cp_mm
 
                 plot_array(pred_shape, target_shape, reference, save_to_filepath, phoneme, p2cp_mm_str)
@@ -418,8 +420,8 @@ def run_phoneme_to_PC_test(
         "loss": mean_loss,
         "p2cp_mean": np.mean(p2cp_metric_values),
         "p2cp_std": np.std(p2cp_metric_values),
-        "p2cp_mean_mm": np.mean(p2cp_metric_values) * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES,
-        "p2cp_std_mm": np.std(p2cp_metric_values) * DatasetConfig.PIXEL_SPACING * DatasetConfig.RES,
+        "p2cp_mean_mm": np.mean(p2cp_metric_values) * dataset_config.PIXEL_SPACING * dataset_config.RES,
+        "p2cp_std_mm": np.std(p2cp_metric_values) * dataset_config.PIXEL_SPACING * dataset_config.RES,
         "saves_dir": epoch_outputs_dir
     }
 

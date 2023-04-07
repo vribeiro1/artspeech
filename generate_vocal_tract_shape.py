@@ -34,7 +34,7 @@ from vt_shape_gen.vocal_tract_tube import generate_vocal_tract_tube
 from helpers import npy_to_xarticul
 from phoneme_wise_mean_contour import forward_mean_contour
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
-from settings import DatasetConfig
+from settings import DATASET_CONFIG
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 VOCABULARY_FILEPATH = os.path.join(BASE_DIR, "data", "vocabulary_gottingen.json")
@@ -166,6 +166,7 @@ def save_contours(outputs, save_to, articulators, regularize_outputs=True):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument("--database-name", dest="database_name", required=True)
     parser.add_argument("--textgrid", dest="textgrid_filepath", required=True)
     parser.add_argument("--encoding", dest="textgrid_encoding", default="utf-8")
     parser.add_argument("--method", dest="method", default="neural-network")
@@ -174,7 +175,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     validate_textgrid(args.textgrid_filepath, args.textgrid_encoding)
-
+    dataset_config = DATASET_CONFIG[args.database_name]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     with open(VOCABULARY_FILEPATH) as f:
@@ -261,8 +262,8 @@ if __name__ == "__main__":
         for i_frame, articuls_dict in enumerate(articulators_dicts):
             internal_wall, external_wall = generate_vocal_tract_tube(articuls_dict)
 
-            xarticul_int = npy_to_xarticul(internal_wall * DatasetConfig.RES)
-            xarticul_ext = npy_to_xarticul(external_wall * DatasetConfig.RES)
+            xarticul_int = npy_to_xarticul(internal_wall * database_name.RES)
+            xarticul_ext = npy_to_xarticul(external_wall * database_name.RES)
 
             plt.figure(figsize=(10, 10))
 

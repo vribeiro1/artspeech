@@ -11,10 +11,10 @@ from phoneme_to_articulation.principal_components.dataset import PrincipalCompon
 from phoneme_to_articulation.principal_components.evaluation import run_autoencoder_test
 from phoneme_to_articulation.principal_components.models import Autoencoder
 from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss
-from settings import DatasetConfig
 
 
 def main(
+    database_name,
     datadir,
     batch_size,
     seq_dict,
@@ -30,8 +30,8 @@ def main(
 
     test_sequences = sequences_from_dict(datadir, seq_dict)
     test_dataset = PrincipalComponentsAutoencoderDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=DatasetConfig,
         sequences=test_sequences,
         articulator=articulator,
         clip_tails=clip_tails
