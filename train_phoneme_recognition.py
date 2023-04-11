@@ -5,6 +5,7 @@ import logging
 import mlflow
 import numpy as np
 import os
+import shutil
 import tempfile
 import torch
 import torch.nn as nn
@@ -118,7 +119,7 @@ def main(
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PhonemeRecognitionDataset(
         datadir=datadir,
-        database=database,
+        database_name=database_name,
         sequences=train_sequences,
         vocabulary=vocabulary,
         dataset_config=dataset_config,
@@ -138,7 +139,7 @@ def main(
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = PhonemeRecognitionDataset(
         datadir=datadir,
-        database=database,
+        database_name=database_name,
         sequences=valid_sequences,
         vocabulary=vocabulary,
         dataset_config=dataset_config,
@@ -282,7 +283,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = PhonemeRecognitionDataset(
         datadir=datadir,
-        database=database,
+        database_name=database_name,
         sequences=test_sequences,
         vocabulary=vocabulary,
         dataset_config=dataset_config,
@@ -354,7 +355,6 @@ if __name__ == "__main__":
         experiment_id=experiment.experiment_id,
         run_name=args.run_name
     ):
-        mlflow.log_params(cfg)
         mlflow.log_dict(cfg, "config.json")
         try:
             main(**cfg)

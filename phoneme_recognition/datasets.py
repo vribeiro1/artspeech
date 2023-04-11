@@ -57,7 +57,7 @@ class PhonemeRecognitionDataset(Dataset):
     def __init__(
         self,
         datadir: str,
-        database: str,
+        database_name: str,
         sequences,
         vocabulary,
         dataset_config,
@@ -104,7 +104,7 @@ class PhonemeRecognitionDataset(Dataset):
                 os.makedirs(save_audio_dir)
         else:
             save_audio_dir = None
-        collector = DATABASE_COLLECTORS[database](datadir, save_audio_dir)
+        collector = DATABASE_COLLECTORS[database_name](datadir, save_audio_dir)
         self.data = collector.collect_data(sequences)
 
         self.vocal_tract_loader = VocalTractShapeLoader(

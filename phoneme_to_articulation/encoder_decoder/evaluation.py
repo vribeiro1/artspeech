@@ -9,7 +9,7 @@ from tqdm import tqdm
 from vt_tools import (
     LOWER_LIP,
     PHARYNX,
-    SOFT_PALATE,
+    SOFT_PALATE_MIDLINE,
     TONGUE,
     UPPER_LIP,
     UPPER_INCISOR,
@@ -20,28 +20,38 @@ from helpers import make_padding_mask
 from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
 from tract_variables import calculate_vocal_tract_variables
 
-required_articulators_for_TVs = [
+REQUIRED_ARTICULATORS_FOR_TVS = [
     LOWER_LIP,
     PHARYNX,
-    SOFT_PALATE,
+    SOFT_PALATE_MIDLINE,
     TONGUE,
     UPPER_LIP,
     UPPER_INCISOR,
 ]
 
 
-def save_outputs(sentences_ids, frame_ids, outputs, targets, lengths, phonemes, articulators, save_to, regularize_out):
+def save_outputs(
+    sentences_ids,
+    frame_ids,
+    outputs,
+    targets,
+    lengths,
+    phonemes,
+    articulators,
+    save_to,
+    regularize_out
+):
     """
     Args:
-    sentences_ids (str): Unique id of each sentence to save the results.
-    frame_ids (list)
-    outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
-    targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
-    lengths (List): List with the length of each sentence in the batch.
-    phonemes (List): List with the sequence of phonemes for each sentence in the batch.
-    articulators (List[str]): List of articulators.
-    save_to (str): Path to the directory to save the results.
-    regularize_out (bool): If should apply bspline regularization or not.
+        sentences_ids (str): Unique id of each sentence to save the results.
+        frame_ids (list)
+        outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
+        targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
+        lengths (List): List with the length of each sentence in the batch.
+        phonemes (List): List with the sequence of phonemes for each sentence in the batch.
+        articulators (List[str]): List of articulators.
+        save_to (str): Path to the directory to save the results.
+        regularize_out (bool): If should apply bspline regularization or not.
     """
     for sentence_id, sentence_outs, sentence_targets, length, sentence_phonemes, sentence_frames in zip(
         sentences_ids, outputs, targets, lengths, phonemes, frame_ids
@@ -77,17 +87,26 @@ def save_outputs(sentences_ids, frame_ids, outputs, targets, lengths, phonemes, 
             pd.DataFrame(phoneme_data).to_csv(os.path.join(saves_i_dir, "phonemes.csv"), index=False)
 
 
-def tract_variables(sentences_ids, frames, outputs, targets, lengths, phonemes, articulators, save_to):
+def tract_variables(
+    sentences_ids,
+    frames,
+    outputs,
+    targets,
+    lengths,
+    phonemes,
+    articulators,
+    save_to
+):
     """
     Args:
-    sentences_ids (str): Unique id of each sentence to save the results.
-    sentence_frames
-    outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
-    targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
-    lengths (List): List with the length of each sentence in the batch.
-    phonemes (List): List with the sequence of phonemes for each sentence in the batch.
-    articulators (List[str]): List of articulators.
-    save_to (str): Path to the directory to save the results.
+        sentences_ids (str): Unique id of each sentence to save the results.
+        sentence_frames
+        outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
+        targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
+        lengths (List): List with the length of each sentence in the batch.
+        phonemes (List): List with the sequence of phonemes for each sentence in the batch.
+        articulators (List[str]): List of articulators.
+        save_to (str): Path to the directory to save the results.
     """
     for i_sentence, (
         sentence_id, sentence_outs, sentence_targets, length, sentence_frames, sentence_phonemes
@@ -147,8 +166,16 @@ def tract_variables(sentences_ids, frames, outputs, targets, lengths, phonemes, 
         df.to_csv(filepath, index=False)
 
 
-def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
-             device=None, regularize_out=False):
+def run_test(
+    epoch,
+    model,
+    dataloader,
+    criterion,
+    outputs_dir,
+    articulators,
+    device=None,
+    regularize_out=False
+):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -201,7 +228,12 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
 
             # Only calculate the tract variables if all of the required articulators are included
             # in the test
-            if all([articulator in articulators for articulator in required_articulators_for_TVs]):
+            if all(
+                [
+                    articulator in articulators
+                    for articulator in REQUIRED_ARTICULATORS_FOR_TVS
+                ]
+            ):
                 tract_variables(
                     sentences_ids,
                     sentence_frames,

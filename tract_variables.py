@@ -3,7 +3,7 @@ import torch
 from vt_tools import (
     LOWER_LIP,
     PHARYNX,
-    SOFT_PALATE,
+    SOFT_PALATE_MIDLINE,
     TONGUE,
     UPPER_LIP,
     UPPER_INCISOR,
@@ -72,9 +72,10 @@ def _calculate_VEL(soft_palate_velum_arr, pharynx_arr):
 
 def calculate_vocal_tract_variables(inputs_dict):
     """
-    inputs_dict: Dictionary containing the articulator name as key and the articulator points as value.
-
-    return: Dictionary containing the TV name as key and the value and location as value.
+    Args:
+        inputs_dict (dict): Dictionary containing the articulator name as key and the articulator points as value.
+    Return:
+        TVs (dict): Dictionary containing the TV name as key and the value and location as value.
 
     Measured vocal tract variables are:
     LA - Lip aperture
@@ -88,8 +89,8 @@ def calculate_vocal_tract_variables(inputs_dict):
     """
     LA, LA_llip, LA_ulip = _calculate_LA(inputs_dict[LOWER_LIP], inputs_dict[UPPER_LIP])
     TTCD, TTCD_tongue, TTDC_uincisor = _calculate_TTCD(inputs_dict[TONGUE], inputs_dict[UPPER_INCISOR])
-    TBCD, TBCD_tongue, TBCD_palate = _calculate_TBCD(inputs_dict[TONGUE], inputs_dict[UPPER_INCISOR], inputs_dict[SOFT_PALATE])
-    VEL, VEL_velum, VEL_pharynx = _calculate_VEL(inputs_dict[SOFT_PALATE], inputs_dict[PHARYNX])
+    TBCD, TBCD_tongue, TBCD_palate = _calculate_TBCD(inputs_dict[TONGUE], inputs_dict[UPPER_INCISOR], inputs_dict[SOFT_PALATE_MIDLINE])
+    VEL, VEL_velum, VEL_pharynx = _calculate_VEL(inputs_dict[SOFT_PALATE_MIDLINE], inputs_dict[PHARYNX])
 
     # PoC stands for Place of Constriction. For each TV, there are two PoCs,
     # from which the TV is measured.
