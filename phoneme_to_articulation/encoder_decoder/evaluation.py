@@ -76,10 +76,11 @@ def save_outputs(sentences_ids, frame_ids, outputs, targets, lengths, phonemes, 
             pd.DataFrame(phoneme_data).to_csv(os.path.join(saves_i_dir, "phonemes.csv"), index=False)
 
 
-def tract_variables(sentences_ids, outputs, targets, lengths, phonemes, articulators, save_to):
+def tract_variables(sentences_ids, frames, outputs, targets, lengths, phonemes, articulators, save_to):
     """
     Args:
     sentences_ids (str): Unique id of each sentence to save the results.
+    sentence_frames
     outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
     targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
     lengths (List): List with the length of each sentence in the batch.
@@ -88,16 +89,16 @@ def tract_variables(sentences_ids, outputs, targets, lengths, phonemes, articula
     save_to (str): Path to the directory to save the results.
     """
     for i_sentence, (
-        sentence_id, sentence_outs, sentence_targets, length, sentence_phonemes
+        sentence_id, sentence_outs, sentence_targets, length, sentence_frames, sentence_phonemes
     ) in enumerate(zip(
-        sentences_ids, outputs, targets, lengths, phonemes
+        sentences_ids, outputs, targets, lengths, frames, phonemes
     )):
         saves_i_dir = os.path.join(save_to, sentence_id)
         if not os.path.exists(saves_i_dir):
             os.makedirs(saves_i_dir)
 
         TVs_data = []
-        for i_frame, (out, target, phoneme) in enumerate(zip(sentence_outs[:length], sentence_targets[:length], sentence_phonemes)):
+        for out, target, frame, phoneme in zip(sentence_outs[:length], sentence_targets[:length], sentence_frames, sentence_phonemes):
             pred_input_dict = {
                 art: tensor.T for art, tensor in zip(articulators, out)
             }
@@ -110,7 +111,7 @@ def tract_variables(sentences_ids, outputs, targets, lengths, phonemes, articula
 
             item = {
                 "sentence": sentence_id,
-                "frame": '%04d' % i_frame,
+                "frame": frame,
                 "phoneme": phoneme
             }
 
@@ -198,6 +199,7 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
             if all([articulator in articulators for articulator in required_articulators_for_TVs]):
                 tract_variables(
                     sentences_ids,
+                    sentence_frames,
                     outputs,
                     targets,
                     lengths,
