@@ -7,6 +7,7 @@ import mlflow
 import numpy as np
 import os
 import pandas as pd
+import shutil
 import tempfile
 import torch
 import yaml
@@ -18,7 +19,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from helpers import set_seeds, sequences_from_dict
+from helpers import set_seeds, sequences_from_dict, make_padding_mask
 from metrics import pearsons_correlation
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
@@ -41,6 +42,7 @@ def run_epoch(
     optimizer,
     criterion,
     articulators,
+    scheduler=None,
     device=None
 ):
     if device is None:
@@ -64,10 +66,16 @@ def run_epoch(
         with torch.set_grad_enabled(training):
             outputs = model(sentence, lengths)
             loss = criterion(outputs, targets)
+            padding_mask = make_padding_mask(lengths)
+            bs, max_len, num_articulators, features = loss.shape
+            loss = loss.view(bs * max_len, num_articulators, features)
+            loss = loss[padding_mask.view(bs * max_len)].mean()
 
             if training:
                 loss.backward()
                 optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
 
             x_corr, y_corr = pearsons_correlation(outputs, targets)
             x_corr = x_corr.mean(dim=-1)[0]
@@ -131,16 +139,24 @@ def main(
         tokens = json.load(f)
         vocabulary = {token: i for i, token in enumerate(tokens)}
 
-    n_articulators = len(articulators)
+    num_articulators = len(articulators)
 
-    model = ArtSpeech(len(vocabulary), n_articulators, gru_dropout=0.2)
+    model = ArtSpeech(
+        len(vocabulary),
+        num_articulators,
+        gru_dropout=0.2
+    )
     if state_dict_filepath is not None:
         state_dict = torch.load(state_dict_filepath, map_location=device)
         model.load_state_dict(state_dict)
     model.to(device)
 
-    loss_fn = EuclideanDistance()
-    optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
+    loss_fn = EuclideanDistance("none")
+    optimizer = Adam(
+        model.parameters(),
+        lr=learning_rate,
+        weight_decay=weight_decay
+    )
     scheduler = ReduceLROnPlateau(
         optimizer,
         factor=0.1,
@@ -291,7 +307,11 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         collate_fn=pad_sequence_collate_fn
     )
 
-    best_model = ArtSpeech(len(vocabulary), n_articulators, gru_dropout=0.2)
+    best_model = ArtSpeech(
+        len(vocabulary),
+        num_articulators,
+        gru_dropout=0.2
+    )
     state_dict = torch.load(best_model_path, map_location=device)
     best_model.load_state_dict(state_dict)
     best_model.to(device)
@@ -348,4 +368,7 @@ if __name__ == "__main__":
         run_name=args.run_name
     ):
         mlflow.log_dict(cfg, "config.json")
-        main(**cfg)
+        try:
+            main(**cfg)
+        finally:
+            shutil.rmtree(TMP_DIR)

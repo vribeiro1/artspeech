@@ -24,8 +24,6 @@ phonemes_per_TV = {
 
 
 def pad_sequence_collate_fn(batch):
-    sentences_ids = [item[0] for item in batch]
-
     sentence_numerized = [item[1] for item in batch]
     len_sentences = torch.tensor(funcy.lmap(len, sentence_numerized), dtype=torch.int)
     len_sentences_sorted, sentences_sorted_indices = len_sentences.sort(descending=True)
@@ -44,6 +42,7 @@ def pad_sequence_collate_fn(batch):
     # padded_critical_masks = padded_critical_masks.permute(0, 2, 1)
 
     sentence_frames = [batch[i][6] for i in sentences_sorted_indices]
+    sentences_ids = [batch[i][0] for i in sentences_sorted_indices]
 
     return (
         sentences_ids,
@@ -98,6 +97,7 @@ class ArtSpeechDataset(Dataset):
 
         if self.clip_tails:
             tail_clip_refs = {}
+            tail_clipper = TailClipper(self.dataset_config)
             for reference in TailClipper.TAIL_CLIP_REFERENCES:
                 fp_reference = os.path.join(
                     self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
@@ -110,7 +110,7 @@ class ArtSpeechDataset(Dataset):
                 tail_clip_refs[reference.replace("-", "_")] = reference_array
 
             tail_clip_method_name = f"clip_{articulator.replace('-', '_')}_tails"
-            tail_clip_method = getattr(TailClipper, tail_clip_method_name, None)
+            tail_clip_method = getattr(tail_clipper, tail_clip_method_name, None)
 
             if tail_clip_method:
                 articulator_array = tail_clip_method(articulator_array, **tail_clip_refs)
@@ -140,6 +140,7 @@ class ArtSpeechDataset(Dataset):
         subject = item["subject"]
         sequence = item["sequence"]
         frame_ids = item["frame_ids"]
+        sentence_tokens = item["phonemes"]
 
         sentence_targets = torch.zeros(size=(0, self.n_articulators, 2, self.n_samples))
         sentence_references = torch.zeros(size=(0, 2, self.n_samples))
@@ -172,7 +173,7 @@ class ArtSpeechDataset(Dataset):
         else:
             critical_masks = torch.stack([
                 torch.tensor([
-                    int(phonemes_per_TV[TV](phoneme)) for phoneme in item["phonemes"]
+                    int(phonemes_per_TV[TV](phoneme)) for phoneme in sentence_tokens
                 ], dtype=torch.int)
                 for TV in self.TVs
             ])
@@ -180,7 +181,6 @@ class ArtSpeechDataset(Dataset):
         sentence_targets = sentence_targets.type(torch.float)
         sentence_references = sentence_references.type(torch.float)
 
-        sentence_tokens = item["phonemes"]
         sentence_numerized = torch.tensor([
             self.vocabulary.get(token, self.vocabulary[UNKNOWN])
             for token in sentence_tokens

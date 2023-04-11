@@ -53,7 +53,13 @@ class Decoder(nn.Module):
 
 class ArtSpeech(nn.Module):
     def __init__(
-        self, vocab_size, n_articulators, embed_dim=64, hidden_size=128, n_samples=50, gru_dropout=0.
+        self,
+        vocab_size,
+        n_articulators,
+        embed_dim=64,
+        hidden_size=128,
+        n_samples=50,
+        gru_dropout=0.,
     ):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
@@ -78,10 +84,11 @@ class ArtSpeech(nn.Module):
         """
         embed = self.embedding(x)
 
-        packed_embed = pack_padded_sequence(embed, lengths, batch_first=True)
-        packed_rnn_out, _ = self.rnn(packed_embed)
-        rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
+        # packed_embed = pack_padded_sequence(embed, lengths, batch_first=True)
+        # packed_rnn_out, _ = self.rnn(packed_embed)
+        # rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
 
+        rnn_out, _ = self.rnn(embed)
         linear_out = self.linear(rnn_out)  # torch.Size([bs, seq_len, embed_dim])
         out = torch.stack([
             predictor(linear_out) for predictor in self.predictors
