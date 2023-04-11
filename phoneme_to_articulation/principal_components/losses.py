@@ -11,6 +11,7 @@ from vt_tools import (
     UPPER_LIP
 )
 
+from helpers import make_padding_mask
 from phoneme_to_articulation.metrics import EuclideanDistance
 from phoneme_to_articulation.principal_components.models import (
     Encoder,
@@ -175,21 +176,6 @@ class AutoencoderLoss2(nn.Module):
         betas = torch.softmax(torch.tensor(betas), dim=0)
         return betas
 
-    @staticmethod
-    def make_padding_mask(lengths):
-        """
-        Make a padding mask from a tensor lengths.
-
-        Args:
-            lengths (torch.tensor): tensor of shape (B,)
-        """
-        bs = len(lengths)
-        max_length = lengths.max()
-        mask = torch.ones(size=(bs, max_length))
-        mask = torch.cumsum(mask, dim=1)
-        mask = mask <= lengths.unsqueeze(dim=1)
-        return mask
-
     def forward(
         self,
         output_pcs,
@@ -203,7 +189,7 @@ class AutoencoderLoss2(nn.Module):
             target_shapes (torch.tensor): tensor of shape (B, T, Nart, 2, D)
             critical_mask (torch.tensor): tensor of shape (B, Ntv, T)
         """
-        padding_mask = self.make_padding_mask(lengths)
+        padding_mask = make_padding_mask(lengths)
 
         bs, seq_len, num_articulators, _, num_samples = target_shapes.shape
         encoder_inputs = target_shapes.reshape(bs * seq_len, num_articulators, 2 * num_samples)

@@ -63,7 +63,7 @@ def main(
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
-    loss_fn = EuclideanDistance()
+    loss_fn = EuclideanDistance("none")
 
     test_results = run_test(
         epoch=0,

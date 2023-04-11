@@ -74,3 +74,18 @@ def sequences_from_dict(datadir, sequences_dict):
         sequences.extend([(subj, seq) for seq in use_seqs])
 
     return sequences
+
+
+def make_padding_mask(lengths):
+    """
+    Make a padding mask from a tensor lengths.
+
+    Args:
+        lengths (torch.tensor): tensor of shape (B,)
+    """
+    bs = len(lengths)
+    max_length = lengths.max()
+    mask = torch.ones(size=(bs, max_length))
+    mask = torch.cumsum(mask, dim=1)
+    mask = mask <= lengths.unsqueeze(dim=1)
+    return mask

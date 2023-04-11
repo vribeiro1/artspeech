@@ -16,6 +16,7 @@ from vt_tools import (
 )
 from vt_tools.bs_regularization import regularize_Bsplines
 
+from helpers import make_padding_mask
 from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
 from tract_variables import calculate_vocal_tract_variables
 
@@ -168,6 +169,10 @@ def run_test(epoch, model, dataloader, criterion, outputs_dir, articulators,
         with torch.set_grad_enabled(False):
             outputs = model(sentences, lengths)
             loss = criterion(outputs, targets)
+            padding_mask = make_padding_mask(lengths)
+            bs, max_len, num_articulators, features = loss.shape
+            loss = loss.view(bs * max_len, num_articulators, features)
+            loss = loss[padding_mask.view(bs * max_len)].mean()
 
             outputs = outputs.detach().cpu()
             targets = targets.detach().cpu()
