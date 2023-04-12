@@ -29,7 +29,7 @@ ORDER_STR = {
 }
 
 
-def evaluate_autoencoder(datadir, dataset_config, exp_dir):
+def evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir):
     config_filepath = os.path.join(exp_dir, "config.json")
     encoders_filepath = os.path.join(exp_dir, "best_encoders.pt")
     decoders_filepath = os.path.join(exp_dir, "best_decoders.pt")
@@ -50,8 +50,8 @@ def evaluate_autoencoder(datadir, dataset_config, exp_dir):
 
     sequences = sequences_from_dict(datadir, sequences_dict)
     dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=dataset_config,
         sequences=sequences,
         articulators=articulators,
     )
@@ -209,8 +209,8 @@ def main(
     test_sequences = sequences_from_dict(datadir, seq_dict)
     articulators = sorted(articulators_indices_dict.keys())
     test_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=dataset_config,
         sequences=test_sequences,
         articulators=articulators,
         clip_tails=clip_tails
@@ -273,4 +273,4 @@ if __name__ == "__main__":
 
     datadir = cfg["datadir"]
     exp_dir = cfg["exp_dir"]
-    evaluate_autoencoder(datadir, dataset_config, exp_dir)
+    evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir)

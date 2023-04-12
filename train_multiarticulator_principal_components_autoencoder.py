@@ -63,9 +63,10 @@ def main(
     test_seq_dict,
     model_params,
     alpha,
+    num_workers=0,
     clip_tails=True,
     state_dict_fpath=None,
-    num_workers=0
+    checkpoint_filepath=None,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
@@ -145,8 +146,23 @@ def main(
 
     best_metric = np.inf
     epochs_since_best = 0
-
     epochs = range(1, n_epochs + 1)
+
+    if checkpoint_filepath is not None:
+        checkpoint = torch.load(checkpoint_filepath, map_location=device)
+
+        model.load_state_dict(checkpoint["model"])
+        optimizer.load_state_dict(checkpoint["optimizer"])
+        # scheduler.load_state_dict(checkpoint["scheduler"])
+        epoch = checkpoint["epoch"]
+        epochs = range(epoch, num_epochs + 1)
+        best_metric = checkpoint["best_metric"]
+        epochs_since_best = checkpoint["epochs_since_best"]
+
+        logging.info(f"""
+Loaded checkpoint -- Launching training from epoch {epoch} with best metric
+so far {best_metric} seen {epochs_since_best} epochs ago.
+""")
     for epoch in epochs:
         info_train = run_autoencoder_epoch(
             phase=TRAIN,
@@ -194,6 +210,20 @@ def main(
 
         mlflow.log_artifact(last_encoders_path)
         mlflow.log_artifact(last_decoders_path)
+
+        checkpoint = {
+            "epoch": epoch,
+            "model": model.state_dict(),
+            "optimizer": optimizer.state_dict(),
+            # "scheduler": scheduler.state_dict(),
+            "best_metric": best_metric,
+            "epochs_since_best": epochs_since_best,
+            "best_model_path": best_model_path,
+            "last_model_path": last_model_path
+        }
+
+        torch.save(checkpoint, save_checkpoint_path)
+        mlflow.log_artifact(save_checkpoint_path)
 
         print(f"""
 Finished training epoch {epoch}
