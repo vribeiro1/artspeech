@@ -103,8 +103,8 @@ def main(
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
     valid_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
+        database_name=database_name,
         datadir=datadir,
-        dataset_config=dataset_config,
         sequences=valid_sequences,
         articulators=articulators,
         clip_tails=clip_tails
