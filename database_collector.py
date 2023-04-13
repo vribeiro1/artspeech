@@ -17,7 +17,7 @@ class DatabaseCollector:
     phoneme_tier = "PhonTier"
 
     def __init__(self, datadir, save_audio_dir=None):
-        self.datadir=datadir
+        self.datadir = datadir
         self.save_audio_dir = save_audio_dir
 
     @staticmethod
@@ -177,8 +177,8 @@ class ArtSpeechDatabase2Collector(DatabaseCollector):
     long_sentence_tier = "LongSentenceTier"
     short_sentence_tier = "ShortSentenceTier"
 
-    def __init__(self, datadir, sentence_tier="long"):
-        super().__init__(datadir)
+    def __init__(self, datadir, save_audio_dir=None, sentence_tier="long"):
+        super().__init__(datadir, save_audio_dir)
 
         self.sentence_tier = (
             self.short_sentence_tier if sentence_tier == "short"

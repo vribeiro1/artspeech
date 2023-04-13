@@ -16,9 +16,20 @@ ex.observers.append(fs_observer)
 
 @ex.automain
 def main(
-    _run, datadir, n_epochs, batch_size, patience, learning_rate, weight_decay,
-    train_filepath, valid_filepath, test_filepath, vocab_filepath,
-    articulators, p_aug=0., state_dict_fpath=None
+    _run,
+    datadir,
+    n_epochs,
+    batch_size,
+    patience,
+    learning_rate,
+    weight_decay,
+    train_filepath,
+    valid_filepath,
+    test_filepath,
+    vocab_filepath,
+    articulators,
+    p_aug=0.,
+    state_dict_fpath=None
 ):
     with open(vocab_filepath) as f:
         tokens = json.load(f)

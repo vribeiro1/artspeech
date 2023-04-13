@@ -29,7 +29,13 @@ if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
 
 
-def reconstruction_error(outputs, targets, denorm_fn_dict, px_space=1, res=1):
+def reconstruction_error(
+    outputs,
+    targets,
+    denorm_fn_dict,
+    px_space=1,
+    res=1
+):
     p2cp_fn = MeanP2CPDistance(reduction="mean")
 
     batch_size, num_articulators, n_features = outputs.shape
@@ -75,6 +81,7 @@ def main(
     best_decoders_path = os.path.join(RESULTS_DIR, "best_decoders.pt")
     last_encoders_path = os.path.join(RESULTS_DIR, "last_encoders.pt")
     last_decoders_path = os.path.join(RESULTS_DIR, "last_decoders.pt")
+    save_checkpoint_path = os.path.join(RESULTS_DIR, "checkpoint.pt")
 
     articulators_indices_dict = model_params["indices_dict"]
     articulators = sorted(articulators_indices_dict.keys())
@@ -151,7 +158,7 @@ def main(
     if checkpoint_filepath is not None:
         checkpoint = torch.load(checkpoint_filepath, map_location=device)
 
-        model.load_state_dict(checkpoint["model"])
+        autoencoder.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
         # scheduler.load_state_dict(checkpoint["scheduler"])
         epoch = checkpoint["epoch"]
@@ -213,13 +220,15 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
 
         checkpoint = {
             "epoch": epoch,
-            "model": model.state_dict(),
+            "model": autoencoder.state_dict(),
             "optimizer": optimizer.state_dict(),
             # "scheduler": scheduler.state_dict(),
             "best_metric": best_metric,
             "epochs_since_best": epochs_since_best,
-            "best_model_path": best_model_path,
-            "last_model_path": last_model_path
+            "best_encoders_path": best_encoders_path,
+            "best_decoders_path": best_decoders_path,
+            "last_encoders_path": last_encoders_path,
+            "last_decoders_path": last_decoders_path,
         }
 
         torch.save(checkpoint, save_checkpoint_path)

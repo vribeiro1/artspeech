@@ -30,7 +30,7 @@ from vt_tools import (
 
 from database_collector import DATABASE_COLLECTORS
 from phoneme_recognition import Feature, Target
-from settings import BASE_DIR
+from settings import BASE_DIR, DATASET_CONFIG
 from vocal_tract_loader import VocalTractShapeLoader, cached_load_articulator_array
 
 ARTICULATORS = [
@@ -60,7 +60,6 @@ class PhonemeRecognitionDataset(Dataset):
         database_name: str,
         sequences,
         vocabulary,
-        dataset_config,
         features: List[Feature],
         sample_rate: Optional[int] = 16000,
         n_fft: Optional[int] = 1024,
@@ -78,7 +77,7 @@ class PhonemeRecognitionDataset(Dataset):
         super().__init__()
 
         self.datadir = datadir
-        self.dataset_config = dataset_config
+        self.dataset_config = DATASET_CONFIG[database_name]
         self.vocabulary = vocabulary
         self.sil_token = sil_token
         self.blank_token = blank_token
@@ -111,7 +110,7 @@ class PhonemeRecognitionDataset(Dataset):
             datadir=self.datadir,
             articulators=ARTICULATORS,
             num_samples=50,
-            dataset_config=collector.dataset_config
+            dataset_config=self.dataset_config
         )
 
     def __len__(self):
