@@ -15,7 +15,6 @@ from sklearn.metrics import confusion_matrix
 from phoneme_recognition.metrics import CrossEntropyLoss
 from settings import TRAIN, SIL, UNKNOWN, BLANK
 
-
 CLASSES_NAMES = {
     0: "dental",
     1: "labial",

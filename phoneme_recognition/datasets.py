@@ -173,6 +173,7 @@ class PhonemeRecognitionDataset(Dataset):
 
     def __getitem__(self, index):
         item = self.data[index]
+        sentence_name = item["sentence_name"]
         subject = item["subject"]
         sequence = item["sequence"]
         frame_ids = item["frame_ids"]
@@ -181,7 +182,9 @@ class PhonemeRecognitionDataset(Dataset):
         wav_filepath = item["wav_filepath"]
         audio_duration = item["audio_duration"]
 
-        sample = {}
+        sample = {
+            "sentence_name": sentence_name
+        }
         if Feature.MELSPEC in self.features:
             melspec, melspec_length = self.load_melspec(wav_filepath)
             sample[Feature.MELSPEC.value] = melspec
@@ -217,8 +220,8 @@ class PhonemeRecognitionDataset(Dataset):
             acoustic_target = torch.zeros(size=(melspec_length,), dtype=torch.long)
             for phoneme, start_time, end_time in phonemes_with_time:
                 token = self.vocabulary.get(phoneme, unknown_token)
-                start_spec = int(np.around((start_time * melspec_length) / audio_duration))
-                end_spec = int(np.around((end_time * melspec_length) / audio_duration))
+                start_spec = int((start_time * melspec_length) / audio_duration)
+                end_spec = int((end_time * melspec_length) / audio_duration)
                 acoustic_target[start_spec:end_spec] = token
                 sample[Target.ACOUSTIC.value] = acoustic_target
                 sample[f"{Target.ACOUSTIC.value}_length"] = melspec_length
