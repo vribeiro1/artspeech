@@ -185,10 +185,11 @@ def run_multiart_autoencoder_test(
     model,
     dataloader,
     criterion,
+    dataset_config,
     outputs_dir=None,
     plots_dir=None,
     fn_metrics=None,
-    device=None
+    device=None,
 ):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -239,6 +240,7 @@ def run_multiart_autoencoder_test(
                     inputs,
                     phonemes,
                     denorm_fn,
+                    res=dataset_config.RES,
                     outputs_dir=epoch_outputs_dir,
                 )
             all_latents = torch.concat([all_latents, latents], dim=0)

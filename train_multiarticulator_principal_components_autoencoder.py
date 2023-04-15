@@ -276,9 +276,10 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
         model=best_autoencoder,
         dataloader=test_dataloader,
         criterion=loss_fn,
+        dataset_config=dataset_config,
         outputs_dir=test_outputs_dir,
         plots_dir=RESULTS_DIR,
-        device=device
+        device=device,
     )
 
     mlflow.log_metrics({

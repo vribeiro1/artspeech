@@ -249,9 +249,10 @@ def main(
         model=best_autoencoder,
         dataloader=test_dataloader,
         criterion=loss_fn,
+        dataset_config=dataset_config,
         # outputs_dir=test_outputs_dir,
         plots_dir=plots_dir,
-        device=device
+        device=device,
     )
 
     with open(os.path.join(save_to, "test_results.json"), "w") as f:
