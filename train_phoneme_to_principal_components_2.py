@@ -30,7 +30,7 @@ from phoneme_to_articulation.principal_components.dataset import (
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
 from phoneme_to_articulation.principal_components.metrics import DecoderMeanP2CPDistance2
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
-from settings import BASE_DIR, TRAIN, VALID, TEST
+from settings import BASE_DIR, TRAIN, VALID, TEST, DATASET_CONFIG
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
@@ -187,12 +187,7 @@ def run_test(
                     os.makedirs(plots_dir)
 
                 for (
-                    timestep,
-                    (
-                        articulators_arrays,
-                        target_arrays,
-                        phoneme
-                    )
+                    timestep, (articulators_arrays, target_arrays, phoneme)
                 ) in enumerate(zip(
                     sentence_shapes,
                     sentence_targets,
@@ -201,11 +196,7 @@ def run_test(
                     plt.figure(figsize=(3, 3))
 
                     for (
-                        i,
-                        (
-                            articulator_array,
-                            target_array
-                        )
+                        i, (articulator_array, target_array)
                     ) in enumerate(zip(
                         articulators_arrays,
                         target_arrays
@@ -267,6 +258,7 @@ def main(
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
+    dataset_config = DATASET_CONFIG[database_name]
 
     best_model_path = os.path.join(RESULTS_DIR, "best_model.pt")
     last_model_path = os.path.join(RESULTS_DIR, "last_model.pt")
@@ -312,8 +304,16 @@ def main(
         beta2=beta2,
         **autoencoder_kwargs,
     )
-    optimizer = Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = ReduceLROnPlateau(optimizer, factor=0.1, patience=10)
+    optimizer = Adam(
+        model.parameters(),
+        lr=learning_rate,
+        weight_decay=weight_decay
+    )
+    scheduler = ReduceLROnPlateau(
+        optimizer,
+        factor=0.1,
+        patience=10
+    )
 
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsPhonemeToArticulationDataset2(
@@ -355,7 +355,7 @@ def main(
 
     fn_metrics = {
         "p2cp_mean": DecoderMeanP2CPDistance2(
-            dataset_config=GottingenConfig,
+            dataset_config=dataset_config,
             decoder_state_dict_filepath=decoder_state_dict_filepath,
             indices_dict=indices_dict,
             autoencoder_kwargs=autoencoder_kwargs,
@@ -521,13 +521,13 @@ if __name__ == "__main__":
 
     with open(args.config_filepath) as f:
         cfg = yaml.safe_load(f)
+    mlflow.log_artifact(args.config_filepath)
 
     experiment = mlflow.set_experiment(args.experiment_name)
     with mlflow.start_run(
         experiment_id=experiment.experiment_id,
         run_name=args.run_name
     ):
-        mlflow.log_dict(cfg, "config.json")
         try:
             main(**cfg)
         finally:

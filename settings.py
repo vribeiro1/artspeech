@@ -31,8 +31,6 @@ class GottingenConfig:
     SYNC_SHIFT = 0
 
 
-DatasetConfig = GottingenConfig
-
 DATASET_CONFIG = {
     "artspeech": ArtSpeechConfig,
     "artspeech2": ArtSpeech2Config,
