@@ -23,10 +23,6 @@ from settings import DATASET_CONFIG
 
 PINK = np.array([255, 0, 85, 255]) / 255
 BLUE = np.array([0, 139, 231, 255]) / 255
-ORDER_STR = {
-    1: "st",
-    2: "nd"
-}
 
 
 def evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir):
@@ -42,6 +38,7 @@ def evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir):
         config = ujson.load(f)
     sequences_dict = config["test_seq_dict"]
 
+    num_workers = config.get("num_workers", 0)
     model_params = config["model_params"]
     articulators_indices_dict = model_params["indices_dict"]
     articulators = sorted(articulators_indices_dict.keys())
@@ -55,13 +52,12 @@ def evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir):
         sequences=sequences,
         articulators=articulators,
     )
-
     dataloader = DataLoader(
         dataset,
         batch_size=config["batch_size"],
         shuffle=False,
         worker_init_fn=set_seeds,
-        num_workers=config.get("num_workers", 0)
+        num_workers=num_workers,
     )
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -130,7 +126,9 @@ def evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir):
             latents = latents.unsqueeze(dim=0).to(device)
 
             reconstruction = torch.concat([
-                autoencoder.decoders.decoders[articulator](latents[:, autoencoder.indices_dict[articulator]]).unsqueeze(dim=1)
+                autoencoder.decoders.decoders[articulator](
+                    latents[:, autoencoder.indices_dict[articulator]]
+                ).unsqueeze(dim=1)
                 for articulator in autoencoder.sorted_articulators
             ], dim=1)
             reconstruction = reconstruction.detach().cpu()
@@ -141,19 +139,12 @@ def evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir):
                 reconstruction[:, i, :, :] = denorm_fn(reconstruction[:, i, :, :])
             reconstruction = reconstruction.squeeze(dim=0)
 
-            plt.title(f"{i_PC + 1}{ORDER_STR.get(i_PC + 1, 'th')} component", fontsize=56)
-
-            if v <= 0:
-                color = PINK
-            else:
-                color = BLUE
-
+            color = PINK if v <= 0 else BLUE
             for rec in reconstruction:
                 plt.plot(*rec, color=color, lw=3, alpha=0.2)
 
         for shape in orig_shape:
             plt.plot(*shape, "--", color="red", lw=5, alpha=0.5)
-
         for rec in orig_reconstruction:
             plt.plot(*rec, color="limegreen", lw=5, alpha=0.5)
 
@@ -166,30 +157,6 @@ def evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir):
         plt.savefig(os.path.join(saves_dir, f"C{i_PC + 1}.pdf"))
         plt.savefig(os.path.join(saves_dir, f"C{i_PC + 1}.png"))
         plt.close()
-
-    plt.figure(figsize=(5.7, 2.3))
-    plt.rcParams.update({"mathtext.fontset": "cm"})
-
-    rec_neg_handler = mlines.Line2D([0, 1], [0, 1], color=PINK, linestyle="-", lw=5, label=r"reconstructions ($z_i \leq 0$)")
-    rec_pos_handler = mlines.Line2D([0, 1], [0, 1], color=BLUE, linestyle="-", lw=5, label=r"reconstructions ($z_i > 0$)")
-    orig_rec_handler = mlines.Line2D([0, 1], [0, 1], color="limegreen", linestyle="-", lw=5, label="original reconstruction")
-    orig_handler = mlines.Line2D([0, 1], [0, 1], color="red", linestyle="--", lw=5, label="original curve")
-
-    plt.legend(
-        handles=[
-            rec_neg_handler,
-            rec_pos_handler,
-            orig_rec_handler,
-            orig_handler
-        ],
-        fontsize=22,
-        loc="center"
-    )
-
-    plt.axis("off")
-    plt.tight_layout()
-    plt.savefig(os.path.join(saves_dir, "legend.pdf"))
-    plt.savefig(os.path.join(saves_dir, "legend.png"))
 
 
 def main(
