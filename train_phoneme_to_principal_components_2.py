@@ -521,13 +521,13 @@ if __name__ == "__main__":
 
     with open(args.config_filepath) as f:
         cfg = yaml.safe_load(f)
-    mlflow.log_artifact(args.config_filepath)
 
     experiment = mlflow.set_experiment(args.experiment_name)
     with mlflow.start_run(
         experiment_id=experiment.experiment_id,
         run_name=args.run_name
     ):
+        mlflow.log_artifact(args.config_filepath)
         try:
             main(**cfg)
         finally:
