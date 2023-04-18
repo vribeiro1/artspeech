@@ -3,7 +3,7 @@ funcy
 librosa
 matplotlib
 mlflow
-numpy==1.21
+numpy>=1.21
 opencv-python
 pandas
 pydicom
@@ -12,7 +12,6 @@ sacred
 scikit-learn
 scikit-image
 seaborn
-shap
 shapely
 statsmodels
 tensorboardX
