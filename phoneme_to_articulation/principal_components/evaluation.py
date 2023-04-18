@@ -78,7 +78,7 @@ def plot_autoencoder_outputs(datadir, frame_ids, outputs, inputs, phonemes, deno
         plot_array(denorm_outputs, denorm_targets, reference.unsqueeze(dim=0), save_to, phoneme)
 
 
-def plot_cov_matrix(cov_matrix, saves_dir):
+def plot_cov_matrix(cov_matrix, saves_dir, suffix=""):
     n_components, _ = cov_matrix.shape
 
     plt.figure(figsize=(10, 10))
@@ -99,8 +99,9 @@ def plot_cov_matrix(cov_matrix, saves_dir):
 
     plt.tick_params(axis="both", which="major", labelsize=18)
     plt.tight_layout()
-    plt.savefig(os.path.join(saves_dir, f"covariance_matrix.pdf"))
-    plt.savefig(os.path.join(saves_dir, f"covariance_matrix.png"))
+    filename = "covariance_matrix" + suffix
+    plt.savefig(os.path.join(saves_dir, f"{filename}.pdf"))
+    plt.savefig(os.path.join(saves_dir, f"{filename}.png"))
 
 
 def run_autoencoder_test(
@@ -188,6 +189,7 @@ def run_multiart_autoencoder_test(
     dataset_config,
     outputs_dir=None,
     plots_dir=None,
+    indices_dict=None,
     fn_metrics=None,
     device=None,
 ):
@@ -248,7 +250,18 @@ def run_multiart_autoencoder_test(
     cov_latents = torch.cov(all_latents.T)
     cov_latents = cov_latents.detach().cpu()
     if plots_dir:
-        plot_cov_matrix(cov_latents, plots_dir)
+        if indices_dict is None:
+            plot_cov_matrix(
+                cov_latents,
+                plots_dir
+            )
+        else:
+            for articulator, indices in indices_dict.items():
+                plot_cov_matrix(
+                    cov_latents[indices, indices],
+                    plots_dir,
+                    f"_{articulator}"
+                )
 
     mean_loss = np.mean(losses)
     info = {

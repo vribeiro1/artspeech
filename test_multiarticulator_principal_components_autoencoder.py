@@ -25,17 +25,21 @@ PINK = np.array([255, 0, 85, 255]) / 255
 BLUE = np.array([0, 139, 231, 255]) / 255
 
 
-def evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir):
-    config_filepath = os.path.join(exp_dir, "config.json")
-    encoders_filepath = os.path.join(exp_dir, "best_encoders.pt")
-    decoders_filepath = os.path.join(exp_dir, "best_decoders.pt")
-
-    saves_dir = os.path.join(exp_dir, "plots")
-    if not os.path.exists(saves_dir):
-        os.makedirs(saves_dir)
+def evaluate_autoencoder(
+    database_name,
+    datadir,
+    dataset_config,
+    config_filepath,
+    encoders_filepath,
+    decoders_filepath,
+    save_to,
+):
+    plots_dir = os.path.join(save_to, "plots")
+    if not os.path.exists(plots_dir):
+        os.makedirs(plots_dir)
 
     with open(config_filepath) as f:
-        config = ujson.load(f)
+        config = yaml.safe_load(f)
     sequences_dict = config["test_seq_dict"]
 
     num_workers = config.get("num_workers", 0)
@@ -103,7 +107,7 @@ def evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir):
         data_targets = torch.cat([data_targets, targets])
         data_p2cp = torch.cat([data_p2cp, p2cp])
 
-    errors_filepath = os.path.join(exp_dir, "reconstruction_errors.npy")
+    errors_filepath = os.path.join(save_to, "reconstruction_errors.npy")
     np.save(errors_filepath, data_p2cp.numpy())
 
     ################################################################################################
@@ -154,15 +158,17 @@ def evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir):
         plt.axis("off")
 
         plt.tight_layout()
-        plt.savefig(os.path.join(saves_dir, f"C{i_PC + 1}.pdf"))
-        plt.savefig(os.path.join(saves_dir, f"C{i_PC + 1}.png"))
+        plt.savefig(os.path.join(plots_dir, f"C{i_PC + 1}.pdf"))
+        plt.savefig(os.path.join(plots_dir, f"C{i_PC + 1}.png"))
         plt.close()
 
 
 def main(
     database_name,
     datadir,
-    exp_dir,
+    config_filepath,
+    encoders_filepath,
+    decoders_filepath,
     batch_size,
     model_params,
     seq_dict,
@@ -190,11 +196,9 @@ def main(
     )
 
     best_autoencoder = MultiArticulatorAutoencoder(**model_params)
-    encoders_filepath = os.path.join(exp_dir, "best_encoders.pt")
     best_encoders_state_dict = torch.load(encoders_filepath, map_location=device)
     best_autoencoder.encoders.load_state_dict(best_encoders_state_dict)
 
-    decoders_filepath = os.path.join(exp_dir, "best_decoders.pt")
     best_decoders_state_dict = torch.load(decoders_filepath, map_location=device)
     best_autoencoder.decoders.load_state_dict(best_decoders_state_dict)
     best_autoencoder.to(device)
@@ -219,6 +223,7 @@ def main(
         dataset_config=dataset_config,
         # outputs_dir=test_outputs_dir,
         plots_dir=plots_dir,
+        indices_dict=articulators_indices_dict,
         device=device,
     )
 
@@ -240,5 +245,16 @@ if __name__ == "__main__":
     dataset_config = DATASET_CONFIG[database_name]
 
     datadir = cfg["datadir"]
-    exp_dir = cfg["exp_dir"]
-    evaluate_autoencoder(database_name, datadir, dataset_config, exp_dir)
+    save_to = cfg["save_to"]
+    config_filepath = cfg["config_filepath"]
+    encoders_filepath = cfg["encoders_filepath"]
+    decoders_filepath = cfg["decoders_filepath"]
+    evaluate_autoencoder(
+        database_name,
+        datadir,
+        dataset_config,
+        config_filepath,
+        encoders_filepath,
+        decoders_filepath,
+        save_to,
+    )

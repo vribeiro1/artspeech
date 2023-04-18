@@ -279,6 +279,7 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
         dataset_config=dataset_config,
         outputs_dir=test_outputs_dir,
         plots_dir=RESULTS_DIR,
+        indices_dict=articulators_indices_dict,
         device=device,
     )
 
