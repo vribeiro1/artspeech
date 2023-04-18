@@ -45,9 +45,21 @@ class Encoder(nn.Module):
             for _ in range(hidden_blocks)]
         )
 
-        self.output_layer = nn.Linear(
-            in_features=hidden_features,
-            out_features=num_components,
+        self.output_layer = nn.Sequential(
+            nn.Linear(
+                in_features=hidden_features,
+                out_features=hidden_features // 2,
+            ),
+            nn.ReLU(),
+            nn.Linear(
+                in_features=hidden_features // 2,
+                out_features=hidden_features // 4,
+            ),
+            nn.ReLU(),
+            nn.Linear(
+                in_features=hidden_features,
+                out_features=num_components,
+            )
         )
 
     def forward(self, x):
@@ -73,12 +85,28 @@ class Decoder(nn.Module):
         super().__init__()
 
         self.input_layer = nn.Sequential(
-            nn.Linear(in_features=num_components, out_features=hidden_features),
+            nn.Linear(
+                in_features=num_components,
+                out_features=hidden_features // 4
+            ),
+            nn.ReLU(),
+            nn.Linear(
+                in_features=hidden_features // 4,
+                out_features=hidden_features // 2
+            ),
+            nn.ReLU(),
+            nn.Linear(
+                in_features=hidden_features // 4,
+                out_features=hidden_features
+            ),
             nn.ReLU(),
         )
 
         self.hidden_layers = nn.ModuleList([
-            HiddenBlock(hidden_features=hidden_features, dropout=dropout)
+            HiddenBlock(
+                hidden_features=hidden_features,
+                dropout=dropout
+            )
             for _ in range(hidden_blocks)]
         )
 
