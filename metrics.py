@@ -2,33 +2,7 @@ import torch
 
 from vt_tools.metrics import p2cp_mean
 
-from phoneme_to_articulation.metrics import EuclideanDistance
-
-
-def p2cp_distance(outputs, targets):
-    """
-    Args:
-    outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
-    targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
-    """
-    bs, seq_len, N_art, _, N_samples = outputs.shape
-
-    results = torch.zeros(0, seq_len, N_art)
-    for batch_out, batch_target in zip(outputs, targets):
-        batch_results = torch.zeros(0, N_art)
-        for seq_out, seq_target in zip(batch_out, batch_target):
-            seq_results = []
-            for output, target in zip(seq_out, seq_target):
-                output_transpose = output.transpose(1, 0)
-                target_transpose = target.transpose(1, 0)
-
-                p2cp = p2cp_mean(output_transpose.numpy(), target_transpose.numpy())
-                seq_results.append(p2cp)
-
-            batch_results = torch.cat([batch_results, torch.tensor(seq_results).unsqueeze(dim=0)])
-        results = torch.cat([results, batch_results.unsqueeze(dim=0)])
-
-    return results
+from phoneme_to_articulation.metrics import EuclideanDistance, MeanP2CPDistance
 
 
 def pearsons_correlation(outputs, targets):
@@ -60,11 +34,20 @@ def pearsons_correlation(outputs, targets):
     return x_corr, y_corr
 
 
+def p2cp_distance(outputs, targets):
+    """
+    Args:
+        outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+        targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+    """
+    p2cp_distance_fn = MeanP2CPDistance(reduction="none")
+    return p2cp_distance_fn(outputs, targets).mean(dim=-1)
+
 def euclidean_distance(outputs, targets):
     """
     Args:
-    outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
-    targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+        outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+        targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
     """
     euclidean_distance_fn = EuclideanDistance(reduction="none")
     return euclidean_distance_fn(outputs, targets).mean(dim=-1)

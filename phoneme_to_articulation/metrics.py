@@ -27,7 +27,6 @@ class EuclideanDistance(nn.Module):
 class MeanP2CPDistance(nn.Module):
     def __init__(self, reduction="mean"):
         super().__init__()
-
         self.reduction = getattr(torch, reduction, lambda x: x)
 
     def forward(self, u_, v_):
