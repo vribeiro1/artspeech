@@ -33,7 +33,7 @@ from phoneme_recognition.datasets import  PhonemeRecognitionDataset, collate_fn
 from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC
-from settings import DATASET_CONFIG, BASE_DIR, TRAIN, VALID, TEST
+from settings import BASE_DIR, TRAIN, VALID
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)

@@ -10,23 +10,24 @@ from torchmetrics.functional import word_error_rate
 class CrossEntropyLoss(nn.Module):
     def __init__(self, *args, class_weights=None, **kwargs):
         super().__init__()
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-        if class_weights is None:
-            class_weights = {}
-        else:
+        if class_weights is not None:
             if isinstance(class_weights, str):
                 with open(class_weights) as f:
                     class_weights = ujson.load(f)
 
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-        # Add a 1.0 weight for the unknown class
-        weight = torch.tensor(
-            [1.0] +
-            [w for _, w in sorted(
-                class_weights.items(),
-                key=lambda t: t[0]
-            )]
-        ).to(device)
+            # Add a 1.0 weight for the unknown class
+            weight = torch.tensor(
+                [1.0] +
+                [w for _, w in sorted(
+                    class_weights.items(),
+                    key=lambda t: t[0]
+                )]
+            ).to(device)
+        else:
+            weight = None
+
         self.ce = nn.CrossEntropyLoss(*args, weight=weight, **kwargs)
 
     @staticmethod
@@ -46,7 +47,6 @@ class CrossEntropyLoss(nn.Module):
 
     def forward(self, inputs, targets, inputs_lengths, targets_lengths):
         inputs = inputs.permute(1, 0, 2)
-        bs, time, classes = inputs.shape
 
         inputs_pad_mask = self.get_pad_mask(inputs, inputs_lengths)
         inputs_pad_mask = torch.flatten(inputs_pad_mask, start_dim=0, end_dim=1)
