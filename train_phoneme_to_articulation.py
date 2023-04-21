@@ -21,6 +21,7 @@ from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict, make_padding_mask
 from metrics import pearsons_correlation
+from phoneme_recognition import UNKNOWN
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
@@ -135,9 +136,12 @@ def main(
     if not os.path.exists(outputs_dir):
         os.mkdir(outputs_dir)
 
+    default_tokens = [UNKNOWN]
+    vocabulary = {token: i for i, token in enumerate(default_tokens)}
     with open(vocab_filepath) as f:
-        tokens = json.load(f)
-        vocabulary = {token: i for i, token in enumerate(tokens)}
+        tokens = ujson.load(f)
+        for i, token in enumerate(tokens, start=len(vocabulary)):
+            vocabulary[token] = i
 
     num_articulators = len(articulators)
 
@@ -330,6 +334,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         device=device,
         regularize_out=True
     )
+    mlflow.log_artifact(test_outputs_dir)
 
     test_results_filepath = os.path.join(RESULTS_DIR, "test_results.json")
     with open(test_results_filepath, "w") as f:

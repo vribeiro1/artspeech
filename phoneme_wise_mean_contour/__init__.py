@@ -44,7 +44,7 @@ def calculate_tokens_positions_in_sequence(tokens):
 
 
 def process_sentence(sentence, articulators):
-    _, sentence_targets, sentence_tokens = sentence
+    _, _, sentence_targets, sentence_tokens, _, _, _ = sentence
 
     tokens_pos = calculate_tokens_positions_in_sequence(sentence_tokens)
     tokens_seqs_len = calculate_tokens_sequences_len(sentence_tokens)
