@@ -53,11 +53,6 @@ class Encoder(nn.Module):
             nn.ReLU(),
             nn.Linear(
                 in_features=hidden_features // 2,
-                out_features=hidden_features // 4,
-            ),
-            nn.ReLU(),
-            nn.Linear(
-                in_features=hidden_features // 4,
                 out_features=num_components,
             )
         )
@@ -87,11 +82,6 @@ class Decoder(nn.Module):
         self.input_layer = nn.Sequential(
             nn.Linear(
                 in_features=num_components,
-                out_features=hidden_features // 4
-            ),
-            nn.ReLU(),
-            nn.Linear(
-                in_features=hidden_features // 4,
                 out_features=hidden_features // 2
             ),
             nn.ReLU(),
