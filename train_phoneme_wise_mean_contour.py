@@ -1,4 +1,7 @@
+import pdb
+
 import argparse
+import logging
 import mlflow
 import os
 import pandas as pd
@@ -31,7 +34,7 @@ def main(
     test_seq_dict,
     vocab_filepath,
     articulators,
-    state_dict_fpath=None,
+    state_dict_filepath=None,
     clip_tails=True,
 ):
     default_tokens = [UNKNOWN]
@@ -61,14 +64,16 @@ def main(
         clip_tails=clip_tails,
     )
 
-    if state_dict_fpath is None:
+    if state_dict_filepath is None:
         save_to = os.path.join(RESULTS_DIR, "phoneme_wise_articulators.csv")
         df = train(train_dataset, save_to)
         mlflow.log_artifact(save_to)
     else:
-        df = pd.read_csv(state_dict_fpath)
+        df = pd.read_csv(state_dict_filepath)
         for articulator in train_dataset.articulators:
             df[articulator] = df[articulator].apply(eval)
+        mlflow.log_artifact(state_dict_filepath)
+    logging.info("Finished training phoneme wise mean contour")
 
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = ArtSpeechDataset(

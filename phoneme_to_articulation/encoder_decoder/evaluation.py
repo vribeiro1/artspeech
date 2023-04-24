@@ -57,9 +57,9 @@ def save_outputs(
         sentences_ids, outputs, targets, lengths, phonemes, frame_ids
     ):
         phoneme_data = []
-        saves_i_dir = os.path.join(save_to, sentence_id)
-        if not os.path.exists(os.path.join(saves_i_dir, "contours")):
-            os.makedirs(os.path.join(saves_i_dir, "contours"))
+        saves_sentence_dir = os.path.join(save_to, sentence_id)
+        if not os.path.exists(os.path.join(saves_sentence_dir, "contours")):
+            os.makedirs(os.path.join(saves_sentence_dir, "contours"))
 
         for out, target, phoneme, frame in zip(sentence_outs[:length], sentence_targets[:length], sentence_phonemes, sentence_frames):
             phoneme_data.append({
@@ -76,15 +76,15 @@ def save_outputs(
                     resX, resY = regularize_Bsplines(pred_art_arr.transpose(1, 0), 3)
                     pred_art_arr = np.array([resX, resY])
 
-                pred_npy_filepath = os.path.join(saves_i_dir, "contours", f"{frame}_{art}.npy")
+                pred_npy_filepath = os.path.join(saves_sentence_dir, "contours", f"{frame}_{art}.npy")
                 with open(pred_npy_filepath, "wb") as f:
                     np.save(f, pred_art_arr)
 
-                true_npy_filepath = os.path.join(saves_i_dir, "contours", f"{frame}_{art}_true.npy")
+                true_npy_filepath = os.path.join(saves_sentence_dir, "contours", f"{frame}_{art}_true.npy")
                 with open(true_npy_filepath, "wb") as f:
                     np.save(f, true_art_arr)
 
-            pd.DataFrame(phoneme_data).to_csv(os.path.join(saves_i_dir, "phonemes.csv"), index=False)
+            pd.DataFrame(phoneme_data).to_csv(os.path.join(saves_sentence_dir, "phonemes.csv"), index=False)
 
 
 def tract_variables(
@@ -113,9 +113,9 @@ def tract_variables(
     ) in enumerate(zip(
         sentences_ids, outputs, targets, lengths, frames, phonemes
     )):
-        saves_i_dir = os.path.join(save_to, sentence_id)
-        if not os.path.exists(saves_i_dir):
-            os.makedirs(saves_i_dir)
+        saves_sentence_dir = os.path.join(save_to, sentence_id)
+        if not os.path.exists(saves_sentence_dir):
+            os.makedirs(saves_sentence_dir)
 
         TVs_data = []
         for out, target, frame, phoneme in zip(sentence_outs[:length], sentence_targets[:length], sentence_frames, sentence_phonemes):
@@ -161,7 +161,7 @@ def tract_variables(
 
             TVs_data.append(item)
 
-        filepath = os.path.join(saves_i_dir, "tract_variables.csv")
+        filepath = os.path.join(saves_sentence_dir, "tract_variables.csv")
         df = pd.DataFrame(TVs_data)
         df.to_csv(filepath, index=False)
 

@@ -258,7 +258,7 @@ def run_multiart_autoencoder_test(
         else:
             for articulator, indices in indices_dict.items():
                 plot_cov_matrix(
-                    cov_latents[indices, indices],
+                    cov_latents[indices][:, indices],
                     plots_dir,
                     f"_{articulator}"
                 )

@@ -8,6 +8,8 @@ import pandas as pd
 import torch
 import torch.nn.functional as F
 
+from functools import partial
+from multiprocessing import Pool
 from tqdm import tqdm
 
 from phoneme_to_articulation.metrics import EuclideanDistance
@@ -71,10 +73,15 @@ def process_sentence(sentence, articulators):
 
 
 def train(dataset, save_to=None):
-    data = funcy.lflatten([
-        process_sentence(sentence, dataset.articulators)
-        for sentence in tqdm(dataset, desc="train")
-    ])
+    with Pool(5) as pool:
+        data = funcy.lflatten(tqdm(
+            pool.imap(
+                partial(process_sentence, articulators=dataset.articulators),
+                dataset
+            ),
+            total=len(dataset),
+            desc="train"
+        ))
 
     df = pd.DataFrame(data)
     if save_to is not None:
@@ -101,7 +108,7 @@ def forward_mean_contour(sentence_tokens, df, articulators, n_samples=50):
 
     sentence_outputs = torch.zeros(0, n_articulators, 2, n_samples)
     for token, _, _, rel_pos in tokens_rel_pos:
-        df_token_wise = df[df.token == token]
+        df_token_wise = df[df.token == token].sample(frac=0.1, random_state=0)
 
         weights = (df_token_wise.rel_pos - rel_pos).abs().to_numpy()
         n_weights, = weights.shape
@@ -125,13 +132,12 @@ def test(dataset, df, save_to):
         df = pd.read_csv(df)
 
     criterion = EuclideanDistance()
-
     losses = []
     euclidean_per_articulator = [[] for _ in dataset.articulators]
     p2cp_per_articulator = [[] for _ in dataset.articulators]
     x_corrs = [[] for _ in dataset.articulators]
     y_corrs = [[] for _ in dataset.articulators]
-    for i_sentence, (_, _, sentence_targets, sentence_tokens) in enumerate(tqdm(dataset, "test")):
+    for i_sentence, (sentence_name, _, sentence_targets, sentence_tokens, _, _, frame_ids) in tqdm(dataset, "test"):
         sentence_outputs = forward_mean_contour(sentence_tokens, df, dataset.articulators)
         sentence_outputs = sentence_outputs.unsqueeze(dim=0)
         sentence_targets = sentence_targets.unsqueeze(dim=0)
@@ -152,29 +158,24 @@ def test(dataset, df, save_to):
             p2cp_per_articulator[i_art].extend([dist.item() for dist in p2cp[:, i_art]])
             euclidean_per_articulator[i_art].extend([dist.item() for dist in euclidean[:, i_art]])
 
-        saves_i_dir = os.path.join(save_to, str(i_sentence))
-        if not os.path.exists(saves_i_dir):
-            os.makedirs(saves_i_dir)
-
         tract_variables(
+            [sentence_name],
+            [frame_ids],
             sentence_outputs,
             sentence_targets,
-            [len(sentence_tokens)],
+            [len(frame_ids)],
             [sentence_tokens],
-            dataset.articulators,
-            saves_i_dir,
-            offset=i_sentence
+            save_to,
         )
 
         save_outputs(
+            [sentence_name],
+            [frame_ids],
             sentence_outputs,
             sentence_targets,
-            [len(sentence_tokens)],
+            [len(frame_ids)],
             [sentence_tokens],
-            dataset.articulators,
-            saves_i_dir,
-            regularize_out=True,
-            offset=i_sentence
+            save_to,
         )
 
     mean_loss = np.mean(losses)
