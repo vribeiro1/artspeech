@@ -10,6 +10,7 @@ import pandas as pd
 import shutil
 import tempfile
 import torch
+import ujson
 import yaml
 
 from sacred import Experiment
