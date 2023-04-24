@@ -64,6 +64,7 @@ def main(
     if state_dict_fpath is None:
         save_to = os.path.join(RESULTS_DIR, "phoneme_wise_articulators.csv")
         df = train(train_dataset, save_to)
+        mlflow.log_artifact(save_to)
     else:
         df = pd.read_csv(state_dict_fpath)
         for articulator in train_dataset.articulators:
@@ -73,7 +74,7 @@ def main(
     test_dataset = ArtSpeechDataset(
         datadir,
         database_name,
-        test_filepath,
+        test_sequences,
         vocabulary,
         articulators,
         clip_tails=clip_tails,
@@ -88,7 +89,7 @@ def main(
     test_results_filepath = os.path.join(RESULTS_DIR, "test_results.json")
     with open(test_results_filepath, "w") as f:
         ujson.dump(test_results, f)
-    mlflow.log_artifact(df_fitest_results_filepathlepath)
+    mlflow.log_artifact(test_results_filepath)
 
     results_item = {
         "exp": _run._id,
