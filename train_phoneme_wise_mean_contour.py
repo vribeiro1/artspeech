@@ -10,9 +10,6 @@ import tempfile
 import ujson
 import yaml
 
-from sacred import Experiment
-from sacred.observers import FileStorageObserver
-
 from helpers import sequences_from_dict
 from phoneme_recognition import UNKNOWN
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset
@@ -30,12 +27,12 @@ def main(
     database_name,
     datadir,
     train_seq_dict,
-    valid_seq_dict,
     test_seq_dict,
     vocab_filepath,
     articulators,
     state_dict_filepath=None,
     clip_tails=True,
+    weighted=False,
 ):
     default_tokens = [UNKNOWN]
     vocabulary = {token: i for i, token in enumerate(default_tokens)}
@@ -54,19 +51,9 @@ def main(
         clip_tails=clip_tails,
     )
 
-    valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
-    valid_dataset = ArtSpeechDataset(
-        datadir,
-        database_name,
-        valid_sequences,
-        vocabulary,
-        articulators,
-        clip_tails=clip_tails,
-    )
-
     if state_dict_filepath is None:
         save_to = os.path.join(RESULTS_DIR, "phoneme_wise_articulators.csv")
-        df = train(train_dataset, save_to)
+        df = train(train_dataset, save_to, weighted=weighted)
         mlflow.log_artifact(save_to)
     else:
         df = pd.read_csv(state_dict_filepath)
@@ -88,7 +75,13 @@ def main(
     test_outputs_dir = os.path.join(RESULTS_DIR, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
-    test_results = test(test_dataset, df, test_outputs_dir)
+
+    test_results = test(
+        test_dataset,
+        df,
+        test_outputs_dir,
+        weighted=weighted
+    )
     mlflow.log_artifact(test_outputs_dir)
 
     test_results_filepath = os.path.join(RESULTS_DIR, "test_results.json")
@@ -97,7 +90,6 @@ def main(
     mlflow.log_artifact(test_results_filepath)
 
     results_item = {
-        "exp": _run._id,
         "loss": test_results["loss"],
     }
 
