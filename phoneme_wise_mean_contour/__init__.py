@@ -145,7 +145,7 @@ def forward_mean_contour(sentence_tokens, df, articulators, n_samples=50):
     return sentence_outputs
 
 
-def train(dataset, weighted=False, save_to=None):
+def train(dataset, save_to=None, weighted=False):
     process_fn = process_sentence_with_pos if weighted else process_sentence
     data = funcy.flatten(map(
         partial(process_fn, articulators=dataset.articulators),

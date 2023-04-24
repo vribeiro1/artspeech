@@ -53,7 +53,7 @@ def main(
 
     if state_dict_filepath is None:
         save_to = os.path.join(RESULTS_DIR, "phoneme_wise_articulators.csv")
-        df = train(train_dataset, save_to, weighted=weighted)
+        df = train(train_dataset, save_to=save_to, weighted=weighted)
         mlflow.log_artifact(save_to)
     else:
         df = pd.read_csv(state_dict_filepath)
