@@ -183,6 +183,7 @@ def run_test(
     if not os.path.exists(epoch_outputs_dir):
         os.makedirs(epoch_outputs_dir)
 
+    dataset_config = dataloader.dataset.dataset_config
     model.eval()
     losses = []
     euclidean_per_articulator = [[] for _ in articulators]
@@ -268,7 +269,9 @@ def run_test(
             "x_corr": np.mean(x_corrs[i_art]),
             "y_corr": np.mean(y_corrs[i_art]),
             "p2cp": np.mean(p2cp_per_articulator[i_art]),
-            "med": np.mean(euclidean_per_articulator[i_art])
+            "p2cp_mm": np.mean(p2cp_per_articulator[i_art]) * dataset_config.RES * dataset_config.RES,
+            "med": np.mean(euclidean_per_articulator[i_art]),
+            "med_mm": np.mean(euclidean_per_articulator[i_art]) * dataset_config.RES * dataset_config.RES,
         }
         for i_art, art in enumerate(articulators)
     })
