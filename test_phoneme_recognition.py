@@ -1,6 +1,7 @@
 import argparse
 import logging
 import os
+import shutil
 import tempfile
 import torch
 import torch.nn as nn
@@ -99,7 +100,7 @@ def main(
     # dataset = SyntheticPhonemeRecognitionDataset(
     dataset = PhonemeRecognitionDataset(
         datadir=datadir,
-        database=database,
+        database_name=database_name,
         sequences=sequences,
         vocabulary=vocabulary,
         dataset_config=dataset_config,
@@ -148,4 +149,7 @@ if __name__ == "__main__":
     with open(args.config_filepath) as f:
         cfg = yaml.safe_load(f)
 
-    main(**cfg)
+    try:
+        main(**cfg)
+    finally:
+        shutil.rmtree(TMP_DIR)

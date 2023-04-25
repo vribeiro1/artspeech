@@ -157,7 +157,7 @@ def run_autoencoder_test(
                     inputs.unsqueeze(dim=1),
                     phonemes,
                     {TONGUE: dataloader.dataset.normalize.inverse},
-                    res=dataset_config.RES,
+                    res=dataloader.dataset.dataset_config.RES,
                     outputs_dir=epoch_outputs_dir,
                 )
 
