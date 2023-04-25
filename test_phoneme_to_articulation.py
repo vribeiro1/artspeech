@@ -1,15 +1,16 @@
 import pdb
 
 import argparse
-import json
 import os
 import pandas as pd
 import torch
 import yaml
+import ujson
 
 from torch.utils.data import DataLoader
 
 from helpers import set_seeds, sequences_from_dict
+from phoneme_recognition import UNKNOWN
 from phoneme_to_articulation.metrics import EuclideanDistance
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
@@ -31,11 +32,13 @@ def main(
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+    default_tokens = [UNKNOWN]
+    vocabulary = {token: i for i, token in enumerate(default_tokens)}
     with open(vocab_filepath) as f:
-        tokens = json.load(f)
-        vocabulary = {token: i for i, token in enumerate(tokens)}
+        tokens = ujson.load(f)
+        for i, token in enumerate(tokens, start=len(vocabulary)):
+            vocabulary[token] = i
 
-    num_articulators = len(articulators)
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = ArtSpeechDataset(
         datadir,
@@ -54,6 +57,7 @@ def main(
         collate_fn=pad_sequence_collate_fn
     )
 
+    num_articulators = len(articulators)
     best_model = ArtSpeech(len(vocabulary), num_articulators, gru_dropout=0.2)
     state_dict = torch.load(state_dict_fpath, map_location=device)
     best_model.load_state_dict(state_dict)

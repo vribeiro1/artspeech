@@ -145,7 +145,6 @@ def main(
             vocabulary[token] = i
 
     num_articulators = len(articulators)
-
     model = ArtSpeech(
         len(vocabulary),
         num_articulators,

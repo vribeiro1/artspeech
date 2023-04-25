@@ -1,3 +1,4 @@
+import pdb
 import torch
 
 from vt_tools.metrics import p2cp_mean
@@ -39,15 +40,23 @@ def p2cp_distance(outputs, targets):
     Args:
         outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
         targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+
+    Return:
+        p2cp distance (torch.tensor): Torch tensor with shape (bs, seq_len, N_art)
     """
     p2cp_distance_fn = MeanP2CPDistance(reduction="none")
-    return p2cp_distance_fn(outputs, targets).mean(dim=-1)
+    p2cp = p2cp_distance_fn(outputs, targets)
+    return p2cp
 
 def euclidean_distance(outputs, targets):
     """
     Args:
         outputs (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
         targets (torch.tensor): Torch tensor with shape (bs, seq_len, N_art, 2, N_samples).
+
+    Return:
+        euclidean (torch.tensor): Torch tensor with shape (bs, seq_len, N_art)
     """
     euclidean_distance_fn = EuclideanDistance(reduction="none")
-    return euclidean_distance_fn(outputs, targets).mean(dim=-1)
+    euclidean = euclidean_distance_fn(outputs, targets).mean(dim=-1)
+    return euclidean
