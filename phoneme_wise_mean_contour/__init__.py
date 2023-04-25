@@ -192,23 +192,25 @@ def test(dataset, df, save_to, weighted=False):
             euclidean_per_articulator[i_art].extend([dist.item() for dist in euclidean[:, i_art]])
 
         tract_variables(
-            [sentence_name],
-            [frame_ids],
-            sentence_outputs,
-            sentence_targets,
-            [len(frame_ids)],
-            [sentence_tokens],
-            save_to,
+            sentences_ids=[sentence_name],
+            frames=[frame_ids],
+            outputs=sentence_outputs,
+            targets=sentence_targets,
+            lengths=[len(frame_ids)],
+            phonemes=[sentence_tokens],
+            articulators=dataset.articulators,
+            save_to=save_to,
         )
 
         save_outputs(
-            [sentence_name],
-            [frame_ids],
-            sentence_outputs,
-            sentence_targets,
-            [len(frame_ids)],
-            [sentence_tokens],
-            save_to,
+            sentences_ids=[sentence_name],
+            frames=[frame_ids],
+            outputs=sentence_outputs,
+            targets=sentence_targets,
+            lengths=[len(frame_ids)],
+            phonemes=[sentence_tokens],
+            articulators=dataset.articulators,
+            save_to=save_to,
         )
 
     mean_loss = np.mean(losses)
