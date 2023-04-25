@@ -338,7 +338,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
 
     test_results_filepath = os.path.join(RESULTS_DIR, "test_results.json")
     with open(test_results_filepath, "w") as f:
-        json.dump(test_results, f)
+        ujson.dump(test_results, f)
     mlflow.log_artifact(test_results_filepath)
 
     results_item = {
