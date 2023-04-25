@@ -312,14 +312,15 @@ def run_test(
         "loss": mean_loss
     }
 
+    to_mm = dataset_config.RES * dataset_config.PIXEL_SPACING
     info.update({
         art: {
             "x_corr": np.mean(x_corrs[i_art]),
             "y_corr": np.mean(y_corrs[i_art]),
             "p2cp": np.mean(p2cp_per_articulator[i_art]),
-            "p2cp_mm": np.mean(p2cp_per_articulator[i_art]) * dataset_config.RES * dataset_config.RES,
+            "p2cp_mm": np.mean(p2cp_per_articulator[i_art]) * to_mm,
             "med": np.mean(euclidean_per_articulator[i_art]),
-            "med_mm": np.mean(euclidean_per_articulator[i_art]) * dataset_config.RES * dataset_config.RES,
+            "med_mm": np.mean(euclidean_per_articulator[i_art]) * to_mm,
         }
         for i_art, art in enumerate(articulators)
     })
