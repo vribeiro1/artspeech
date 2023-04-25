@@ -211,6 +211,7 @@ def test(dataset, df, save_to, weighted=False):
             phonemes=[sentence_tokens],
             articulators=dataset.articulators,
             save_to=save_to,
+            regularize_out=True
         )
 
     mean_loss = np.mean(losses)
