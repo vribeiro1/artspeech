@@ -91,7 +91,9 @@ def main(
 
     for articulator in test_dataset.articulators:
         results_item[f"p2cp_{articulator}"] = test_results[articulator]["p2cp"]
+        results_item[f"p2cp_mm_{articulator}"] = test_results[articulator]["p2cp_mm"]
         results_item[f"med_{articulator}"] = test_results[articulator]["med"]
+        results_item[f"med_mm_{articulator}"] = test_results[articulator]["med_mm"]
         results_item[f"x_corr_{articulator}"] = test_results[articulator]["x_corr"]
         results_item[f"y_corr_{articulator}"] = test_results[articulator]["y_corr"]
 
