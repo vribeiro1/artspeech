@@ -1,5 +1,3 @@
-import pdb
-
 import numpy as np
 import os
 import pandas as pd
@@ -44,7 +42,7 @@ def save_outputs(
     """
     Args:
         sentences_ids (str): Unique id of each sentence to save the results.
-        frame_ids (list)
+        frame_ids (List)
         outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
         targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
         lengths (List): List with the length of each sentence in the batch.
@@ -53,15 +51,37 @@ def save_outputs(
         save_to (str): Path to the directory to save the results.
         regularize_out (bool): If should apply bspline regularization or not.
     """
-    for sentence_id, sentence_outs, sentence_targets, length, sentence_phonemes, sentence_frames in zip(
-        sentences_ids, outputs, targets, lengths, phonemes, frame_ids
+    for (
+        sentence_id,
+        sentence_outs,
+        sentence_targets,
+        length,
+        sentence_phonemes,
+        sentence_frames
+    ) in zip(
+        sentences_ids,
+        outputs,
+        targets,
+        lengths,
+        phonemes,
+        frame_ids
     ):
         phoneme_data = []
         saves_sentence_dir = os.path.join(save_to, sentence_id)
         if not os.path.exists(os.path.join(saves_sentence_dir, "contours")):
             os.makedirs(os.path.join(saves_sentence_dir, "contours"))
 
-        for out, target, phoneme, frame in zip(sentence_outs[:length], sentence_targets[:length], sentence_phonemes, sentence_frames):
+        for (
+            out,
+            target,
+            phoneme,
+            frame
+        ) in zip(
+            sentence_outs[:length],
+            sentence_targets[:length],
+            sentence_phonemes,
+            sentence_frames
+        ):
             phoneme_data.append({
                 "sentence": sentence_id,
                 "frame": frame,
@@ -84,12 +104,13 @@ def save_outputs(
                 with open(true_npy_filepath, "wb") as f:
                     np.save(f, true_art_arr)
 
-            pd.DataFrame(phoneme_data).to_csv(os.path.join(saves_sentence_dir, "phonemes.csv"), index=False)
+            df_filepath = os.path.join(saves_sentence_dir, "phonemes.csv")
+            pd.DataFrame(phoneme_data).to_csv(df_filepath, index=False)
 
 
 def tract_variables(
     sentences_ids,
-    frames,
+    frame_ids,
     outputs,
     targets,
     lengths,
@@ -100,7 +121,7 @@ def tract_variables(
     """
     Args:
         sentences_ids (str): Unique id of each sentence to save the results.
-        sentence_frames
+        frame_ids (List)
         outputs (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
         targets (torch.tensor): Tensor with shape (bs, seq_len, n_articulators, 2, n_samples).
         lengths (List): List with the length of each sentence in the batch.
@@ -108,17 +129,37 @@ def tract_variables(
         articulators (List[str]): List of articulators.
         save_to (str): Path to the directory to save the results.
     """
-    for i_sentence, (
-        sentence_id, sentence_outs, sentence_targets, length, sentence_frames, sentence_phonemes
-    ) in enumerate(zip(
-        sentences_ids, outputs, targets, lengths, frames, phonemes
-    )):
+    for (
+        sentence_id,
+        sentence_outs,
+        sentence_targets,
+        length,
+        sentence_frames,
+        sentence_phonemes
+    ) in zip(
+        sentences_ids,
+        outputs,
+        targets,
+        lengths,
+        frame_ids,
+        phonemes
+    ):
         saves_sentence_dir = os.path.join(save_to, sentence_id)
         if not os.path.exists(saves_sentence_dir):
             os.makedirs(saves_sentence_dir)
 
         TVs_data = []
-        for out, target, frame, phoneme in zip(sentence_outs[:length], sentence_targets[:length], sentence_frames, sentence_phonemes):
+        for (
+            out,
+            target,
+            frame,
+            phoneme
+        ) in zip(
+            sentence_outs[:length],
+            sentence_targets[:length],
+            sentence_frames,
+            sentence_phonemes
+        ):
             pred_input_dict = {
                 art: tensor.T for art, tensor in zip(articulators, out)
             }
@@ -191,7 +232,14 @@ def run_test(
     x_corrs = [[] for _ in articulators]
     y_corrs = [[] for _ in articulators]
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - inference")
-    for i, (sentences_ids, sentences, targets, lengths, phonemes, sentence_frames) in enumerate(progress_bar):
+    for (
+        sentences_ids,
+        sentences,
+        targets,
+        lengths,
+        phonemes,
+        sentence_frames
+    ) in progress_bar:
         sentences = sentences.to(device)
         targets = targets.to(device)
 

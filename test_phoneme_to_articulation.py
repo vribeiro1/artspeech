@@ -82,7 +82,7 @@ def main(
 
     test_results_filepath = os.path.join(save_to, "test_results.json")
     with open(test_results_filepath, "w") as f:
-        json.dump(test_results, f)
+        ujson.dump(test_results, f)
 
     results_item = {
         "exp": None,

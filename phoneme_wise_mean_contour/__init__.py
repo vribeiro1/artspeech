@@ -193,7 +193,7 @@ def test(dataset, df, save_to, weighted=False):
 
         tract_variables(
             sentences_ids=[sentence_name],
-            frames=[frame_ids],
+            frame_ids=[frame_ids],
             outputs=sentence_outputs,
             targets=sentence_targets,
             lengths=[len(frame_ids)],
@@ -204,7 +204,7 @@ def test(dataset, df, save_to, weighted=False):
 
         save_outputs(
             sentences_ids=[sentence_name],
-            frames=[frame_ids],
+            frame_ids=[frame_ids],
             outputs=sentence_outputs,
             targets=sentence_targets,
             lengths=[len(frame_ids)],
