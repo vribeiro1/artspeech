@@ -45,7 +45,10 @@ def p2cp_distance(outputs, targets):
         p2cp distance (torch.tensor): Torch tensor with shape (bs, seq_len, N_art)
     """
     p2cp_distance_fn = MeanP2CPDistance(reduction="none")
-    p2cp = p2cp_distance_fn(outputs, targets)
+    p2cp = p2cp_distance_fn(
+        outputs.transpose(-1, -2),
+        targets.transpose(-1, -2)
+    )
     return p2cp
 
 def euclidean_distance(outputs, targets):
@@ -58,5 +61,8 @@ def euclidean_distance(outputs, targets):
         euclidean (torch.tensor): Torch tensor with shape (bs, seq_len, N_art)
     """
     euclidean_distance_fn = EuclideanDistance(reduction="none")
-    euclidean = euclidean_distance_fn(outputs, targets).mean(dim=-1)
+    euclidean = euclidean_distance_fn(
+        outputs,
+        targets
+    ).mean(dim=-1)
     return euclidean
