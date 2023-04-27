@@ -248,7 +248,7 @@ def main(
 
     df_TV_corr_report = pd.DataFrame(data)
     TV_corr_report_filepath = os.path.join(results_dir, "TV_corr_report.csv")
-    df_TV_corr_report.to_csv(TV_corr_report_filepath)
+    df_TV_corr_report.to_csv(TV_corr_report_filepath, index=False)
     print(df_TV_corr_report)
 
 
