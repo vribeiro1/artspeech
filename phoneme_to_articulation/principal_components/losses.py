@@ -120,6 +120,7 @@ class AutoencoderLoss2(nn.Module):
         device,
         beta1=1.0,
         beta2=1.0,
+        **kwargs,
     ):
         super().__init__()
 

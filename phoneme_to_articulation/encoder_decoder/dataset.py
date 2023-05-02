@@ -13,7 +13,7 @@ from vt_tools import UPPER_INCISOR
 
 from database_collector import DATABASE_COLLECTORS
 from phoneme_to_articulation.tail_clipper import TailClipper
-from settings import UNKNOWN, DATASET_CONFIG
+from settings import DATASET_CONFIG, UNKNOWN
 
 phonemes_per_TV = {
     "LA": lambda p: p in ["p", "b", "m"],

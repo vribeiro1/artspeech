@@ -15,7 +15,7 @@ from vt_shape_gen.helpers import load_articulator_array
 from database_collector import DATABASE_COLLECTORS
 from phoneme_to_articulation.tail_clipper import TailClipper
 from phoneme_to_articulation.transforms import Normalize
-from settings import DATASET_CONFIG
+from settings import DATASET_CONFIG, UNKNOWN
 
 phoneme_weights = {
     "l": 3,
@@ -356,7 +356,8 @@ class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
 
         sentence_tokens = item["phonemes"]
         sentence_numerized = torch.tensor([
-            self.vocabulary[token] for token in sentence_tokens
+            self.vocabulary.get(token, self.vocabulary[UNKNOWN])
+            for token in sentence_tokens
         ], dtype=torch.long)
 
         return (
@@ -421,7 +422,6 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
         subject = item["subject"]
         sequence = item["sequence"]
         frame_ids = item["frame_ids"]
-        tokens = item["phonemes"]
 
         sentence_targets = torch.zeros(size=(0, len(self.articulators), 2, self.num_samples))
         for frame_id in frame_ids:
@@ -442,8 +442,10 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
             frame_targets = frame_targets.unsqueeze(dim=0)  # (1, Nart, 2, D)
             sentence_targets = torch.cat([sentence_targets, frame_targets], dim=0)
 
+        sentence_tokens = item["phonemes"]
         sentence_numerized = torch.tensor([
-            self.vocabulary[token] for token in tokens
+            self.vocabulary.get(token, self.vocabulary[UNKNOWN])
+            for token in sentence_tokens
         ], dtype=torch.long)
 
         if len(self.TV_to_phoneme_map) > 0:
@@ -451,20 +453,20 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
                 torch.tensor(
                     [
                         int(p in self.TV_to_phoneme_map[TV])
-                        for p in tokens
+                        for p in sentence_tokens
                     ],
                     dtype=torch.int
                 )
                 for TV in sorted(self.TV_to_phoneme_map.keys())
             ])
         else:
-            critical_mask = torch.zeros(size=(0, len(tokens)))
+            critical_mask = torch.zeros(size=(0, len(sentence_tokens)))
 
         return (
             sentence_name,
             sentence_numerized,
             sentence_targets,
-            tokens,
+            sentence_tokens,
             critical_mask,
             frame_ids
         )
