@@ -7,12 +7,17 @@ import pandas as pd
 import seaborn as sns
 import torch
 
+from collections import OrderedDict
 from tqdm import tqdm
 from vt_tools import COLORS, TONGUE, UPPER_INCISOR
 from vt_shape_gen.helpers import load_articulator_array
 
+from phoneme_to_articulation import (
+    save_outputs,
+    tract_variables,
+    REQUIRED_ARTICULATORS_FOR_TVS
+)
 from phoneme_to_articulation.metrics import minimal_distance, MeanP2CPDistance
-from phoneme_to_articulation.encoder_decoder.evaluation import save_outputs
 from phoneme_to_articulation.principal_components.models import Decoder
 from settings import DATASET_CONFIG
 
@@ -271,6 +276,142 @@ def run_multiart_autoencoder_test(
     return info
 
 
+def run_phoneme_to_principal_components_test(
+    epoch,
+    model,
+    dataloader,
+    criterion,
+    fn_metrics=None,
+    outputs_dir=None,
+    decode_transform=None,
+    device=None,
+):
+    if device is None:
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if fn_metrics is None:
+        fn_metrics = {}
+
+    model.eval()
+    dataset_config = dataloader.dataset.dataset_config
+    articulators = dataloader.dataset.articulators
+    normalize_dict = dataloader.dataset.normalize
+
+    losses = []
+    metrics_values = {
+        metric_name: []
+        for metric_name in fn_metrics
+    }
+    progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - inference")
+    for (
+        sentence_names,
+        sentence_inputs,
+        sentence_targets,
+        sentence_lengths,
+        sentence_phonemes,
+        critical_masks,
+        sentence_frames
+    ) in progress_bar:
+        sentence_inputs = sentence_inputs.to(device)
+        sentence_targets = sentence_targets.to(device)
+
+        with torch.set_grad_enabled(False):
+            sentence_outputs = model(sentence_inputs, sentence_lengths)
+            loss = criterion(
+                sentence_outputs,
+                sentence_targets,
+                sentence_lengths,
+                critical_masks,
+            )
+            losses.append(loss.item())
+
+            for metric_name, fn_metric in fn_metrics.items():
+                metric_val = fn_metric(
+                    sentence_outputs,
+                    sentence_targets,
+                    sentence_lengths,
+                )
+                metrics_values[metric_name].append(metric_val.item())
+
+        postfixes = {
+            "loss": np.mean(losses)
+        }
+        postfixes.update({
+            metric_name: np.mean(metric_vals)
+            for metric_name, metric_vals
+            in metrics_values.items()
+        })
+        progress_bar.set_postfix(OrderedDict(postfixes))
+
+        if outputs_dir is not None:
+            epoch_outputs_dir = os.path.join(outputs_dir, str(epoch))
+            if not os.path.exists(epoch_outputs_dir):
+                os.makedirs(epoch_outputs_dir)
+
+            sentence_pred_shapes = decode_transform(sentence_outputs)  # (B, N_art, T, 2 * D)
+            sentence_pred_shapes = sentence_pred_shapes.permute(0, 2, 1, 3)
+            bs, seq_len, num_articulators, features = sentence_pred_shapes.shape
+            sentence_pred_shapes = sentence_pred_shapes.reshape(
+                bs,
+                seq_len,
+                num_articulators,
+                2,
+                features // 2
+            )  # (B, T, N_art, 2, D)
+
+            sentence_pred_shapes = sentence_pred_shapes.detach().cpu()
+            sentence_targets = sentence_targets.detach().cpu()
+
+            for i, articulator in enumerate(articulators):
+                articulator_denorm_fn = normalize_dict[articulator].inverse
+
+                articulator_pred_shapes = sentence_pred_shapes[:, :, i, :, :]
+                sentence_pred_shapes[:, :, i, :, :] = articulator_denorm_fn(articulator_pred_shapes)
+
+                articulator_targets = sentence_targets[:, :, i, :, :]
+                sentence_targets[:, :, i, :, :] = articulator_denorm_fn(articulator_targets)
+
+            # Only calculate the tract variables if all of the required articulators are included
+            # in the test
+            if all(
+                [
+                    articulator in articulators
+                    for articulator in REQUIRED_ARTICULATORS_FOR_TVS
+                ]
+            ):
+                tract_variables(
+                    sentence_names,
+                    sentence_frames,
+                    sentence_pred_shapes,
+                    sentence_targets,
+                    sentence_lengths,
+                    sentence_phonemes,
+                    articulators,
+                    epoch_outputs_dir
+                )
+
+            save_outputs(
+                sentence_names,
+                sentence_frames,
+                sentence_pred_shapes,
+                sentence_targets,
+                sentence_lengths,
+                sentence_phonemes,
+                articulators,
+                epoch_outputs_dir,
+                regularize_out=False
+            )
+
+    info = {
+        "loss": np.mean(losses)
+    }
+    info.update({
+        metric_name: np.mean(metric_vals)
+        for metric_name, metric_vals
+        in metrics_values.items()
+    })
+    return info
+
+
 def run_phoneme_to_PC_test(
     epoch,
     model,
@@ -304,7 +445,16 @@ def run_phoneme_to_PC_test(
     losses = []
     p2cp_metric_values = []
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
-    for sentence_ids, sentence, targets, lengths, phonemes, critical_masks, critical_references, frames in progress_bar:
+    for (
+        sentence_ids,
+        sentence,
+        targets,
+        lengths,
+        phonemes,
+        critical_masks,
+        critical_references,
+        frames
+    ) in progress_bar:
         sentence = sentence.to(device)
         targets = targets.to(device)
         critical_references = critical_references.to(device)
@@ -394,8 +544,22 @@ def run_phoneme_to_PC_test(
 
         p2cp_dist = MeanP2CPDistance(reduction="none")
         for (
-            sentence_id, sentence_pred_shapes, sentence_target_shapes, sentence_references, length, sentence_phonemes, sentence_frames
-        ) in zip(sentence_ids, pred_shapes, target_shapes, critical_references, lengths, phonemes, frames):
+            sentence_id,
+            sentence_pred_shapes,
+            sentence_target_shapes,
+            sentence_references,
+            length,
+            sentence_phonemes,
+            sentence_frames
+        ) in zip(
+            sentence_ids,
+            pred_shapes,
+            target_shapes,
+            critical_references,
+            lengths,
+            phonemes,
+            frames
+        ):
             save_to_dir = os.path.join(epoch_outputs_dir, sentence_id, "plots")
 
             if not os.path.exists(save_to_dir):
@@ -414,7 +578,12 @@ def run_phoneme_to_PC_test(
             for (
                 pred_shape, target_shape, reference, phoneme, frame_id, p2cp
             ) in zip(
-                sentence_pred_shapes, sentence_target_shapes, sentence_references, sentence_phonemes, sentence_frames, sentence_p2cp
+                sentence_pred_shapes,
+                sentence_target_shapes,
+                sentence_references,
+                sentence_phonemes,
+                sentence_frames,
+                sentence_p2cp
             ):
                 save_to_filepath = os.path.join(save_to_dir, f"{frame_id}.jpg")
                 pred_shape = pred_shape.squeeze(dim=0)
@@ -423,7 +592,14 @@ def run_phoneme_to_PC_test(
                 p2cp_mm = p2cp * dataset_config.PIXEL_SPACING * dataset_config.RES
                 p2cp_mm_str ="%0.3f mm" % p2cp_mm
 
-                plot_array(pred_shape, target_shape, reference, save_to_filepath, phoneme, p2cp_mm_str)
+                plot_array(
+                    pred_shape,
+                    target_shape,
+                    reference,
+                    save_to_filepath,
+                    phoneme,
+                    p2cp_mm_str
+                )
 
         losses.append(loss.item())
         progress_bar.set_postfix(loss=np.mean(losses))
@@ -431,12 +607,13 @@ def run_phoneme_to_PC_test(
         ############################################################################################
 
     mean_loss = np.mean(losses)
+    to_mm = dataset_config.PIXEL_SPACING * dataset_config.RES
     info = {
         "loss": mean_loss,
         "p2cp_mean": np.mean(p2cp_metric_values),
         "p2cp_std": np.std(p2cp_metric_values),
-        "p2cp_mean_mm": np.mean(p2cp_metric_values) * dataset_config.PIXEL_SPACING * dataset_config.RES,
-        "p2cp_std_mm": np.std(p2cp_metric_values) * dataset_config.PIXEL_SPACING * dataset_config.RES,
+        "p2cp_mean_mm": np.mean(p2cp_metric_values) * to_mm,
+        "p2cp_std_mm": np.std(p2cp_metric_values) * to_mm,
         "saves_dir": epoch_outputs_dir
     }
 

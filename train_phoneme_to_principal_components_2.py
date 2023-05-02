@@ -27,6 +27,7 @@ from phoneme_to_articulation.principal_components.dataset import (
     PrincipalComponentsPhonemeToArticulationDataset2,
     pad_sequence_collate_fn
 )
+from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_principal_components_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
 from phoneme_to_articulation.principal_components.metrics import DecoderMeanP2CPDistance2
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
@@ -108,130 +109,6 @@ def run_epoch(
     return info
 
 
-def run_test(
-    epoch,
-    model,
-    dataloader,
-    criterion,
-    fn_metrics=None,
-    outputs_dir=None,
-    decode_transform=None,
-    articulators=None,
-    device=None
-):
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    if fn_metrics is None:
-        fn_metrics={}
-
-    model.eval()
-    losses = []
-    metrics_values = {metric_name: [] for metric_name in fn_metrics}
-    progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - test")
-    for (
-        sentence_ids,
-        inputs,
-        targets,
-        len_inputs,
-        phonemes,
-        critical_masks,
-        _
-    ) in progress_bar:
-        inputs = inputs.to(device)
-        targets = targets.to(device)
-
-        with torch.set_grad_enabled(False):
-            outputs = model(inputs, len_inputs)
-            loss = criterion(outputs, targets, len_inputs, critical_masks)
-
-            for metric_name, fn_metric in fn_metrics.items():
-                metric_val = fn_metric(outputs, targets, len_inputs)
-                metrics_values[metric_name].append(metric_val.item())
-            losses.append(loss.item())
-
-        postfixes = {
-            "loss": np.mean(losses)
-        }
-        postfixes.update({
-            metric_name: np.mean(metric_vals)
-            for metric_name, metric_vals in metrics_values.items()
-        })
-        progress_bar.set_postfix(OrderedDict(postfixes))
-
-        if outputs_dir is not None:
-            epoch_outputs_dir = os.path.join(outputs_dir, str(epoch))
-            if not os.path.exists(epoch_outputs_dir):
-                os.makedirs(epoch_outputs_dir)
-
-            output_shapes = decode_transform(outputs)  # (B, Nart, T, 2 * D)
-            output_shapes = output_shapes.permute(0, 2, 1, 3)
-            bs, seq_len, num_articulators, features = output_shapes.shape
-            output_shapes = output_shapes.reshape(bs, seq_len, num_articulators, 2, features // 2)
-            for (
-                sentence_id,
-                sentence_shapes,
-                sentence_targets,
-                sentence_phonemes
-            ) in zip(
-                sentence_ids,
-                output_shapes,
-                targets,
-                phonemes
-            ):
-                sentence_dir = os.path.join(epoch_outputs_dir, sentence_id)
-                if not os.path.exists(sentence_dir):
-                    os.makedirs(sentence_dir)
-
-                plots_dir = os.path.join(sentence_dir, "plots")
-                if not os.path.exists(plots_dir):
-                    os.makedirs(plots_dir)
-
-                for (
-                    timestep, (articulators_arrays, target_arrays, phoneme)
-                ) in enumerate(zip(
-                    sentence_shapes,
-                    sentence_targets,
-                    sentence_phonemes
-                )):
-                    plt.figure(figsize=(3, 3))
-
-                    for (
-                        i, (articulator_array, target_array)
-                    ) in enumerate(zip(
-                        articulators_arrays,
-                        target_arrays
-                    )):
-                        frame = "%04d" % timestep
-                        articulator_name = articulators[i]
-                        denorm_fn = dataloader.dataset.normalize[articulator_name].inverse
-                        articulator_array = denorm_fn(articulator_array)
-                        articulator_array = articulator_array.detach().cpu().numpy()
-                        target_array = denorm_fn(target_array)
-                        target_array = target_array.detach().cpu().numpy()
-
-                        plt.plot(*articulator_array, lw=2, color=COLORS[articulator_name])
-                        plt.plot(*target_array, lw=2, color="red", linestyle="--")
-                        plt.text(0.5, 0.1, phoneme, fontsize=16)
-
-                    plt.xlim([0, 1])
-                    plt.ylim([1, 0])
-                    plt.axis("off")
-                    plt.tight_layout()
-                    fig_filepath = os.path.join(plots_dir, f"{frame}.png")
-                    plt.savefig(fig_filepath)
-                    plt.close()
-
-    info = {
-        "loss": np.mean(losses),
-    }
-    info.update({
-        metric_name: np.mean(metric_values)
-        for metric_name, metric_values in metrics_values.items()
-    })
-
-    return info
-
-
 def main(
     database_name,
     datadir,
@@ -251,6 +128,7 @@ def main(
     decoder_state_dict_filepath,
     beta1=1.0,
     beta2=1.0,
+    TV_to_phoneme_map=None,
     clip_tails=True,
     num_workers=0,
     state_dict_filepath=None,
@@ -270,14 +148,8 @@ def main(
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
 
-    TV_to_phoneme_map = {
-        "LA": [
-            "p",
-            "b",
-            "m"
-        ],
-    }
-
+    if TV_to_phoneme_map is None:
+        TV_to_phoneme_map = {}
     articulators = sorted(indices_dict.keys())
     num_components = 1 + max(set(
         reduce(lambda l1, l2: l1 + l2,
@@ -491,16 +363,15 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
     best_model.load_state_dict(best_model_state_dict)
     best_model.to(device)
 
-    info_test = run_test(
+    info_test = run_phoneme_to_principal_components_test(
         epoch=0,
         model=best_model,
         dataloader=test_dataloader,
         criterion=loss_fn,
+        fn_metrics=fn_metrics,
         outputs_dir=test_outputs_dir,
         decode_transform=loss_fn.decode,
-        articulators=articulators,
         device=device,
-        fn_metrics=fn_metrics,
     )
     mlflow.log_artifact(test_outputs_dir)
     mlflow.log_metrics(
