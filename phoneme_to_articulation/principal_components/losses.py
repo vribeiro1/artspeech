@@ -3,6 +3,7 @@ import pdb
 import torch
 import torch.nn as nn
 
+from functools import reduce
 from vt_tools import (
     LOWER_LIP,
     PHARYNX,
@@ -134,6 +135,9 @@ class AutoencoderLoss2(nn.Module):
             articulator: i
             for i, articulator in enumerate(self.articulators)
         }
+
+        latent_weights = self.articulator_weights(indices_dict).to(device)
+        self.latent_weights = latent_weights.unsqueeze(dim=0)  # Match latent_loss shape
         self.TVs = sorted(TVs)
 
         encoder = MultiEncoder(
@@ -173,6 +177,30 @@ class AutoencoderLoss2(nn.Module):
         self.reconstruction = EuclideanDistance(reduction="none")
 
     @staticmethod
+    def articulator_weights(indices_dict):
+        articulator_weights = {
+            articulator: len(components)
+            for articulator, components in indices_dict.items()
+        }
+
+        latent_weights = reduce(
+            lambda l1, l2: l1 + l2,
+            [
+                [articulator_weights[articulator]] * len(components)
+                for articulator, components in indices_dict.items()
+            ]
+        )
+
+        latent_weights = torch.softmax(
+            torch.tensor(
+                latent_weights,
+                dtype=torch.float
+            ),
+            dim=0
+        )
+        return latent_weights
+
+    @staticmethod
     def normalize_betas(betas):
         betas = torch.softmax(torch.tensor(betas), dim=0)
         return betas
@@ -204,7 +232,9 @@ class AutoencoderLoss2(nn.Module):
         # Mean squared error loss in the level of the principal components
         latent_loss = self.latent(output_pcs, target_pcs)
         latent_loss = latent_loss.view(bs * seq_len, num_pcs)
-        latent_loss = latent_loss[padding_mask.view(bs * seq_len)].mean()
+        latent_loss = latent_loss[padding_mask.view(bs * seq_len)]
+        latent_loss = self.latent_weights * latent_loss
+        latent_loss = latent_loss.mean()
 
         # Euclidean distance loss in the level of the shapes
         reconstruction_loss = self.reconstruction(output_shapes, target_shapes)

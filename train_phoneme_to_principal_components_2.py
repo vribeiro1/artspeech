@@ -47,6 +47,7 @@ def run_epoch(
     dataloader,
     optimizer,
     criterion,
+    scheduler=None,
     fn_metrics=None,
     device=None
 ):
@@ -84,6 +85,9 @@ def run_epoch(
             if training:
                 loss.backward()
                 optimizer.step()
+                if scheduler is not None:
+                    scheduler.step()
+
             for metric_name, fn_metric in fn_metrics.items():
                 metric_val = fn_metric(outputs, targets, len_inputs)
                 metrics_values[metric_name].append(metric_val.item())

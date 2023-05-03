@@ -88,6 +88,7 @@ class DecoderMeanP2CPDistance2(nn.Module):
         super().__init__()
 
         self.dataset_config = dataset_config
+        self.to_mm = self.dataset_config.RES * self.dataset_config.PIXEL_SPACING
         decoder = MultiDecoder(
             indices_dict,
             **autoencoder_kwargs,
@@ -118,8 +119,9 @@ class DecoderMeanP2CPDistance2(nn.Module):
             targets[..., i, :, :] = self.denorm_fns[i](targets[..., i, :, :])
 
         p2cp = self.mean_p2cp(outputs_shapes, targets)
-        p2cp_mm = p2cp * self.dataset_config.RES * self.dataset_config.PIXEL_SPACING
-        mean_p2cp = torch.concat([p2cp_mm[i, :l, :] for i, l in enumerate(lengths)]).mean()
+        p2cp_mm = p2cp * self.to_mm
+        p2cp_mm = torch.concat([p2cp_mm[i, :l, :] for i, l in enumerate(lengths)])
+        mean_p2cp = p2cp_mm.mean()
         return mean_p2cp
 
 
