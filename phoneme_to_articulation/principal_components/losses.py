@@ -121,14 +121,15 @@ class AutoencoderLoss2(nn.Module):
         device,
         beta1=1.0,
         beta2=1.0,
+        beta3=1.0,
         **kwargs,
     ):
         super().__init__()
 
-        beta0 = 1.0
         beta1 = beta1
         beta2 = beta2
-        self.beta0, self.beta1, self.beta2 = self.normalize_betas([beta0, beta1, beta2])
+        beta3 = beta3
+        self.beta1, self.beta2, self.beta3 = self.normalize_betas([beta1, beta2, beta3])
 
         self.articulators = sorted(indices_dict.keys())
         self.articulators_indices = {
@@ -259,9 +260,9 @@ class AutoencoderLoss2(nn.Module):
             critical_loss = torch.tensor(0, device=target_shapes.device, dtype=torch.float)
 
         return (
-            self.beta0 * latent_loss +
-            self.beta1 * reconstruction_loss +
-            self.beta2 * critical_loss
+            self.beta1 * latent_loss +
+            self.beta2 * reconstruction_loss +
+            self.beta3 * critical_loss
         )
 
 
