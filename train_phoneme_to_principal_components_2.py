@@ -132,6 +132,7 @@ def main(
     decoder_state_dict_filepath,
     beta1=1.0,
     beta2=1.0,
+    beta3=1.0,
     TV_to_phoneme_map=None,
     clip_tails=True,
     num_workers=0,
@@ -178,6 +179,7 @@ def main(
         decoder_state_dict_filepath=decoder_state_dict_filepath,
         beta1=beta1,
         beta2=beta2,
+        beta3=beta3,
         **autoencoder_kwargs,
     )
     optimizer = Adam(
