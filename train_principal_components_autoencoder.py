@@ -281,9 +281,13 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", dest="config_filepath")
+    parser.add_argument("--mlflow", dest="mlflow_tracking_uri", default=None)
     parser.add_argument("--experiment", dest="experiment_name", default="principal_components_autoencoder")
     parser.add_argument("--run", dest="run_name", default=None)
     args = parser.parse_args()
+
+    if args.mlflow_tracking_uri is not None:
+        mlflow.set_tracking_uri(args.mlflow_tracking_uri)
 
     with open(args.config_filepath) as f:
         cfg = yaml.safe_load(f)
