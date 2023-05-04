@@ -9,7 +9,7 @@ import torch
 import yaml
 
 from torch.optim import Adam
-from torch.optim.lr_scheduler import CyclicLR
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from vt_tools import *
 
@@ -130,12 +130,13 @@ def main(
         alpha=alpha,
     )
     optimizer = Adam(autoencoder.parameters(), lr=learning_rate, weight_decay=weight_decay)
-    scheduler = CyclicLR(
+    scheduler = ReduceLROnPlateau(
         optimizer,
-        base_lr=learning_rate / 25,
-        max_lr=learning_rate,
-        cycle_momentum=False
+        factor=0.1,
+        patience=10,
+        min_lr=learning_rate / 1000,
     )
+
 
     denorm_fn_dict = {
         articulator: denorm_fn.inverse
@@ -160,7 +161,7 @@ def main(
 
         autoencoder.load_state_dict(checkpoint["model"])
         optimizer.load_state_dict(checkpoint["optimizer"])
-        # scheduler.load_state_dict(checkpoint["scheduler"])
+        scheduler.load_state_dict(checkpoint["scheduler"])
         epoch = checkpoint["epoch"]
         epochs = range(epoch, num_epochs + 1)
         best_metric = checkpoint["best_metric"]
@@ -222,7 +223,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             "epoch": epoch,
             "model": autoencoder.state_dict(),
             "optimizer": optimizer.state_dict(),
-            # "scheduler": scheduler.state_dict(),
+            "scheduler": scheduler.state_dict(),
             "best_metric": best_metric,
             "epochs_since_best": epochs_since_best,
             "best_encoders_path": best_encoders_path,
@@ -291,12 +292,15 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
 
 
 if __name__ == "__main__":
-    if __name__ == "__main__":
-        parser = argparse.ArgumentParser()
-        parser.add_argument("--config", dest="config_filepath")
-        parser.add_argument("--experiment", dest="experiment_name", default="multiarticulator_autoencoder")
-        parser.add_argument("--run", dest="run_name", default=None)
-        args = parser.parse_args()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", dest="config_filepath")
+    parser.add_argument("--mlflow", dest="mlflow_tracking_uri", default=None)
+    parser.add_argument("--experiment", dest="experiment_name", default="multiarticulator_autoencoder")
+    parser.add_argument("--run", dest="run_name", default=None)
+    args = parser.parse_args()
+
+    if args.mlflow_tracking_uri is not None:
+        mlflow.set_tracking_uri(args.mlflow_tracking_uri)
 
     with open(args.config_filepath) as f:
         cfg = yaml.safe_load(f)
