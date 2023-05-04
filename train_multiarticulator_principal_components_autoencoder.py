@@ -178,7 +178,6 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             model=autoencoder,
             dataloader=train_dataloader,
             optimizer=optimizer,
-            scheduler=scheduler,
             criterion=loss_fn,
             device=device
         )
