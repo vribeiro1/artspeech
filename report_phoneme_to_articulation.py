@@ -29,6 +29,7 @@ def plot_tract_variables_for_sentence(
     df,
     sentence_name,
     plots_dir,
+    suffix=None,
     which="both"
 ):
     plot_pred = which in ["pred", "both"]
@@ -109,8 +110,11 @@ def plot_tract_variables_for_sentence(
     plt.grid(True, "major")
     plt.ylim(y_min, y_max + y_margin)
     plt.tight_layout()
-    plt.savefig(os.path.join(plots_dir, f"TVs_{sentence_name}.pdf"), format="pdf")
-    plt.savefig(os.path.join(plots_dir, f"TVs_{sentence_name}.jpg"), format="jpg")
+    filename = f"TVs_{sentence_name}"
+    if suffix is not None:
+        filename = "_".join([filename, suffix])
+    plt.savefig(os.path.join(plots_dir, f"{filename}.pdf"), format="pdf")
+    plt.savefig(os.path.join(plots_dir, f"{filename}.jpg"), format="jpg")
     plt.close()
 
 
@@ -156,10 +160,27 @@ def main(
         if not os.path.exists(plots_dir):
             os.makedirs(plots_dir)
 
+        # Plot both the prediction and target together
         plot_tract_variables_for_sentence(
             df_sentence,
             sentence_name,
             plots_dir
+        )
+        # Plot only the prediction
+        plot_tract_variables_for_sentence(
+            df_sentence,
+            sentence_name,
+            plots_dir,
+            suffix="pred",
+            which="pred"
+        )
+        # Plot only the target
+        plot_tract_variables_for_sentence(
+            df_sentence,
+            sentence_name,
+            plots_dir,
+            suffix="target",
+            which="target"
         )
 
         contours_dir = os.path.join(sentence_dir, "contours")
