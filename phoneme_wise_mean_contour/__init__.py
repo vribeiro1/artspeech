@@ -3,6 +3,7 @@ import pdb
 import funcy
 import functools
 import numpy as np
+import os
 import pandas as pd
 import torch
 import torch.nn.functional as F
@@ -160,6 +161,7 @@ def train(dataset, save_to=None, weighted=False):
 
 
 def test(dataset, df, save_to, weighted=False):
+    save_to = os.path.join(save_to, "0")  # Keep compatibility with other methods
     if isinstance(df, str):
         df = pd.read_csv(df)
 
