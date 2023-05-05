@@ -13,7 +13,7 @@ import yaml
 from helpers import sequences_from_dict
 from phoneme_recognition import UNKNOWN
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset
-from phoneme_wise_mean_contour import train, test
+from phoneme_to_articulation.phoneme_wise_mean_contour import train, test
 from settings import BASE_DIR
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
