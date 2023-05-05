@@ -219,12 +219,10 @@ class PrincipalComponentsArtSpeech(nn.Module):
         (torch.tensor): Torch tensor of shape (bs, seq_len, num_components).
         """
         embed = self.embedding(x)
+        packed_embed = pack_padded_sequence(embed, lengths, batch_first=True)
+        packed_rnn_out, _ = self.rnn(packed_embed)
+        rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
 
-        # packed_embed = pack_padded_sequence(embed, lengths, batch_first=True)
-        # packed_rnn_out, _ = self.rnn(packed_embed)
-        # rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
-
-        rnn_out, _ = self.rnn(embed)
         linear_out = self.linear(rnn_out)  # (bs, seq_len, embed_dim)
         components = self.predictor(linear_out)
 
