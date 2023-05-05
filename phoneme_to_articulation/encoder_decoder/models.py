@@ -77,18 +77,17 @@ class ArtSpeech(nn.Module):
     def forward(self, x, lengths):
         """
         Args:
-        x (torch.tensor): Torch tensor of shape (bs, seq).
-        lengths (list): Lengths of the input sequences sorted in decreasing order.
+            x (torch.tensor): Torch tensor of shape (bs, seq_len).
+            lengths (list): Lengths of the input sequences sorted in decreasing order.
 
-        output: torch.Size([bs, seq_len, n_articulators, 2, n_samples])
+        Return:
+            output (torch.tensor): Torch tensor of shape (bs, seq_len, n_articulators, 2, n_samples)
         """
         embed = self.embedding(x)
+        packed_embed = pack_padded_sequence(embed, lengths, batch_first=True)
+        packed_rnn_out, _ = self.rnn(packed_embed)
+        rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
 
-        # packed_embed = pack_padded_sequence(embed, lengths, batch_first=True)
-        # packed_rnn_out, _ = self.rnn(packed_embed)
-        # rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
-
-        rnn_out, _ = self.rnn(embed)
         linear_out = self.linear(rnn_out)  # torch.Size([bs, seq_len, embed_dim])
         out = torch.stack([
             predictor(linear_out) for predictor in self.predictors
