@@ -224,7 +224,7 @@ class PrincipalComponentsArtSpeech(nn.Module):
         rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
 
         linear_out = self.linear(rnn_out)  # (bs, seq_len, embed_dim)
-        components = self.predictor(linear_out)
+        components = torch.tanh(self.predictor(linear_out))
 
         return components
 
