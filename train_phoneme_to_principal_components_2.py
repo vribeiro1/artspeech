@@ -2,7 +2,6 @@ import pdb
 
 import argparse
 import logging
-import matplotlib.pyplot as plt
 import mlflow
 import numpy as np
 import os
@@ -19,7 +18,6 @@ from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
-from vt_tools import COLORS
 
 from helpers import set_seeds, sequences_from_dict
 from phoneme_recognition import UNKNOWN
@@ -31,7 +29,7 @@ from phoneme_to_articulation.principal_components.evaluation import run_phoneme_
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
 from phoneme_to_articulation.principal_components.metrics import DecoderMeanP2CPDistance2
 from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
-from settings import BASE_DIR, TRAIN, VALID, TEST, DATASET_CONFIG
+from settings import BASE_DIR, TRAIN, VALID, DATASET_CONFIG
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
