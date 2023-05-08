@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 
 from phoneme_to_articulation.metrics import EuclideanDistance, MeanP2CPDistance
-from phoneme_to_articulation.principal_components.models import Decoder, MultiDecoder
+from phoneme_to_articulation.principal_components.models.autoencoder import Decoder, MultiDecoder
 from phoneme_to_articulation.principal_components.transforms import Decode, InputTransform
 
 

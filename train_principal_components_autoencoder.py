@@ -18,7 +18,7 @@ from phoneme_to_articulation.principal_components.dataset import PrincipalCompon
 from phoneme_to_articulation.principal_components.evaluation import run_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss
 from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistance
-from phoneme_to_articulation.principal_components.models import Autoencoder
+from phoneme_to_articulation.principal_components.models.autoencoder import Autoencoder
 from settings import DATASET_CONFIG, BASE_DIR, TRAIN, VALID, TEST
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")

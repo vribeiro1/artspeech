@@ -28,7 +28,7 @@ from phoneme_to_articulation.principal_components.dataset import (
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_principal_components_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
 from phoneme_to_articulation.principal_components.metrics import DecoderMeanP2CPDistance2
-from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
+from phoneme_to_articulation.principal_components.models.rnn import PrincipalComponentsArtSpeech
 from settings import BASE_DIR, TRAIN, VALID, DATASET_CONFIG
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")

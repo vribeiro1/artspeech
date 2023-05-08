@@ -18,7 +18,7 @@ from phoneme_to_articulation import (
     REQUIRED_ARTICULATORS_FOR_TVS
 )
 from phoneme_to_articulation.metrics import minimal_distance, MeanP2CPDistance
-from phoneme_to_articulation.principal_components.models import Decoder
+from phoneme_to_articulation.principal_components.models.autoencoder import Decoder
 from settings import DATASET_CONFIG
 
 

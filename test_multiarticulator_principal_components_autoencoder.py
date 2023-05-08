@@ -18,7 +18,7 @@ from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistanc
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsMultiArticulatorAutoencoderDataset
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import MultiArtRegularizedLatentsMSELoss
-from phoneme_to_articulation.principal_components.models import MultiArticulatorAutoencoder
+from phoneme_to_articulation.principal_components.models.autoencoder import MultiArticulatorAutoencoder
 from settings import DATASET_CONFIG
 
 PINK = np.array([255, 0, 85, 255]) / 255

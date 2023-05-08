@@ -26,7 +26,7 @@ from phoneme_to_articulation.principal_components.metrics import (
     DecoderEuclideanDistance,
     DecoderMeanP2CPDistance
 )
-from phoneme_to_articulation.principal_components.models import PrincipalComponentsArtSpeech
+from phoneme_to_articulation.principal_components.models.rnn import PrincipalComponentsArtSpeech
 from settings import BASE_DIR, TRAIN, VALID, TEST
 
 ex = Experiment()

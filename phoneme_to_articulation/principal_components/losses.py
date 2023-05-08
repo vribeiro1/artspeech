@@ -14,7 +14,7 @@ from vt_tools import (
 
 from helpers import make_padding_mask
 from phoneme_to_articulation.metrics import EuclideanDistance
-from phoneme_to_articulation.principal_components.models import (
+from phoneme_to_articulation.principal_components.models.autoencoder import (
     Encoder,
     Decoder,
     MultiEncoder,
