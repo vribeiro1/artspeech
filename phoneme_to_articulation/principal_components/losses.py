@@ -113,7 +113,6 @@ class AutoencoderLoss2(nn.Module):
         indices_dict,
         TVs,
         in_features,
-        hidden_blocks,
         hidden_features,
         encoder_state_dict_filepath,
         decoder_state_dict_filepath,
@@ -140,7 +139,6 @@ class AutoencoderLoss2(nn.Module):
         encoder = MultiEncoder(
             indices_dict,
             in_features,
-            hidden_blocks,
             hidden_features,
         )
         encoder_state_dict = torch.load(
@@ -157,7 +155,6 @@ class AutoencoderLoss2(nn.Module):
         decoder = MultiDecoder(
             indices_dict,
             in_features,
-            hidden_blocks,
             hidden_features,
         )
         decoder_state_dict = torch.load(

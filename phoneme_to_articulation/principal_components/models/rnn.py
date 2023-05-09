@@ -38,7 +38,7 @@ class PrincipalComponentsArtSpeech(nn.Module):
         num_components,
         embed_dim=64,
         hidden_size=128,
-        gru_dropout=0.
+        rnn_dropout=0.
     ):
         super().__init__()
 
@@ -48,7 +48,7 @@ class PrincipalComponentsArtSpeech(nn.Module):
             hidden_size,
             num_layers=2,
             bidirectional=True,
-            dropout=gru_dropout,
+            dropout=rnn_dropout,
             batch_first=True
         )
 

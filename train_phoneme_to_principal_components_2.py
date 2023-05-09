@@ -276,6 +276,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             optimizer=optimizer,
             criterion=loss_fn,
             device=device,
+            fn_metrics=fn_metrics,
         )
 
         mlflow.log_metrics(
