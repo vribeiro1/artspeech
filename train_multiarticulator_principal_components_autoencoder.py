@@ -17,7 +17,7 @@ from helpers import set_seeds, sequences_from_dict
 from phoneme_to_articulation.principal_components import run_autoencoder_epoch
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsMultiArticulatorAutoencoderDataset
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
-from phoneme_to_articulation.principal_components.losses import MultiArtRegularizedLatentsMSELoss
+from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss2
 from phoneme_to_articulation.principal_components.models.autoencoder import MultiArticulatorAutoencoder
 from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistance
 from settings import BASE_DIR, DATASET_CONFIG, TRAIN, VALID, TEST
@@ -125,7 +125,7 @@ def main(
         worker_init_fn=set_seeds
     )
 
-    loss_fn = MultiArtRegularizedLatentsMSELoss(
+    loss_fn = RegularizedLatentsMSELoss2(
         indices_dict=articulators_indices_dict,
         alpha=alpha,
     )

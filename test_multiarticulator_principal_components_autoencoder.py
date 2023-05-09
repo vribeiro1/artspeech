@@ -17,7 +17,7 @@ from helpers import set_seeds, sequences_from_dict
 from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistance
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsMultiArticulatorAutoencoderDataset
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
-from phoneme_to_articulation.principal_components.losses import MultiArtRegularizedLatentsMSELoss
+from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss2
 from phoneme_to_articulation.principal_components.models.autoencoder import MultiArticulatorAutoencoder
 from settings import DATASET_CONFIG
 
@@ -210,7 +210,7 @@ def main(
     if not os.path.exists(plots_dir):
         os.makedirs(plots_dir)
 
-    loss_fn = MultiArtRegularizedLatentsMSELoss(
+    loss_fn = RegularizedLatentsMSELoss2(
         indices_dict=articulators_indices_dict,
         alpha=0.1,
     )

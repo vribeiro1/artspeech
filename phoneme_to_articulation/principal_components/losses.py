@@ -3,7 +3,6 @@ import pdb
 import torch
 import torch.nn as nn
 
-from functools import reduce
 from vt_tools import (
     LOWER_LIP,
     PHARYNX,
@@ -266,7 +265,7 @@ class RegularizedLatentsMSELoss(nn.Module):
         return mse + self.alpha * cov_loss
 
 
-class MultiArtRegularizedLatentsMSELoss(nn.Module):
+class RegularizedLatentsMSELoss2(nn.Module):
     def __init__(
         self,
         alpha,
