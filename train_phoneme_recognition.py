@@ -206,6 +206,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             optimizer=optimizer,
             scheduler=scheduler,
             criterion=loss_fn,
+            fn_metrics=metrics,
             device=device,
             feature=feature,
             target=target,
