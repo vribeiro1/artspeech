@@ -395,7 +395,7 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
         self.TV_to_phoneme_map = TV_to_phoneme_map
 
         collector = DATABASE_COLLECTORS[database_name](datadir)
-        self.data = collector.collect_data(sequences)[:1]
+        self.data = collector.collect_data(sequences)
 
         self.normalize = {}
         for articulator in self.articulators:
