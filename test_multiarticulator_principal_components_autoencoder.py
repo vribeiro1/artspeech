@@ -15,7 +15,7 @@ from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict
 from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistance
-from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsMultiArticulatorAutoencoderDataset
+from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsAutoencoderDataset2
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss2
 from phoneme_to_articulation.principal_components.models.autoencoder import MultiArticulatorAutoencoder
@@ -50,7 +50,7 @@ def evaluate_autoencoder(
     latent_size = max(funcy.flatten(articulators_indices_dict.values())) + 1
 
     sequences = sequences_from_dict(datadir, sequences_dict)
-    dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
+    dataset = PrincipalComponentsAutoencoderDataset2(
         database_name=database_name,
         datadir=datadir,
         sequences=sequences,
@@ -181,7 +181,7 @@ def main(
     articulators_indices_dict = model_params["indices_dict"]
     test_sequences = sequences_from_dict(datadir, seq_dict)
     articulators = sorted(articulators_indices_dict.keys())
-    test_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
+    test_dataset = PrincipalComponentsAutoencoderDataset2(
         database_name=database_name,
         datadir=datadir,
         sequences=test_sequences,

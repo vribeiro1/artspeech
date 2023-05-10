@@ -183,7 +183,7 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
         return frame_name, articulator, weight, phoneme
 
 
-class PrincipalComponentsMultiArticulatorAutoencoderDataset(PrincipalComponentsAutoencoderDataset):
+class PrincipalComponentsAutoencoderDataset2(PrincipalComponentsAutoencoderDataset):
     def __init__(
         self,
         database_name,
@@ -395,7 +395,7 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
         self.TV_to_phoneme_map = TV_to_phoneme_map
 
         collector = DATABASE_COLLECTORS[database_name](datadir)
-        self.data = collector.collect_data(sequences)
+        self.data = collector.collect_data(sequences)[:1]
 
         self.normalize = {}
         for articulator in self.articulators:

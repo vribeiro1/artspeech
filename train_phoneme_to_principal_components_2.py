@@ -236,10 +236,10 @@ def main(
             indices_dict=indices_dict,
             autoencoder_kwargs=autoencoder_kwargs,
             device=device,
-            denorm_fns=[
-                train_dataset.normalize[articulator].inverse
+            denorm_fns={
+                articulator: train_dataset.normalize[articulator].inverse
                 for articulator in articulators
-            ]
+            }
         )
     }
 

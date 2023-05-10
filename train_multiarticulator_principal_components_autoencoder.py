@@ -15,7 +15,7 @@ from vt_tools import *
 
 from helpers import set_seeds, sequences_from_dict
 from phoneme_to_articulation.principal_components import run_autoencoder_epoch
-from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsMultiArticulatorAutoencoderDataset
+from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsAutoencoderDataset2
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
 from phoneme_to_articulation.principal_components.losses import RegularizedLatentsMSELoss2
 from phoneme_to_articulation.principal_components.models.autoencoder import MultiArticulatorAutoencoder
@@ -94,7 +94,7 @@ def main(
 
     dataset_config = DATASET_CONFIG[database_name]
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
-    train_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
+    train_dataset = PrincipalComponentsAutoencoderDataset2(
         database_name=database_name,
         datadir=datadir,
         sequences=train_sequences,
@@ -110,7 +110,7 @@ def main(
     )
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
-    valid_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
+    valid_dataset = PrincipalComponentsAutoencoderDataset2(
         database_name=database_name,
         datadir=datadir,
         sequences=valid_sequences,
@@ -243,7 +243,7 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
             break
 
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
-    test_dataset = PrincipalComponentsMultiArticulatorAutoencoderDataset(
+    test_dataset = PrincipalComponentsAutoencoderDataset2(
         database_name=database_name,
         datadir=datadir,
         sequences=test_sequences,
