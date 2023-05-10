@@ -8,11 +8,6 @@ from phoneme_to_articulation.principal_components.models.autoencoder import Deco
 from phoneme_to_articulation.principal_components.transforms import Decode, InputTransform
 
 
-# Problem in metrics calculation since it is taking padding into account, which creates unrealistic
-# good results.
-# TODO: Think about how to fix this problem.
-
-
 class DecoderEuclideanDistance(nn.Module):
     def __init__(self, decoder_filepath, n_components, n_samples, reduction, device, denorm_fn=None):
         super().__init__()
@@ -77,16 +72,17 @@ class DecoderMeanP2CPDistance(nn.Module):
 
 class DecoderMeanP2CPDistance2(nn.Module):
     def __init__(
-            self,
-            dataset_config,
-            decoder_state_dict_filepath,
-            indices_dict,
-            autoencoder_kwargs,
-            denorm_fns,
-            device,
-        ):
+        self,
+        dataset_config,
+        decoder_state_dict_filepath,
+        indices_dict,
+        autoencoder_kwargs,
+        denorm_fns,
+        device,
+    ):
         super().__init__()
 
+        self.articulators = sorted(indices_dict.keys())
         self.dataset_config = dataset_config
         self.to_mm = self.dataset_config.RES * self.dataset_config.PIXEL_SPACING
         decoder = MultiDecoder(
@@ -109,14 +105,13 @@ class DecoderMeanP2CPDistance2(nn.Module):
     def forward(self, outputs, targets, lengths):
         bs, seq_len, num_articulators, _, num_samples = targets.shape
 
-        outputs = outputs.clone()
-        targets = targets.clone()
-
         outputs_shapes = self.decode(outputs)
         outputs_shapes = outputs_shapes.reshape(bs, seq_len, num_articulators, 2, num_samples)
-        for i in range(num_articulators):
-            outputs_shapes[..., i, :, :] = self.denorm_fns[i](outputs_shapes[..., i, :, :])
-            targets[..., i, :, :] = self.denorm_fns[i](targets[..., i, :, :])
+        for i, articulator in enumerate(self.articulators):
+            outputs_shapes[..., i, :, :] = self.denorm_fns[articulator](outputs_shapes[..., i, :, :])
+            targets[..., i, :, :] = self.denorm_fns[articulator](targets[..., i, :, :])
+        outputs_shapes = outputs_shapes.transpose(-1, -2)
+        targets = targets.transpose(-1, -2)
 
         p2cp = self.mean_p2cp(outputs_shapes, targets)
         p2cp_mm = p2cp * self.to_mm
