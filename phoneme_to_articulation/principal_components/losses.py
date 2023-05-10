@@ -168,7 +168,7 @@ class AutoencoderLoss2(nn.Module):
         )
 
         self.latent = nn.MSELoss(reduction="none")
-        self.reconstruction = EuclideanDistance(reduction="none")
+        self.reconstruction = nn.MSELoss(reduction="none")
 
     @staticmethod
     def normalize_betas(betas):
@@ -199,6 +199,11 @@ class AutoencoderLoss2(nn.Module):
         output_shapes = self.decode(output_pcs)
         output_shapes = output_shapes.reshape(bs, seq_len, num_articulators, 2, num_samples)
 
+        # outputs_pcs : (bs, seq_len, num_components)
+        # target_pcs : (bs, seq_len, num_components)
+        # output_shapes : (bs, seq_len, Nart, 2, D)
+        # target_shaoes : (bs, seq_len, Nart, 2, D)
+
         # Mean squared error loss in the level of the principal components
         latent_loss = self.latent(output_pcs, target_pcs)
         latent_loss = latent_loss.view(bs * seq_len, num_pcs)
@@ -207,7 +212,7 @@ class AutoencoderLoss2(nn.Module):
 
         # Euclidean distance loss in the level of the shapes
         reconstruction_loss = self.reconstruction(output_shapes, target_shapes)
-        reconstruction_loss = reconstruction_loss.view(bs * seq_len, num_articulators, num_samples)
+        reconstruction_loss = reconstruction_loss.view(bs * seq_len, num_articulators, 2, num_samples)
         reconstruction_loss = reconstruction_loss[padding_mask.view(bs * seq_len)].mean()
 
         # Critical loss

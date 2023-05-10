@@ -8,22 +8,23 @@ class PrincipalComponentsPredictor(nn.Module):
     def __init__(
         self,
         in_features,
-        num_components
+        num_components,
+        hidden_features=256
     ):
         super().__init__()
 
         self.linear = nn.Sequential(
             nn.LayerNorm([in_features]),
-            nn.Linear(in_features=in_features, out_features=256),
+            nn.Linear(in_features=in_features, out_features=hidden_features),
             nn.ReLU(),
-            nn.LayerNorm([256]),
-            nn.Linear(in_features=256, out_features=256),
+            nn.LayerNorm([hidden_features]),
+            nn.Linear(in_features=hidden_features, out_features=hidden_features),
             nn.ReLU(),
-            nn.LayerNorm(256),
-            nn.Linear(in_features=256, out_features=128),
+            nn.LayerNorm(hidden_features),
+            nn.Linear(in_features=hidden_features, out_features=hidden_features // 2),
             nn.ReLU(),
-            nn.LayerNorm(128),
-            nn.Linear(in_features=128, out_features=num_components)
+            nn.LayerNorm(hidden_features // 2),
+            nn.Linear(in_features=hidden_features // 2, out_features=num_components)
         )
 
     def forward(self, inputs):
@@ -59,7 +60,8 @@ class PrincipalComponentsArtSpeech(nn.Module):
 
         self.predictor = PrincipalComponentsPredictor(
             in_features=hidden_size,
-            num_components=num_components
+            num_components=num_components,
+            hidden_features=512
         )
 
     def forward(self, x, lengths):
