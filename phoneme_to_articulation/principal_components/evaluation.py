@@ -19,7 +19,6 @@ from phoneme_to_articulation import (
 )
 from phoneme_to_articulation.metrics import minimal_distance, MeanP2CPDistance
 from phoneme_to_articulation.principal_components.models.autoencoder import Decoder
-from settings import DATASET_CONFIG
 
 
 def plot_array(outputs, targets, references, save_to, phoneme=None, tag=None):
@@ -260,12 +259,22 @@ def run_multiart_autoencoder_test(
                 cov_latents,
                 plots_dir
             )
+
+            np.save(
+                os.path.join(plots_dir, f"covariance_matrix.npy"),
+                cov_latents
+            )
         else:
             for articulator, indices in indices_dict.items():
                 plot_cov_matrix(
                     cov_latents[indices][:, indices],
                     plots_dir,
                     f"_{articulator}"
+                )
+
+                np.save(
+                    os.path.join(plots_dir, f"covariance_matrix_{articulator}.npy"),
+                    cov_latents[indices][:, indices]
                 )
 
     mean_loss = np.mean(losses)

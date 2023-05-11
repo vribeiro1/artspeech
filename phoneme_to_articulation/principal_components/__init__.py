@@ -2,7 +2,7 @@ import numpy as np
 import torch
 
 from tqdm import tqdm
-from settings import TRAIN, VALID, TEST
+from settings import TRAIN
 
 
 def run_autoencoder_epoch(

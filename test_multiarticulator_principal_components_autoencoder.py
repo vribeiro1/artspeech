@@ -2,10 +2,10 @@ import pdb
 
 import argparse
 import funcy
-import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import pandas as pd
 import torch
 import ujson
 import yaml
@@ -29,21 +29,18 @@ def evaluate_autoencoder(
     database_name,
     datadir,
     dataset_config,
-    config_filepath,
+    batch_size,
+    sequences_dict,
+    model_params,
     encoders_filepath,
     decoders_filepath,
     save_to,
+    num_workers=0,
 ):
     plots_dir = os.path.join(save_to, "plots")
     if not os.path.exists(plots_dir):
         os.makedirs(plots_dir)
 
-    with open(config_filepath) as f:
-        config = yaml.safe_load(f)
-    sequences_dict = config["test_seq_dict"]
-
-    num_workers = config.get("num_workers", 0)
-    model_params = config["model_params"]
     articulators_indices_dict = model_params["indices_dict"]
     articulators = sorted(articulators_indices_dict.keys())
     n_articulators = len(articulators)
@@ -58,7 +55,7 @@ def evaluate_autoencoder(
     )
     dataloader = DataLoader(
         dataset,
-        batch_size=config["batch_size"],
+        batch_size=batch_size,
         shuffle=False,
         worker_init_fn=set_seeds,
         num_workers=num_workers,
@@ -75,11 +72,12 @@ def evaluate_autoencoder(
     autoencoder.eval()
 
     p2cp_fn = MeanP2CPDistance(reduction="none")
+    data_frame_names = []
     data_p2cp = torch.zeros(size=(0, n_articulators))
     data_latents = torch.zeros(size=(0, latent_size))
     data_reconstructions = torch.zeros(size=(0, n_articulators, 2, 50))
     data_targets = torch.zeros(size=(0, n_articulators, 2, 50))
-    for _, inputs, _, _ in tqdm(dataloader):
+    for frame_names, inputs, _, _ in tqdm(dataloader):
         bs, _, _ = inputs.shape
 
         inputs = inputs.to(device)
@@ -106,9 +104,19 @@ def evaluate_autoencoder(
         data_latents = torch.cat([data_latents, latents])
         data_targets = torch.cat([data_targets, targets])
         data_p2cp = torch.cat([data_p2cp, p2cp])
+        data_frame_names.extend([frame_name.split("_") for frame_name in frame_names])
 
     errors_filepath = os.path.join(save_to, "reconstruction_errors.npy")
     np.save(errors_filepath, data_p2cp.numpy())
+
+    df_errors_filepath = os.path.join(save_to, "reconstruction_errors.csv")
+    df_errors = pd.DataFrame(data_frame_names, columns=["subject", "sequence", "frame"])
+    df_errors[articulators] = data_p2cp
+    df_errors.to_csv(df_errors_filepath, index=False)
+
+    df_errors_agg_filepath = os.path.join(save_to, "reconstruction_errors_agg.csv")
+    df_errors_agg = df_errors.agg(["mean", "std", "median", "min", "max"]).reset_index()
+    df_errors_agg.to_csv(df_errors_agg_filepath, index=False)
 
     ################################################################################################
     #
@@ -166,7 +174,6 @@ def evaluate_autoencoder(
 def main(
     database_name,
     datadir,
-    config_filepath,
     encoders_filepath,
     decoders_filepath,
     batch_size,
@@ -238,23 +245,27 @@ if __name__ == "__main__":
 
     with open(args.cfg_filepath) as f:
         cfg = yaml.safe_load(f.read())
-
     main(**cfg)
 
     database_name = cfg["database_name"]
     dataset_config = DATASET_CONFIG[database_name]
-
+    sequences_dict = cfg["seq_dict"]
+    model_params = cfg["model_params"]
+    batch_size = cfg["batch_size"]
+    num_workers = cfg.get("num_workers", 0)
     datadir = cfg["datadir"]
     save_to = cfg["save_to"]
-    config_filepath = cfg["config_filepath"]
     encoders_filepath = cfg["encoders_filepath"]
     decoders_filepath = cfg["decoders_filepath"]
     evaluate_autoencoder(
         database_name,
         datadir,
         dataset_config,
-        config_filepath,
+        batch_size,
+        sequences_dict,
+        model_params,
         encoders_filepath,
         decoders_filepath,
         save_to,
+        num_workers=num_workers,
     )
