@@ -39,12 +39,15 @@ class PrincipalComponentsArtSpeech(nn.Module):
         num_components,
         embed_dim=64,
         hidden_size=128,
-        rnn_dropout=0.
+        rnn_dropout=0.,
+        rnn=RNNType.GRU,
     ):
         super().__init__()
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.rnn = nn.GRU(
+
+        rnn_class = rnn.value
+        self.rnn = rnn_class(
             embed_dim,
             hidden_size,
             num_layers=2,

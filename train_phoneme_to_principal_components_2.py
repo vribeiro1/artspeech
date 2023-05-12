@@ -21,6 +21,7 @@ from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict
 from phoneme_recognition import UNKNOWN
+from phoneme_to_articulation import RNNType
 from phoneme_to_articulation.principal_components.dataset import (
     PrincipalComponentsPhonemeToArticulationDataset2,
     pad_sequence_collate_fn
@@ -128,6 +129,7 @@ def main(
     autoencoder_kwargs,
     encoder_state_dict_filepath,
     decoder_state_dict_filepath,
+    rnn_type="GRU",
     beta1=1.0,
     beta2=1.0,
     beta3=1.0,
@@ -160,7 +162,8 @@ def main(
     ))
     model = PrincipalComponentsArtSpeech(
         vocab_size=len(vocabulary),
-        num_components=num_components,
+        indices_dict=indices_dict,
+        rnn=RNNType[rnn_type.upper()],
         **modelkwargs,
     )
     if state_dict_filepath is not None:
