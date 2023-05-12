@@ -32,7 +32,7 @@ from phoneme_recognition import (
 from phoneme_recognition.datasets import  PhonemeRecognitionDataset, collate_fn
 from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
-from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC
+from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC, F1Score
 from settings import BASE_DIR, TRAIN, VALID
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
@@ -169,7 +169,8 @@ def main(
     metrics = {
         "edit_distance": EditDistance(decoder),
         "accuracy": Accuracy(len(vocabulary)),
-        "auroc": AUROC(len(vocabulary))
+        "auroc": AUROC(len(vocabulary)),
+        "f1_score": F1Score(len(vocabulary)),
     }
 
     best_metric = np.inf

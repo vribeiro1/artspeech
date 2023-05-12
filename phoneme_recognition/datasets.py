@@ -132,7 +132,6 @@ class PhonemeRecognitionDataset(Dataset):
         audio = torch.concat([audio, audio], dim=0)  # mono to stereo
 
         _, num_samples = audio.shape
-        duration = num_samples / self.sample_rate
         melspec = dynamic_range_compression(self.melspectrogram(audio))
         _, _, melspec_length = melspec.shape
 

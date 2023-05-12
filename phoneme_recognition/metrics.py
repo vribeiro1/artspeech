@@ -1,13 +1,56 @@
 import pdb
+from typing import Any
 import torch
 import torch.nn as nn
 import ujson
 
-from torchmetrics.classification import MulticlassAccuracy, MulticlassAUROC
+from torchmetrics.classification import MulticlassAccuracy, MulticlassAUROC, MulticlassF1Score
 from torchmetrics.functional import word_error_rate
 
 
-class CrossEntropyLoss(nn.Module):
+class MetricsMixin:
+    @classmethod
+    def get_pad_mask(cls, inputs, lengths):
+        if len(inputs.shape) == 2:
+            bs, time = inputs.shape
+        elif len(inputs.shape) == 3:
+            bs, time, _ = inputs.shape
+        else:
+            raise Exception("invalid inputs")
+
+        cumsum = torch.cumsum(torch.ones((bs, time)), dim=1)
+        lengths = lengths.repeat(time, 1).T
+        pad_mask = (cumsum <= lengths).type(torch.long)
+        pad_mask = pad_mask.to(inputs.device)
+        return pad_mask
+
+    @classmethod
+    def prepare_inputs(
+        cls,
+        emissions,
+        targets,
+        emissions_lengths,
+        targets_lengths,
+        detach_inputs=True
+    ):
+        if detach_inputs:
+            emissions = emissions.detach().cpu()
+            targets = targets.detach().cpu()  # (B, T)
+
+        emissions_pad_mask = cls.get_pad_mask(emissions, emissions_lengths)
+        emissions_pad_mask = torch.flatten(emissions_pad_mask, start_dim=0, end_dim=1)
+        emissions = torch.flatten(emissions, start_dim=0, end_dim=1)
+        emissions = emissions[emissions_pad_mask == 1]
+
+        targets_pad_mask = cls.get_pad_mask(targets, targets_lengths)
+        targets_pad_mask = torch.flatten(targets_pad_mask, start_dim=0, end_dim=1)
+        targets = torch.flatten(targets, start_dim=0, end_dim=1)
+        targets = targets[targets_pad_mask == 1]
+
+        return emissions, targets
+
+
+class CrossEntropyLoss(nn.Module, MetricsMixin):
     def __init__(self, *args, class_weights=None, **kwargs):
         super().__init__()
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -30,35 +73,16 @@ class CrossEntropyLoss(nn.Module):
 
         self.ce = nn.CrossEntropyLoss(*args, weight=weight, **kwargs)
 
-    @staticmethod
-    def get_pad_mask(inputs, lengths):
-        if len(inputs.shape) == 2:
-            bs, time = inputs.shape
-        elif len(inputs.shape) == 3:
-            bs, time, _ = inputs.shape
-        else:
-            raise Exception("invalid inputs")
-
-        cumsum = torch.cumsum(torch.ones((bs, time)), dim=1)
-        lengths = lengths.repeat(time, 1).T
-        pad_mask = (cumsum <= lengths).type(torch.long)
-        pad_mask = pad_mask.to(inputs.device)
-        return pad_mask
-
-    def forward(self, inputs, targets, inputs_lengths, targets_lengths):
-        inputs = inputs.permute(1, 0, 2)
-
-        inputs_pad_mask = self.get_pad_mask(inputs, inputs_lengths)
-        inputs_pad_mask = torch.flatten(inputs_pad_mask, start_dim=0, end_dim=1)
-        inputs = torch.flatten(inputs, start_dim=0, end_dim=1)
-        inputs = inputs[inputs_pad_mask == 1]
-
-        targets_pad_mask = self.get_pad_mask(targets, targets_lengths)
-        targets_pad_mask = torch.flatten(targets_pad_mask, start_dim=0, end_dim=1)
-        targets = torch.flatten(targets, start_dim=0, end_dim=1)
-        targets = targets[targets_pad_mask == 1]
-        out = self.ce(inputs, targets)
-
+    def forward(self, emissions, targets, emissions_lengths, targets_lengths):
+        emissions = emissions.permute(1, 0, 2)
+        emissions, targets = self.prepare_inputs(
+            emissions,
+            targets,
+            emissions_lengths,
+            targets_lengths,
+            detach_inputs=False
+        )
+        out = self.ce(emissions, targets)
         return out
 
 
@@ -88,75 +112,46 @@ class EditDistance:
         return edit_dist
 
 
-class Accuracy:
+class F1Score(MetricsMixin):
+    def __init__(self, num_classes, average="macro"):
+        self.f1_score = MulticlassF1Score(num_classes=num_classes, average=average)
+
+    def __call__(self, emissions, targets, emissions_lengths, targets_lengths):
+        emissions, targets = self.prepare_inputs(
+            emissions,
+            targets,
+            emissions_lengths,
+            targets_lengths
+        )
+        f1 = self.f1_score(emissions, targets)
+        return f1
+
+
+class Accuracy(MetricsMixin):
     def __init__(self, num_classes, average="macro"):
         self.accuracy = MulticlassAccuracy(num_classes=num_classes, average=average)
 
-    @staticmethod
-    def get_pad_mask(inputs, lengths):
-        if len(inputs.shape) == 2:
-            bs, time = inputs.shape
-        elif len(inputs.shape) == 3:
-            bs, time, _ = inputs.shape
-        else:
-            raise Exception("invalid inputs")
-
-        cumsum = torch.cumsum(torch.ones((bs, time)), dim=1)
-        lengths = lengths.repeat(time, 1).T
-        pad_mask = (cumsum <= lengths).type(torch.long)
-        pad_mask = pad_mask.to(inputs.device)
-        return pad_mask
-
-    def __call__(self, emissions, targets, inputs_lengths, targets_lengths):
-        emissions = emissions.detach().cpu()
-        emissions_pad_mask = self.get_pad_mask(emissions, inputs_lengths)
-        emissions_pad_mask = torch.flatten(emissions_pad_mask, start_dim=0, end_dim=1)
-        emissions = torch.flatten(emissions, start_dim=0, end_dim=1)
-        emissions = emissions[emissions_pad_mask == 1]
-
-        targets = targets.detach().cpu()  # (B, T)
-        targets_pad_mask = self.get_pad_mask(targets, targets_lengths)
-        targets_pad_mask = torch.flatten(targets_pad_mask, start_dim=0, end_dim=1)
-        targets = torch.flatten(targets, start_dim=0, end_dim=1)
-        targets = targets[targets_pad_mask == 1]
-
+    def __call__(self, emissions, targets, emissions_lengths, targets_lengths):
+        emissions, targets = self.prepare_inputs(
+            emissions,
+            targets,
+            emissions_lengths,
+            targets_lengths
+        )
         acc = self.accuracy(emissions, targets)
         return acc
 
 
-class AUROC:
+class AUROC(MetricsMixin):
     def __init__(self, num_classes, average="macro"):
         self.auroc = MulticlassAUROC(num_classes=num_classes, average=average)
 
-    @staticmethod
-    def get_pad_mask(inputs, lengths):
-        if len(inputs.shape) == 2:
-            bs, time = inputs.shape
-        elif len(inputs.shape) == 3:
-            bs, time, _ = inputs.shape
-        else:
-            raise Exception("invalid inputs")
-
-        cumsum = torch.cumsum(torch.ones((bs, time)), dim=1)
-        lengths = lengths.repeat(time, 1).T
-        pad_mask = (cumsum <= lengths).type(torch.long)
-        pad_mask = pad_mask.to(inputs.device)
-        return pad_mask
-
-    def __call__(self, emissions, targets, inputs_lengths, targets_lengths):
-        emissions = emissions  # (B, T, C)
-
-        emissions = emissions.detach().cpu()
-        emissions_pad_mask = self.get_pad_mask(emissions, inputs_lengths)
-        emissions_pad_mask = torch.flatten(emissions_pad_mask, start_dim=0, end_dim=1)
-        emissions = torch.flatten(emissions, start_dim=0, end_dim=1)
-        emissions = emissions[emissions_pad_mask == 1]
-
-        targets = targets.detach().cpu()  # (B, T)
-        targets_pad_mask = self.get_pad_mask(targets, targets_lengths)
-        targets_pad_mask = torch.flatten(targets_pad_mask, start_dim=0, end_dim=1)
-        targets = torch.flatten(targets, start_dim=0, end_dim=1)
-        targets = targets[targets_pad_mask == 1]
-
+    def __call__(self, emissions, targets, emissions_lengths, targets_lengths):
+        emissions, targets = self.prepare_inputs(
+            emissions,
+            targets,
+            emissions_lengths,
+            targets_lengths
+        )
         auc = self.auroc(emissions, targets)
         return auc

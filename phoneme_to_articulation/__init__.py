@@ -1,7 +1,9 @@
 import numpy as np
 import os
 import pandas as pd
+import torch.nn as nn
 
+from enum import Enum
 from vt_tools import (
     LOWER_LIP,
     PHARYNX,
@@ -22,6 +24,11 @@ REQUIRED_ARTICULATORS_FOR_TVS = [
     UPPER_LIP,
     UPPER_INCISOR,
 ]
+
+
+class RNNType(Enum):
+    LSTM = nn.LSTM
+    GRU = nn.GRU
 
 
 def save_outputs(
