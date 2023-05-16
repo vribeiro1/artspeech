@@ -1,4 +1,4 @@
-# Articulatory Speech Synthesis
+# Articulatory Synthesis of Speech
 
 <b>Vinicius de Paulo Souza Ribeiro</b><br>
 LORIA - Laboratoire Lorrain de Recherche en Informatique et ses Applications<br>
