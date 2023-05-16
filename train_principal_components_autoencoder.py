@@ -296,7 +296,8 @@ if __name__ == "__main__":
     with mlflow.start_run(
         experiment_id=experiment.experiment_id,
         run_name=args.run_name
-    ):
+    ) as run:
+        print(f"Experiment ID: {experiment.experiment_id}\nRun ID: {run.info.run_id}")
         mlflow.log_artifact(args.config_filepath)
         try:
             main(**cfg)
