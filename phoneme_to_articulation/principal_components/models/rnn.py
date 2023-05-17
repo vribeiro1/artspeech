@@ -1,7 +1,10 @@
 import torch
 import torch.nn as nn
 
+from functools import reduce
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
+
+from phoneme_to_articulation import RNNType
 
 
 class PrincipalComponentsPredictor(nn.Module):
@@ -20,8 +23,14 @@ class PrincipalComponentsPredictor(nn.Module):
             nn.LayerNorm([hidden_features]),
             nn.Linear(in_features=hidden_features, out_features=hidden_features),
             nn.ReLU(),
+            nn.LayerNorm([hidden_features]),
+            nn.Linear(in_features=hidden_features, out_features=hidden_features),
+            nn.ReLU(),
             nn.LayerNorm(hidden_features),
             nn.Linear(in_features=hidden_features, out_features=hidden_features // 2),
+            nn.ReLU(),
+            nn.LayerNorm(hidden_features // 2),
+            nn.Linear(in_features=hidden_features // 2, out_features=hidden_features // 2),
             nn.ReLU(),
             nn.LayerNorm(hidden_features // 2),
             nn.Linear(in_features=hidden_features // 2, out_features=num_components)
@@ -36,13 +45,20 @@ class PrincipalComponentsArtSpeech(nn.Module):
     def __init__(
         self,
         vocab_size,
-        num_components,
+        indices_dict,
         embed_dim=64,
         hidden_size=128,
         rnn_dropout=0.,
         rnn=RNNType.GRU,
     ):
         super().__init__()
+
+        self.latent_size = 1 + max(set(
+            reduce(lambda l1, l2: l1 + l2,
+            indices_dict.values())
+        ))
+        self.indices_dict = indices_dict
+        self.sorted_articulators = sorted(indices_dict.keys())
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)
 
@@ -61,11 +77,13 @@ class PrincipalComponentsArtSpeech(nn.Module):
             nn.ReLU()
         )
 
-        self.predictor = PrincipalComponentsPredictor(
-            in_features=hidden_size,
-            num_components=num_components,
-            hidden_features=512
-        )
+        self.predictors = nn.ModuleDict({
+            articulator: PrincipalComponentsPredictor(
+                in_features=hidden_size,
+                num_components=len(components),
+                hidden_features=256,
+            ) for articulator, components in indices_dict.items()
+        })
 
     def forward(self, x, lengths):
         """
@@ -82,6 +100,24 @@ class PrincipalComponentsArtSpeech(nn.Module):
         rnn_out, _ = pad_packed_sequence(packed_rnn_out, batch_first=True)
 
         linear_out = self.linear(rnn_out)  # (bs, seq_len, embed_dim)
-        components = torch.tanh(self.predictor(linear_out))
+
+        bs, seq_len = x.shape
+        articulators_components = {
+            articulator: -torch.inf * torch.ones(
+                size=(bs, seq_len, self.latent_size),
+                dtype=torch.float, device=x.device
+            ) for articulator in self.sorted_articulators
+        }
+
+        for articulator in self.sorted_articulators:
+            indices = self.indices_dict[articulator]
+            predictor = self.predictors[articulator]
+            articulators_components[articulator][..., indices] = predictor(linear_out)
+
+        components = torch.stack([
+            articulators_components[articulator] for articulator in self.sorted_articulators
+        ], dim=2)
+        components, _ = torch.max(components, dim=2)
+        components = torch.tanh(components)
 
         return components

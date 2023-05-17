@@ -156,10 +156,7 @@ def main(
     if TV_to_phoneme_map is None:
         TV_to_phoneme_map = {}
     articulators = sorted(indices_dict.keys())
-    num_components = 1 + max(set(
-        reduce(lambda l1, l2: l1 + l2,
-        indices_dict.values())
-    ))
+
     model = PrincipalComponentsArtSpeech(
         vocab_size=len(vocabulary),
         indices_dict=indices_dict,
@@ -279,7 +276,6 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             optimizer=optimizer,
             criterion=loss_fn,
             device=device,
-            fn_metrics=fn_metrics,
         )
 
         mlflow.log_metrics(
@@ -364,7 +360,8 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
 
     best_model = PrincipalComponentsArtSpeech(
         vocab_size=len(vocabulary),
-        num_components=num_components,
+        indices_dict=indices_dict,
+        rnn=RNNType[rnn_type.upper()],
         **modelkwargs,
     )
     best_model_state_dict = torch.load(best_model_path, map_location=device)
@@ -409,7 +406,8 @@ if __name__ == "__main__":
     with mlflow.start_run(
         experiment_id=experiment.experiment_id,
         run_name=args.run_name
-    ):
+    ) as run:
+        print(f"Experiment ID: {experiment.experiment_id}\nRun ID: {run.info.run_id}")
         mlflow.log_artifact(args.config_filepath)
         try:
             main(**cfg)
