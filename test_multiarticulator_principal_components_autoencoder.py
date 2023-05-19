@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import os
 import pandas as pd
+import seaborn as sns
 import torch
 import ujson
 import yaml
@@ -23,6 +24,71 @@ from settings import DATASET_CONFIG
 
 PINK = np.array([255, 0, 85, 255]) / 255
 BLUE = np.array([0, 139, 231, 255]) / 255
+
+
+def plot_nomograms(
+    orig_shape,
+    orig_reconstruction,
+    orig_latents,
+    autoencoder,
+    normalize,
+    plots_dir,
+    device=None,
+):
+    if device is None:
+        device = orig_latents.device
+    articulators = autoencoder.sorted_articulators
+    num_articulators = len(articulators)
+    latent_size = len(orig_latents)
+    for i_PC in range(latent_size):
+        plt.figure(figsize=(10, 10))
+
+        PC_range = np.arange(-1, 1.01, 0.1)
+        for v in PC_range:
+            latents = orig_latents.clone()
+            latents[i_PC] = v
+            latents = latents.unsqueeze(dim=0).to(device)
+
+            reconstruction = torch.concat([
+                autoencoder.decoders.decoders[articulator](
+                    latents[:, autoencoder.indices_dict[articulator]]
+                ).unsqueeze(dim=1)
+                for articulator in autoencoder.sorted_articulators
+            ], dim=1)
+            reconstruction = reconstruction.detach().cpu()
+            reconstruction = reconstruction.reshape(1, num_articulators, 2, 50)
+
+            for i, articulator in enumerate(articulators):
+                denorm_fn = normalize[articulator].inverse
+                reconstruction[:, i, :, :] = denorm_fn(reconstruction[:, i, :, :])
+            reconstruction = reconstruction.squeeze(dim=0)
+
+            color = PINK if v <= 0 else BLUE
+            for rec in reconstruction:
+                plt.plot(*rec, color=color, lw=3, alpha=0.2)
+
+        for shape in orig_shape:
+            plt.plot(*shape, "--", color="red", lw=5, alpha=0.5)
+        for rec in orig_reconstruction:
+            plt.plot(*rec, color="limegreen", lw=5, alpha=0.5)
+
+        plt.xlim([0., 1.])
+        plt.ylim([1., 0.])
+        plt.axis("off")
+
+        plt.tight_layout()
+        plt.savefig(os.path.join(plots_dir, f"C{i_PC + 1}.pdf"))
+        plt.savefig(os.path.join(plots_dir, f"C{i_PC + 1}.png"))
+        plt.close()
+
+
+def plot_latent_space_distribution(df_latent, plots_dir):
+    for col in df_latent.columns:
+        plt.figure(figsize=(10, 10))
+        sns.histplot(df_latent[col])
+        plt.savefig(os.path.join(plots_dir, f"C{col}_distribution.pdf"))
+        plt.savefig(os.path.join(plots_dir, f"C{col}_distribution.png"))
+        plt.close()
 
 
 def evaluate_autoencoder(
@@ -106,6 +172,10 @@ def evaluate_autoencoder(
         data_p2cp = torch.cat([data_p2cp, p2cp])
         data_frame_names.extend([frame_name.split("_") for frame_name in frame_names])
 
+    latent_space_filepath = os.path.join(save_to, "latent_space.csv")
+    df_latent = pd.DataFrame(data_latents, columns=[str(i) for i in range(1, latent_size + 1)])
+    df_latent.to_csv(latent_space_filepath, index=False)
+
     errors_filepath = os.path.join(save_to, "reconstruction_errors.npy")
     np.save(errors_filepath, data_p2cp.numpy())
 
@@ -115,60 +185,32 @@ def evaluate_autoencoder(
     df_errors.to_csv(df_errors_filepath, index=False)
 
     df_errors_agg_filepath = os.path.join(save_to, "reconstruction_errors_agg.csv")
-    df_errors_agg = df_errors.agg(["mean", "std", "median", "min", "max"]).reset_index()
+    df_errors_agg = df_errors.agg({
+        articulator: ["mean", "std", "median", "min", "max"]
+        for articulator in articulators
+    }).reset_index()
     df_errors_agg.to_csv(df_errors_agg_filepath, index=False)
 
-    ################################################################################################
-    #
     # Nomogram plots
-    #
-    ################################################################################################
-
     idx = 100
     orig_shape = data_targets[idx]
     orig_reconstruction = data_reconstructions[idx]
+    orig_latents = data_latents[idx]
+    plot_nomograms(
+        orig_shape=orig_shape,
+        orig_reconstruction=orig_reconstruction,
+        orig_latents=orig_latents,
+        autoencoder=autoencoder,
+        normalize=dataset.normalize,
+        plots_dir=plots_dir,
+        device=device,
+    )
 
-    for i_PC in range(latent_size):
-        plt.figure(figsize=(10, 10))
-
-        PC_range = np.arange(-1, 1.01, 0.1)
-        for v in PC_range:
-            latents = data_latents[idx].clone()
-            latents[i_PC] = v
-            latents = latents.unsqueeze(dim=0).to(device)
-
-            reconstruction = torch.concat([
-                autoencoder.decoders.decoders[articulator](
-                    latents[:, autoencoder.indices_dict[articulator]]
-                ).unsqueeze(dim=1)
-                for articulator in autoencoder.sorted_articulators
-            ], dim=1)
-            reconstruction = reconstruction.detach().cpu()
-            reconstruction = reconstruction.reshape(1, n_articulators, 2, 50)
-
-            for i, articulator in enumerate(articulators):
-                denorm_fn = dataset.normalize[articulator].inverse
-                reconstruction[:, i, :, :] = denorm_fn(reconstruction[:, i, :, :])
-            reconstruction = reconstruction.squeeze(dim=0)
-
-            color = PINK if v <= 0 else BLUE
-            for rec in reconstruction:
-                plt.plot(*rec, color=color, lw=3, alpha=0.2)
-
-        for shape in orig_shape:
-            plt.plot(*shape, "--", color="red", lw=5, alpha=0.5)
-        for rec in orig_reconstruction:
-            plt.plot(*rec, color="limegreen", lw=5, alpha=0.5)
-
-        plt.xlim([0., 1.])
-        plt.ylim([1., 0.])
-
-        plt.axis("off")
-
-        plt.tight_layout()
-        plt.savefig(os.path.join(plots_dir, f"C{i_PC + 1}.pdf"))
-        plt.savefig(os.path.join(plots_dir, f"C{i_PC + 1}.png"))
-        plt.close()
+    # Latent space distribution plots
+    plot_latent_space_distribution(
+        df_latent=df_latent,
+        plots_dir=plots_dir,
+    )
 
 
 def main(
@@ -180,6 +222,7 @@ def main(
     model_params,
     seq_dict,
     save_to,
+    num_workers=0,
     clip_tails=True,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -199,7 +242,8 @@ def main(
         test_dataset,
         batch_size=batch_size,
         shuffle=False,
-        worker_init_fn=set_seeds
+        worker_init_fn=set_seeds,
+        num_workers=num_workers,
     )
 
     best_autoencoder = MultiArticulatorAutoencoder(**model_params)
