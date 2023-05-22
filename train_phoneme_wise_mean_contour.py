@@ -108,7 +108,8 @@ if __name__ == "__main__":
     parser.add_argument("--config", dest="config_filepath")
     parser.add_argument("--mlflow", dest="mlflow_tracking_uri", default=None)
     parser.add_argument("--experiment", dest="experiment_name", default="phoneme_wise_mean_contour")
-    parser.add_argument("--run", dest="run_name", default=None)
+    parser.add_argument("--run_id", dest="run_id", default=None)
+    parser.add_argument("--run_name", dest="run_name", default=None)
     args = parser.parse_args()
 
     if args.mlflow_tracking_uri is not None:
@@ -119,11 +120,15 @@ if __name__ == "__main__":
 
     experiment = mlflow.set_experiment(args.experiment_name)
     with mlflow.start_run(
+        run_id=args.run_id,
         experiment_id=experiment.experiment_id,
         run_name=args.run_name
     ) as run:
         print(f"Experiment ID: {experiment.experiment_id}\nRun ID: {run.info.run_id}")
-        mlflow.log_artifact(args.config_filepath)
+        try:
+            mlflow.log_artifact(args.config_filepath)
+        except shutil.SameFileError:
+            logging.info("Skipping logging config file since it already exists.")
         try:
             main(**cfg)
         finally:
