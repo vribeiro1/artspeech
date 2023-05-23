@@ -174,16 +174,9 @@ class DatabaseCollector:
 
 class ArtSpeechDatabase2Collector(DatabaseCollector):
     dataset_config = ArtSpeech2Config
-    long_sentence_tier = "LongSentenceTier"
-    short_sentence_tier = "ShortSentenceTier"
 
-    def __init__(self, datadir, save_audio_dir=None, sentence_tier="long"):
+    def __init__(self, datadir, save_audio_dir=None):
         super().__init__(datadir, save_audio_dir)
-
-        self.sentence_tier = (
-            self.short_sentence_tier if sentence_tier == "short"
-            else self.long_sentence_tier
-        )
 
     def get_sequence_dir(self, subject, sequence):
         return os.path.join(self.datadir, subject, sequence)
