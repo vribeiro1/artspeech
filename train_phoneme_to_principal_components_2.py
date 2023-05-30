@@ -65,13 +65,13 @@ def run_epoch(
     metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
     for (
-        sentence_ids,
+        _,
         inputs,
         targets,
         len_inputs,
-        phonemes,
+        _,
         critical_masks,
-        sentence_frames
+        _
     ) in progress_bar:
         inputs = inputs.to(device)
         targets = targets.to(device)

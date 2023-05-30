@@ -36,27 +36,40 @@ class VocalTractShapeLoader:
 
         return coord_system_reference_array
 
-    def prepare_articulator_array(self, subject, sequence, frame_id, articulator):
+    @staticmethod
+    def prepare_articulator_array(
+            datadir,
+            subject,
+            sequence,
+            frame_id,
+            articulator,
+            dataset_config,
+            clip_tails=True
+        ):
         fp_articulator = os.path.join(
-            self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{articulator}.npy"
+            datadir, subject, sequence, "inference_contours", f"{frame_id}_{articulator}.npy"
         )
 
         articulator_array = cached_load_articulator_array(
             fp_articulator,
-            norm_value=self.dataset_config.RES
+            norm_value=dataset_config.RES
         )
 
-        if self.clip_tails:
+        if clip_tails:
             tail_clip_refs = {}
-            tail_clipper = TailClipper(self.dataset_config)
+            tail_clipper = TailClipper(dataset_config)
             for reference in TailClipper.TAIL_CLIP_REFERENCES:
                 fp_reference = os.path.join(
-                    self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
+                    datadir,
+                    subject,
+                    sequence,
+                    "inference_contours",
+                    f"{frame_id}_{reference}.npy"
                 )
 
                 reference_array = cached_load_articulator_array(
                     fp_reference,
-                    norm_value=self.dataset_config.RES
+                    norm_value=dataset_config.RES
                 )
                 tail_clip_refs[reference.replace("-", "_")] = reference_array
 
@@ -88,10 +101,13 @@ class VocalTractShapeLoader:
                 frame_targets = torch.stack(
                     [
                         self.prepare_articulator_array(
+                            self.datadir,
                             subject,
                             sequence,
                             frame_id,
-                            articulator
+                            articulator,
+                            self.dataset_config,
+                            self.clip_tails,
                         )
                         for articulator in self.articulators
                     ],
