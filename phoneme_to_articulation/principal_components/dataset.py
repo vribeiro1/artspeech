@@ -3,7 +3,6 @@ import numpy as np
 import os
 import pandas as pd
 import torch
-import torch.nn.functional as F
 
 from functools import lru_cache
 from torch.nn.utils.rnn import pad_sequence
@@ -102,19 +101,19 @@ class InputLoaderMixin:
         return articulator_array, coord_system_reference_array
 
 
-class PrincipalComponentsAutoencoderDataset(Dataset):
+class PrincipalComponentsAutoencoderDataset2(Dataset):
     def __init__(
         self,
         database_name,
         datadir,
         sequences,
-        articulator,
+        articulators,
         clip_tails=True
     ):
         self.datadir = datadir
         self.dataset_config = DATASET_CONFIG[database_name]
-        self.articulator = articulator
         self.clip_tails = clip_tails
+        self.articulators = sorted(articulators)
 
         collector = DATABASE_COLLECTORS[database_name](datadir)
         sentence_data = collector.collect_data(sequences)
@@ -128,78 +127,6 @@ class PrincipalComponentsAutoencoderDataset(Dataset):
                     "phoneme": phoneme,
                 })
         self.data = pd.DataFrame(data)
-
-        mean_filepath = os.path.join(
-            datadir,
-            "normalization_statistics",
-            f"{articulator}_mean.npy"
-        )
-        mean = torch.from_numpy(np.load(mean_filepath))
-        std_filepath = os.path.join(
-            datadir,
-            "normalization_statistics",
-            f"{articulator}_std.npy"
-        )
-        std = torch.from_numpy(np.load(std_filepath))
-        self.normalize = Normalize(mean, std)
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, index):
-        """
-
-        Return:
-            frame_name (str): unique reference to the frame, created by concatenating the subject,
-                sequence and frame number
-            articulator (torch.tensor): tensor of shape (2 * D,), where D is the dimension of the
-                articulator array.
-            weight (float): phoneme weight
-            phoneme (str): phoneme
-        """
-        item = self.data.iloc[index]
-        phoneme = item["phoneme"]
-
-        subject = item["subject"]
-        sequence = item["sequence"]
-        frame_id = item["frame_id"]
-
-        weight = torch.tensor(phoneme_weights.get(phoneme, 1), dtype=torch.float)
-        frame_name = f"{subject}_{sequence}_{frame_id}"
-
-        articulator, _ = InputLoaderMixin.prepare_articulator_array(
-            self.datadir,
-            subject,
-            sequence,
-            frame_id,
-            self.articulator,
-            self.dataset_config,
-            self.normalize,
-            self.clip_tails,
-        )
-        n, m = articulator.shape
-        articulator = articulator.reshape(n * m).type(torch.float)
-
-        return frame_name, articulator, weight, phoneme
-
-
-class PrincipalComponentsAutoencoderDataset2(PrincipalComponentsAutoencoderDataset):
-    def __init__(
-        self,
-        database_name,
-        datadir,
-        sequences,
-        articulators,
-        clip_tails=True
-    ):
-        super().__init__(
-            database_name,
-            datadir,
-            sequences,
-            articulators[0],
-            clip_tails
-        )
-        self.articulators = sorted(articulators)
 
         self.normalize = {}
         for articulator in self.articulators:
@@ -216,6 +143,9 @@ class PrincipalComponentsAutoencoderDataset2(PrincipalComponentsAutoencoderDatas
             )
             std = torch.from_numpy(np.load(std_filepath))
             self.normalize[articulator] = Normalize(mean, std)
+
+    def __len__(self):
+        return len(self.data)
 
     def __getitem__(self, index):
         item = self.data.iloc[index]
@@ -246,129 +176,6 @@ class PrincipalComponentsAutoencoderDataset2(PrincipalComponentsAutoencoderDatas
         articulators = articulators.reshape(l, n * m).type(torch.float)
 
         return frame_name, articulators, weight, phoneme
-
-
-class PrincipalComponentsPhonemeToArticulationDataset(Dataset):
-    critical_phonemes = {
-        "TTCD": lambda p: p in ["l", "d", "n", "t"],
-        "TBCD": lambda p: p in ["k", "g"]
-    }
-
-    def __init__(
-        self,
-        database_name,
-        datadir,
-        sequences,
-        vocabulary,
-        articulator,
-        sync_shift,
-        framerate,
-        n_samples=50,
-        clip_tails=True
-    ):
-        self.datadir = datadir
-        self.dataset_config = DATASET_CONFIG[database_name]
-        self.vocabulary = vocabulary
-        self.articulator = articulator
-        self.n_samples = n_samples
-        self.clip_tails = clip_tails
-        self.TVs = ["TBCD", "TTCD"]
-
-        collector = DATABASE_COLLECTORS[database_name](datadir)
-        self.data = collector.collect_data(sequences)
-
-        mean_filepath = os.path.join(
-            datadir,
-            "normalization_statistics",
-            f"{articulator}_mean.npy"
-        )
-        mean = torch.from_numpy(np.load(mean_filepath))
-        std_filepath = os.path.join(
-            datadir,
-            "normalization_statistics",
-            f"{articulator}_std.npy"
-        )
-        std = torch.from_numpy(np.load(std_filepath))
-        self.normalize = Normalize(mean, std)
-
-    def __len__(self):
-        return len(self.data)
-
-    def __getitem__(self, index):
-        item = self.data[index]
-        sentence_name = item["sentence_name"]
-        subject = item["subject"]
-        sequence = item["sequence"]
-        frame_ids = item["frame_ids"]
-
-        sentence_targets = torch.zeros(size=(0, 1, 2, self.n_samples))
-        sentence_critical_references = torch.zeros(size=(0, len(self.TVs), 2, self.n_samples))
-        for frame_id in frame_ids:
-            articulator_array, coord_system_reference_array = InputLoaderMixin.prepare_articulator_array(
-                self.datadir,
-                subject,
-                sequence,
-                frame_id,
-                self.articulator,
-                self.dataset_config,
-                self.normalize,
-                self.clip_tails,
-            )
-            articulator_array = articulator_array.unsqueeze(dim=0).unsqueeze(dim=0)
-            coord_system_reference_array = coord_system_reference_array.unsqueeze(dim=0)
-            sentence_targets = torch.cat([sentence_targets, articulator_array], dim=0)
-
-            denorm_coord_system_reference_array = self.normalize.inverse(
-                coord_system_reference_array
-            )
-            hard_palate = denorm_coord_system_reference_array[:, :, :20]
-            hard_palate = F.interpolate(
-                hard_palate,
-                size=self.n_samples,
-                mode="linear",
-                align_corners=True
-            )
-            norm_hard_palate = self.normalize(hard_palate)
-
-            alveolar_region = denorm_coord_system_reference_array[:, :, 20:42]
-            alveolar_region = F.interpolate(
-                alveolar_region,
-                size=self.n_samples,
-                mode="linear",
-                align_corners=True
-            )
-            norm_alveolar_region = self.normalize(alveolar_region)
-
-            critical_reference = torch.cat([norm_hard_palate, norm_alveolar_region], dim=0)
-            critical_reference = critical_reference.unsqueeze(dim=0)
-            sentence_critical_references = torch.cat([
-                sentence_critical_references,
-                critical_reference
-            ])
-
-        sentence_targets = sentence_targets.type(torch.float)
-        sentence_critical_references = sentence_critical_references.type(torch.float)
-
-        critical_mask = torch.stack([
-            torch.tensor([int(self.critical_phonemes[TV](p)) for p in item["phonemes"]], dtype=torch.int)
-             for TV in sorted(self.TVs)
-        ])
-
-        sentence_tokens = item["phonemes"]
-        sentence_numerized = torch.tensor([
-            self.vocabulary.get(token, self.vocabulary[UNKNOWN])
-            for token in sentence_tokens
-        ], dtype=torch.long)
-
-        return (
-            sentence_name,
-            sentence_numerized,
-            sentence_targets,
-            sentence_tokens,
-            critical_mask,
-            sentence_critical_references,
-            frame_ids
-        )
 
 
 class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):

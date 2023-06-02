@@ -4,82 +4,112 @@ import torch
 import ujson
 import yaml
 
+from functools import reduce
 from torch.utils.data import DataLoader
 
 from helpers import sequences_from_dict, set_seeds
+from phoneme_recognition import UNKNOWN
 from phoneme_to_articulation.principal_components.dataset import (
-    PrincipalComponentsPhonemeToArticulationDataset,
+    PrincipalComponentsPhonemeToArticulationDataset2,
     pad_sequence_collate_fn
 )
-from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_PC_test
-from phoneme_to_articulation.principal_components.losses import AutoencoderLoss
+from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_principal_components_test
+from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
 from phoneme_to_articulation.principal_components.models.rnn import PrincipalComponentsArtSpeech
 from settings import DATASET_CONFIG
 
 
-def main(cfg):
+def main(
+    database_name,
+    datadir,
+    batch_size,
+    seq_dict,
+    indices_dict,
+    vocab_filepath,
+    state_dict_filepath,
+    modelkwargs,
+    autoencoder_kwargs,
+    save_to,
+    encoder_state_dict_filepath,
+    decoder_state_dict_filepath,
+    beta1=1.0,
+    beta2=1.0,
+    num_workers=0,
+    TV_to_phoneme_map=None,
+    clip_tails=True
+):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    database_name = cfg["database_name"]
     dataset_config = DATASET_CONFIG[database_name]
 
-    with open(cfg["vocab_fpath"]) as f:
+    vocabulary = {UNKNOWN: 0}
+    with open(vocab_filepath) as f:
         tokens = ujson.load(f)
-        vocabulary = {token: i for i, token in enumerate(tokens)}
+        for i, token in enumerate(tokens, start=len(vocabulary)):
+            vocabulary[token] = i
 
-    test_sequences = sequences_from_dict(cfg["datadir"], cfg["test_seq_dict"])
-    test_dataset = PrincipalComponentsPhonemeToArticulationDataset(
-        database_name=database_name,
-        datadir=cfg["datadir"],
-        sequences=test_sequences,
-        vocabulary=vocabulary,
-        articulator=cfg["articulator"],
-        sync_shift=0,
-        framerate=55,
-        clip_tails=cfg["clip_tails"]
+    articulators = sorted(indices_dict.keys())
+    num_components = 1 + max(set(
+        reduce(lambda l1, l2: l1 + l2,
+        indices_dict.values())
+    ))
+
+    if TV_to_phoneme_map is None:
+        TV_to_phoneme_map = {}
+    TVs = sorted(TV_to_phoneme_map.keys())
+    loss_fn = AutoencoderLoss2(
+        indices_dict=indices_dict,
+        TVs=TVs,
+        device=device,
+        encoder_state_dict_filepath=encoder_state_dict_filepath,
+        decoder_state_dict_filepath=decoder_state_dict_filepath,
+        beta1=beta1,
+        beta2=beta2,
+        **autoencoder_kwargs,
+    )
+
+    sequences = sequences_from_dict(datadir, seq_dict)
+    test_dataset = PrincipalComponentsPhonemeToArticulationDataset2(
+        database_name,
+        datadir,
+        sequences,
+        vocabulary,
+        articulators,
+        TV_to_phoneme_map,
+        clip_tails=clip_tails,
     )
     test_dataloader = DataLoader(
         test_dataset,
-        batch_size=cfg["batch_size"],
+        batch_size=batch_size,
         shuffle=False,
+        num_workers=num_workers,
         worker_init_fn=set_seeds,
-        collate_fn=pad_sequence_collate_fn
+        collate_fn=pad_sequence_collate_fn,
     )
 
-    best_model = PrincipalComponentsArtSpeech(
+    model = PrincipalComponentsArtSpeech(
         vocab_size=len(vocabulary),
-        n_components=cfg["n_components"],
-        gru_dropout=0.2
+        num_components=num_components,
+        **modelkwargs,
     )
-    best_model_state_dict = torch.load(cfg["state_dict_fpath"], map_location=device)
-    best_model.load_state_dict(best_model_state_dict)
-    best_model.to(device)
+    model_state_dict = torch.load(state_dict_filepath, map_location=device)
+    model.load_state_dict(model_state_dict)
+    model.to(device)
 
-    test_outputs_dir = os.path.join(cfg["save_to"], "test_outputs")
+    test_outputs_dir = os.path.join(save_to, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
-    loss_fn = AutoencoderLoss(
-        in_features=100,
-        n_components=cfg["n_components"],
-        encoder_state_dict_fpath=cfg["encoder_state_dict_fpath"],
-        decoder_state_dict_fpath=cfg["decoder_state_dict_fpath"],
-        device=device,
-        beta=0.3
-    )
-
-    info_test = run_phoneme_to_PC_test(
+    info_test = run_phoneme_to_principal_components_test(
         epoch=0,
-        model=best_model,
-        decoder_state_dict_fpath=cfg["decoder_state_dict_fpath"],
-        n_components=cfg["n_components"],
+        model=model,
         dataloader=test_dataloader,
         criterion=loss_fn,
         outputs_dir=test_outputs_dir,
-        dataset_config=dataset_config,
+        decode_transform=loss_fn.decode,
         device=device
     )
 
-    with open(os.path.join(cfg["save_to"], "test_results.json"), "w") as f:
+    with open(os.path.join(save_to, "test_results.json"), "w") as f:
         ujson.dump(info_test, f)
 
 
@@ -91,4 +121,4 @@ if __name__ == "__main__":
     with open(args.cfg_filepath) as f:
         cfg = yaml.safe_load(f.read())
 
-    main(cfg)
+    main(**cfg)

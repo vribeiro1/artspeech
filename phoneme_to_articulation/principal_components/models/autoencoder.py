@@ -35,35 +35,6 @@ class Decoder(nn.Module):
         return self.decoder(x)
 
 
-class Autoencoder(nn.Module):
-    def __init__(
-        self,
-        in_features,
-        num_components,
-        hidden_features=64,
-    ):
-        super().__init__()
-
-        self.latent_size = num_components
-
-        self.encoder = Encoder(
-            in_features=in_features,
-            num_components=num_components,
-            hidden_features=hidden_features,
-        )
-
-        self.decoder = Decoder(
-            num_components=num_components,
-            out_features=in_features,
-            hidden_features=hidden_features,
-        )
-
-    def forward(self, x):
-        latents = torch.tanh(self.encoder(x))
-        outputs = self.decoder(latents)
-        return outputs, latents
-
-
 class MultiEncoder(nn.Module):
     def __init__(
         self,
