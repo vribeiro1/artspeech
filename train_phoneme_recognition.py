@@ -58,7 +58,7 @@ def main(
     test_seq_dict,
     model_params,
     loss,
-    loss_params,
+    loss_params=None,
     num_workers=0,
     logits_large_margins=0.0,
     pretrained=False,
@@ -153,6 +153,8 @@ def main(
         collate_fn=partial(collate_fn, features_names=[feature]),
     )
 
+    if loss_params is None:
+        loss_params = {}
     loss_fn = criterion_cls(**loss_params)
     optimizer = Adam(
         model.parameters(),
@@ -168,9 +170,9 @@ def main(
 
     metrics = {
         "edit_distance": EditDistance(decoder),
-        "accuracy": Accuracy(len(vocabulary)),
-        "auroc": AUROC(len(vocabulary)),
-        "f1_score": F1Score(len(vocabulary)),
+        # "accuracy": Accuracy(len(vocabulary)),
+        # "auroc": AUROC(len(vocabulary)),
+        # "f1_score": F1Score(len(vocabulary)),
     }
 
     best_metric = np.inf
@@ -212,6 +214,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             feature=feature,
             target=target,
             use_voicing=(voicing_filepath is not None),
+            normalize_outputs=(criterion == Criterion.CTC),
             use_log_prob=(criterion == Criterion.CTC),
         )
 
@@ -236,6 +239,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             feature=feature,
             target=target,
             use_voicing=(voicing_filepath is not None),
+            normalize_outputs=(criterion == Criterion.CTC),
             use_log_prob=(criterion == Criterion.CTC),
         )
 
@@ -247,8 +251,8 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             step=epoch
         )
 
-        if 1 - info_valid["accuracy"] < best_metric:
-            best_metric = 1 - info_valid["accuracy"]
+        if info_valid["edit_distance"] < best_metric:
+            best_metric = info_valid["edit_distance"]
             epochs_since_best = 0
             torch.save(model.state_dict(), best_model_path)
             mlflow.log_artifact(best_model_path)

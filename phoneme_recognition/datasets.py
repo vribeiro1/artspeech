@@ -131,7 +131,6 @@ class PhonemeRecognitionDataset(Dataset):
             audio = F.resample(audio, orig_freq=sample_rate, new_freq=self.sample_rate)
         audio = torch.concat([audio, audio], dim=0)  # mono to stereo
 
-        _, num_samples = audio.shape
         melspec = dynamic_range_compression(self.melspectrogram(audio))
         _, _, melspec_length = melspec.shape
 

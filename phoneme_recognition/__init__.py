@@ -59,6 +59,7 @@ def run_epoch(
     dataloader,
     optimizer,
     criterion,
+    normalize_outputs: bool,
     use_log_prob: bool,
     target: Target,
     feature: Feature = Feature.MELSPEC,
@@ -101,7 +102,8 @@ def run_epoch(
             outputs = model(inputs, voicing)
             if training and logits_large_margins > 0.0:
                 outputs = model.get_noise_logits(outputs, logits_large_margins)
-            norm_outputs = model.get_normalized_outputs(outputs, use_log_prob=use_log_prob)
+            if normalize_outputs:
+                outputs = model.get_normalized_outputs(outputs, use_log_prob=use_log_prob)
             loss = criterion(
                 outputs.permute(1, 0, 2),
                 targets,
@@ -117,6 +119,7 @@ def run_epoch(
 
             losses.append(loss.item())
 
+        norm_outputs = model.get_normalized_outputs(outputs)
         for metric_name, fn_metric in fn_metrics.items():
             metric_val = fn_metric(norm_outputs, targets, input_lengths, target_lengths)
             metrics_values[metric_name].append(metric_val.item())

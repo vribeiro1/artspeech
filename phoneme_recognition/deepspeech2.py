@@ -62,7 +62,7 @@ class RecurrentBlock(nn.Module):
         )
 
         self.layer_norm = nn.LayerNorm(input_size)
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(p=dropout)
 
     def forward(self, x):
         out = self.layer_norm(x)
@@ -140,7 +140,7 @@ class DeepSpeech2(nn.Module):
             nn.GELU(),
         )
 
-        self.dropout = nn.Dropout(dropout)
+        self.dropout = nn.Dropout(p=dropout)
         self.classifier = nn.Linear(rnn_hidden_size, num_classes)
 
     @staticmethod

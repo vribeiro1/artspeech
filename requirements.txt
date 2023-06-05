@@ -1,5 +1,6 @@
 cython
 funcy
+flashlight-text
 librosa
 matplotlib
 mlflow
