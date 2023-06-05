@@ -14,7 +14,7 @@ import yaml
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from helpers import set_seeds, sequences_from_dict
+from helpers import set_seeds, sequences_from_dict, make_indices_dict
 from phoneme_to_articulation.principal_components.metrics import MeanP2CPDistance
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsAutoencoderDataset2
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
@@ -229,6 +229,9 @@ def main(
 
     dataset_config = DATASET_CONFIG[database_name]
     articulators_indices_dict = model_params["indices_dict"]
+    if isinstance(list(articulators_indices_dict.values())[0], int):
+        articulators_indices_dict = make_indices_dict(articulators_indices_dict)
+        model_params["indices_dict"] = articulators_indices_dict
     test_sequences = sequences_from_dict(datadir, seq_dict)
     articulators = sorted(articulators_indices_dict.keys())
     test_dataset = PrincipalComponentsAutoencoderDataset2(
@@ -295,6 +298,10 @@ if __name__ == "__main__":
     dataset_config = DATASET_CONFIG[database_name]
     sequences_dict = cfg["seq_dict"]
     model_params = cfg["model_params"]
+    indices_dict = model_params["indices_dict"]
+    if isinstance(list(indices_dict.values())[0], int):
+        articulators_indices_dict = make_indices_dict(indices_dict)
+        model_params["indices_dict"] = articulators_indices_dict
     batch_size = cfg["batch_size"]
     num_workers = cfg.get("num_workers", 0)
     datadir = cfg["datadir"]

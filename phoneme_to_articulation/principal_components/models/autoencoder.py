@@ -111,7 +111,6 @@ class MultiArticulatorAutoencoder(nn.Module):
         in_features,
         indices_dict,
         hidden_features=64,
-        dropout=0.0,
     ):
         super().__init__()
         self.indices_dict = indices_dict

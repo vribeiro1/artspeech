@@ -19,7 +19,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
-from helpers import set_seeds, sequences_from_dict
+from helpers import set_seeds, sequences_from_dict, make_indices_dict
 from phoneme_recognition import UNKNOWN
 from phoneme_to_articulation import RNNType
 from phoneme_to_articulation.principal_components.dataset import (
@@ -155,6 +155,9 @@ def main(
 
     if TV_to_phoneme_map is None:
         TV_to_phoneme_map = {}
+
+    if isinstance(list(indices_dict.values())[0], int):
+        indices_dict = make_indices_dict(indices_dict)
     articulators = sorted(indices_dict.keys())
 
     model = PrincipalComponentsArtSpeech(

@@ -7,7 +7,7 @@ import yaml
 from functools import reduce
 from torch.utils.data import DataLoader
 
-from helpers import sequences_from_dict, set_seeds
+from helpers import sequences_from_dict, set_seeds, make_indices_dict
 from phoneme_recognition import UNKNOWN
 from phoneme_to_articulation.principal_components.dataset import (
     PrincipalComponentsPhonemeToArticulationDataset2,
@@ -39,7 +39,6 @@ def main(
     clip_tails=True
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    dataset_config = DATASET_CONFIG[database_name]
 
     vocabulary = {UNKNOWN: 0}
     with open(vocab_filepath) as f:
@@ -47,6 +46,8 @@ def main(
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
 
+    if isinstance(list(indices_dict.values())[0], int):
+        indices_dict = make_indices_dict(indices_dict)
     articulators = sorted(indices_dict.keys())
     num_components = 1 + max(set(
         reduce(lambda l1, l2: l1 + l2,

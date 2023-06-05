@@ -13,7 +13,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
 from vt_tools import *
 
-from helpers import set_seeds, sequences_from_dict
+from helpers import set_seeds, sequences_from_dict, make_indices_dict
 from phoneme_to_articulation.principal_components import run_autoencoder_epoch
 from phoneme_to_articulation.principal_components.dataset import PrincipalComponentsAutoencoderDataset2
 from phoneme_to_articulation.principal_components.evaluation import run_multiart_autoencoder_test
@@ -84,6 +84,9 @@ def main(
     save_checkpoint_path = os.path.join(RESULTS_DIR, "checkpoint.pt")
 
     articulators_indices_dict = model_params["indices_dict"]
+    if isinstance(list(articulators_indices_dict.values())[0], int):
+        articulators_indices_dict = make_indices_dict(articulators_indices_dict)
+        model_params["indices_dict"] = articulators_indices_dict
     articulators = sorted(articulators_indices_dict.keys())
 
     autoencoder = MultiArticulatorAutoencoder(**model_params)

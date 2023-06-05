@@ -89,3 +89,26 @@ def make_padding_mask(lengths):
     mask = torch.cumsum(mask, dim=1)
     mask = mask <= lengths.unsqueeze(dim=1)
     return mask
+
+
+def make_indices_dict(num_components):
+    """
+    Converts a dictionary of number of components per articulator into a dictionary of indices per
+    articulator.
+
+    Args:
+        num_components (Dict[str, int]):
+    Returns:
+        indices_dict (Dict[str, list])
+
+    >>> num_components = {'a': 3, 'b': 3, 'c': 2}
+    >>> make_indices_dict(num_components)
+    {'a': [0, 1, 2], 'b': [3, 4, 5], 'c': [6, 7]}
+    """
+    indices_dict = {}
+    start = 0
+    for key, val in num_components.items():
+        indices_dict[key] = list(range(start, start + val))
+        start = start + val
+
+    return indices_dict
