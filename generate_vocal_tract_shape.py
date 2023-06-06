@@ -16,6 +16,7 @@ from matplotlib.figure import Figure
 from tgt import read_textgrid
 from tqdm import tqdm
 from vt_tools import (
+    COLORS,
     ARYTENOID_CARTILAGE,
     EPIGLOTTIS,
     LOWER_INCISOR,
@@ -37,7 +38,6 @@ from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
 from settings import DATASET_CONFIG
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-VOCABULARY_FILEPATH = os.path.join(BASE_DIR, "data", "vocabulary_gottingen.json")
 
 
 def validate_textgrid(textgrid_filepath, encoding="utf-8"):
@@ -171,6 +171,7 @@ if __name__ == "__main__":
     parser.add_argument("--encoding", dest="textgrid_encoding", default="utf-8")
     parser.add_argument("--method", dest="method", default="neural-network")
     parser.add_argument("--state-dict", dest="state_dict_filepath", required=True)
+    parser.add_argument("--vocabulary", dest="vocab_filepath", required=True)
     parser.add_argument("--save-to", dest="save_to", required=True)
     args = parser.parse_args()
 
@@ -178,7 +179,7 @@ if __name__ == "__main__":
     dataset_config = DATASET_CONFIG[args.database_name]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    with open(VOCABULARY_FILEPATH) as f:
+    with open(args.vocab_filepath) as f:
         tokens = json.load(f)
         vocabulary = {token: i for i, token in enumerate(tokens)}
 
@@ -242,7 +243,7 @@ if __name__ == "__main__":
             os.makedirs(xarticul_dir)
 
         articulators = sorted([
-            ARYTENOID_CARTILAGEAGES,
+            ARYTENOID_CARTILAGE,
             EPIGLOTTIS,
             LOWER_INCISOR,
             LOWER_LIP,
@@ -262,8 +263,8 @@ if __name__ == "__main__":
         for i_frame, articuls_dict in enumerate(articulators_dicts):
             internal_wall, external_wall = generate_vocal_tract_tube(articuls_dict)
 
-            xarticul_int = npy_to_xarticul(internal_wall * database_name.RES)
-            xarticul_ext = npy_to_xarticul(external_wall * database_name.RES)
+            xarticul_int = npy_to_xarticul(internal_wall * dataset_config.RES)
+            xarticul_ext = npy_to_xarticul(external_wall * dataset_config.RES)
 
             plt.figure(figsize=(10, 10))
 
