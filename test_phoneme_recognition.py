@@ -25,7 +25,7 @@ from phoneme_recognition import (
 from phoneme_recognition.datasets import PhonemeRecognitionDataset, collate_fn
 from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
-from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC
+from phoneme_recognition.metrics import EditDistance, WordInfoLost, Accuracy, AUROC
 from phoneme_recognition.synthetic_shapes import SyntheticPhonemeRecognitionDataset
 from settings import BASE_DIR, DATASET_CONFIG
 
@@ -120,6 +120,7 @@ def main(
 
     metrics = {
         "edit_distance": EditDistance(decoder),
+        "word_info_lost": WordInfoLost(decoder),
         # "accuracy": Accuracy(len(vocabulary)),
         # "accuracy_per_class": Accuracy(len(vocabulary), average=None),
         # "auroc": AUROC(len(vocabulary))

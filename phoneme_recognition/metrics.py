@@ -5,12 +5,16 @@ import torch.nn as nn
 import ujson
 
 from torchmetrics.classification import MulticlassAccuracy, MulticlassAUROC, MulticlassF1Score
-from torchmetrics.functional import word_error_rate
+from torchmetrics.functional import word_error_rate, word_information_lost
 
 
 class MetricsMixin:
     @classmethod
-    def get_pad_mask(cls, inputs, lengths):
+    def get_pad_mask(
+        cls,
+        inputs,
+        lengths
+    ):
         if len(inputs.shape) == 2:
             bs, time = inputs.shape
         elif len(inputs.shape) == 3:
@@ -49,6 +53,35 @@ class MetricsMixin:
 
         return emissions, targets
 
+    @classmethod
+    def make_pred_and_target_sentences(
+        cls,
+        decoder,
+        emissions,
+        targets,
+        emissions_lengths,
+        targets_lengths,
+        detach_inputs=True
+    ):
+        if detach_inputs:
+            emissions = emissions.detach().cpu()
+            targets = targets.detach().cpu()  # (B, T)
+
+        target_sequences = []
+        for target, length in zip(targets, targets_lengths):
+            target_no_pad = target[:length]
+            tokens = [str(token.item()) for token in target_no_pad]
+            target_sequences.append(" ".join(tokens))
+
+        results = decoder(emissions, emissions_lengths)
+        pred_sequences = []
+        for result in results:
+            best_hyp = result[0]
+            tokens = [str(token.item()) for token in best_hyp.tokens]
+            pred_sequences.append(" ".join(tokens))
+
+        return pred_sequences, target_sequences
+
 
 class CrossEntropyLoss(nn.Module, MetricsMixin):
     def __init__(self, *args, class_weights=None, **kwargs):
@@ -86,30 +119,36 @@ class CrossEntropyLoss(nn.Module, MetricsMixin):
         return out
 
 
-class EditDistance:
+class EditDistance(MetricsMixin):
     def __init__(self, decoder):
         self.decoder = decoder
 
     def __call__(self, emissions, targets, input_lengths, target_lengths):
-        emissions = emissions  # (B, T, C)
-        emissions = emissions.detach().cpu()
-
-        targets = targets.detach().cpu()  # (B, T)
-        target_sequences = []
-        for target, length in zip(targets, target_lengths):
-            target_no_pad = target[:length]
-            tokens = [str(token.item()) for token in target_no_pad]
-            target_sequences.append(" ".join(tokens))
-
-        results = self.decoder(emissions, input_lengths)
-        pred_sequences = []
-        for result in results:
-            best_hyp = result[0]
-            tokens = [str(token.item()) for token in best_hyp.tokens]
-            pred_sequences.append(" ".join(tokens))
-
+        pred_sequences, target_sequences = self.make_pred_and_target_sentences(
+            self.decoder,
+            emissions,
+            targets,
+            input_lengths,
+            target_lengths
+        )
         edit_dist = word_error_rate(pred_sequences, target_sequences)
         return edit_dist
+
+
+class WordInfoLost(MetricsMixin):
+    def __init__(self, decoder):
+        self.decoder = decoder
+
+    def __call__(self, emissions, targets, input_lengths, target_lengths):
+        pred_sequences, target_sequences = self.make_pred_and_target_sentences(
+            self.decoder,
+            emissions,
+            targets,
+            input_lengths,
+            target_lengths
+        )
+        wil = word_information_lost(pred_sequences, target_sequences)
+        return wil
 
 
 class F1Score(MetricsMixin):
