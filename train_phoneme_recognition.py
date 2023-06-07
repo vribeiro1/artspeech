@@ -58,6 +58,7 @@ def main(
     test_seq_dict,
     model_params,
     loss,
+    plot_target=None,
     loss_params=None,
     num_workers=0,
     logits_large_margins=0.0,
@@ -75,6 +76,7 @@ def main(
 
     feature = Feature(feature)
     target = Target(target)
+    plot_target = Target(plot_target) if plot_target else target
     criterion = Criterion[loss]
     criterion_cls = criterion.value
 
@@ -310,7 +312,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         hidden_size = model_params["rnn_hidden_size"]
         best_model.classifier = nn.Linear(hidden_size, len(vocabulary))
     else:
-        model = DeepSpeech2(num_classes=len(vocabulary), **model_params)
+        best_model = DeepSpeech2(num_classes=len(vocabulary), **model_params)
     best_model_state_dict = torch.load(best_model_path, map_location=device)
     best_model.load_state_dict(best_model_state_dict)
     best_model.to(device)
@@ -322,6 +324,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         device=device,
         feature=feature,
         target=target,
+        plot_target=plot_target,
         use_voicing=(voicing_filepath is not None),
         save_dir=RESULTS_DIR,
     )

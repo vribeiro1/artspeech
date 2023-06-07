@@ -48,6 +48,7 @@ def main(
     model_params,
     target,
     state_dict_filepath,
+    plot_target=None,
     voicing_filepath=None,
     num_workers=0,
     save_dir=None,
@@ -58,6 +59,7 @@ def main(
     dataset_config = DATASET_CONFIG[database_name]
     feature = Feature(feature)
     target = Target(target)
+    plot_target = Target(plot_target) if plot_target else target
     criterion = Criterion[loss]
 
     default_tokens = [BLANK, UNKNOWN] if criterion == Criterion.CTC else [UNKNOWN]
@@ -103,7 +105,6 @@ def main(
         database_name=database_name,
         sequences=sequences,
         vocabulary=vocabulary,
-        dataset_config=dataset_config,
         features=[feature],
         tmp_dir=TMP_DIR,
         voiced_tokens=voiced_tokens,
@@ -119,9 +120,9 @@ def main(
 
     metrics = {
         "edit_distance": EditDistance(decoder),
-        "accuracy": Accuracy(len(vocabulary)),
-        "accuracy_per_class": Accuracy(len(vocabulary), average=None),
-        "auroc": AUROC(len(vocabulary))
+        # "accuracy": Accuracy(len(vocabulary)),
+        # "accuracy_per_class": Accuracy(len(vocabulary), average=None),
+        # "auroc": AUROC(len(vocabulary))
     }
 
     info_test = run_test(
@@ -131,6 +132,7 @@ def main(
         device=device,
         feature=feature,
         target=target,
+        plot_target=plot_target,
         use_voicing=(voicing_filepath is not None),
         save_dir=save_dir,
     )

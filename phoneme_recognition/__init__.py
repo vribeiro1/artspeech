@@ -150,6 +150,7 @@ def run_test(
     dataloader,
     fn_metrics,
     target: Target,
+    plot_target: Target,
     feature: Feature = Feature.MELSPEC,
     use_voicing: bool = False,
     device=None,
@@ -160,7 +161,7 @@ def run_test(
 
     vocabulary = dataloader.dataset.vocabulary
     model_predictions = torch.zeros(size=(0,))
-    model_features = torch.zeros(size=(0, 128))
+    model_features = torch.zeros(size=(0, model.classifier.in_features))
     model_targets = torch.zeros(size=(0,))
 
     averaged_metrics = [
@@ -184,6 +185,8 @@ def run_test(
         input_lengths = batch[f"{feature.value}_length"]
         targets = batch[target.value]
         target_lengths = batch[f"{target.value}_length"]
+        plot_targets = batch[plot_target.value]
+        plot_target_lengths = batch[f"{plot_target.value}_length"]
 
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -212,9 +215,8 @@ def run_test(
         features = [feat[:length] for feat, length in zip(features, input_lengths)]
         model_features = torch.cat([model_features] + features, dim=0)
 
-        targets = targets.detach().cpu()
-        targets = [tgt[:length] for tgt, length in zip(targets, target_lengths)]
-        model_targets = torch.cat([model_targets] + targets, dim=0)
+        plot_targets = [tgt[:length] for tgt, length in zip(plot_targets, plot_target_lengths)]
+        model_targets = torch.cat([model_targets] + plot_targets, dim=0)
 
         outputs = outputs.detach().cpu()
         predictions = torch.topk(outputs, k=1, dim=-1).indices
@@ -280,9 +282,10 @@ def plot_features(
     save_filepath,
     plot_groups
 ):
-    plot_features = np.zeros(shape=(0, 128))
+    _, num_features = features.shape
+    plot_features = np.zeros(shape=(0, num_features))
     plot_targets = np.zeros(shape=(0,))
-    for model_class, i in class_map.items():
+    for _, i in class_map.items():
         class_indices = np.argwhere(targets == i).squeeze()
         if len(class_indices) == 0:
             continue
@@ -300,7 +303,7 @@ def plot_features(
     cmap = plt.get_cmap("hsv")
     fig, ax = plt.subplots(figsize=(10, 10))
     num_groups = len(plot_groups)
-    for group_i, (group, classes) in enumerate(plot_groups.items()):
+    for group_i, (_, classes) in enumerate(plot_groups.items()):
         group_features = np.zeros(shape=(0, 2))
         for class_ in classes:
             class_i = class_map[class_]
@@ -313,7 +316,7 @@ def plot_features(
 
         color = cmap(group_i / num_groups)
         label = " ".join(classes)
-        scatter = ax.scatter(
+        ax.scatter(
             *group_features.T,
             alpha=0.7,
             c=[color] * len(group_features),
