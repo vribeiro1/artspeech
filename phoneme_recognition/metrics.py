@@ -1,11 +1,11 @@
-import pdb
-from typing import Any
+import numpy as np
 import torch
 import torch.nn as nn
 import ujson
 
 from torchmetrics.classification import MulticlassAccuracy, MulticlassAUROC, MulticlassF1Score
 from torchmetrics.functional import word_error_rate, word_information_lost
+from typing import Union, List
 
 
 class MetricsMixin:
@@ -194,3 +194,194 @@ class AUROC(MetricsMixin):
         )
         auc = self.auroc(emissions, targets)
         return auc
+
+
+def edit_matrix(prediction_tokens, reference_tokens):
+    """
+    Edit distance matrix from torchmetrics.
+    """
+    dp = [[0] * (len(reference_tokens) + 1) for _ in range(len(prediction_tokens) + 1)]
+    for i in range(len(prediction_tokens) + 1):
+        dp[i][0] = i
+    for j in range(len(reference_tokens) + 1):
+        dp[0][j] = j
+    for i in range(1, len(prediction_tokens) + 1):
+        for j in range(1, len(reference_tokens) + 1):
+            if prediction_tokens[i - 1] == reference_tokens[j - 1]:
+                dp[i][j] = dp[i - 1][j - 1]
+            else:
+                dp[i][j] = min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]) + 1
+    return dp
+
+
+def shortest_path(M):
+    """
+    Dijkstra's shortest path for a matrix.
+    """
+    rows = len(M)
+    cols = len(M[0])
+
+    orig = (0, 0)
+    dest = (rows - 1, cols - 1)
+    unvisited = [(i, j) for i in range(rows) for j in range(cols)]
+
+    shortest_path_table = {
+        node: (0 if node == orig else np.inf, None) for node in unvisited
+    }
+
+    while unvisited:
+        unvisited_table = [
+            item for item in shortest_path_table.items()
+            if item[0] in unvisited
+        ]
+
+        curr_node, (dist_from_orig, _) = min(unvisited_table, key=lambda node: node[1][0])
+        unvisited.remove(curr_node)
+
+        curr_i, curr_j = curr_node
+        neighbors = [
+            (curr_i + 1, curr_j),
+            (curr_i, curr_j + 1),
+            (curr_i + 1, curr_j + 1)
+        ]
+
+        for neighbor in neighbors:
+            if neighbor not in shortest_path_table:
+                continue
+
+            neighbor_i, neighbor_j = neighbor
+            weight = M[neighbor_i][neighbor_j]
+            neighbor_dist_from_orig = dist_from_orig + weight
+            if neighbor_dist_from_orig < shortest_path_table[neighbor][0]:
+                shortest_path_table[neighbor] = neighbor_dist_from_orig, curr_node
+
+    reversed_path = []
+    previous = dest
+    while previous:
+        reversed_path.append(previous)
+        previous = shortest_path_table[previous][1]
+
+    path = list(reversed(reversed_path))
+    return path
+
+
+def _compute_transitions(path):
+    """
+    Compute the deletions, insertions and substitutions for one path.
+    """
+    deletions = []
+    insertions = []
+    substitutions = []
+
+    for curr_node, next_node in zip(path[:-1], path[1:]):
+        curr_i, curr_j = curr_node
+        next_i, next_j = next_node
+
+        if curr_i == next_i:
+            deletions.append(curr_i)
+        elif curr_j == next_j:
+            insertions.append(curr_j)
+        else:
+            substitutions.append((curr_j, curr_i))
+
+    return deletions, insertions, substitutions
+
+
+def compute_transitions(
+    preds: Union[str, List[str]],
+    target: Union[str, List[str]]
+):
+    """
+    >>> targets = ["a b c", "a b c", "a b c", "a b d e a",]
+    >>> preds = ["a b c", "b c", "a b c d", "c b d e",]
+    >>> expected = [([], [], [(0, 0), (1, 1), (2, 2)]), ([0], [], [(1, 0), (2, 1)]), ([], [3], [(0, 0), (1, 1), (2, 2)]), ([4], [], [(0, 0), (1, 1), (2, 2), (3, 3)])]
+    >>> all_transitions = compute_transitions(preds, targets)
+    all_transitions == expected
+    """
+    if isinstance(preds, str):
+        preds = [preds]
+    if isinstance(target, str):
+        target = [target]
+
+    all_transitions = []
+    for pred, tgt in zip(preds, target):
+        pred = pred.split()
+        tgt = tgt.split()
+
+        dp = edit_matrix(pred, tgt)
+        path = shortest_path(dp)
+        transitions = _compute_transitions(path)
+        all_transitions.append(transitions)
+
+    return all_transitions
+
+
+def substitution_matrix(
+    preds: Union[str, List[str]],
+    target: Union[str, List[str]],
+    vocab: List[str],
+    insertions_and_deletions: str = None,
+    normalize: str = None,
+):
+    """
+    Compute the substitution matrix between the predictions and the targets. The substitution matrix
+    is equivalente to a confusion matrix for regular classification. The x-axis holds the predictions
+    and the y-axis holds the targets. The main diagonal represents correct transcriptions, and the
+    other cells represents the token i replaced by token j. An extra row or column can be added to
+    represent the number of insertions and deletions of a token.
+    """
+    if isinstance(preds, str):
+        preds = [preds]
+    if isinstance(target, str):
+        target = [target]
+
+    rows = len(vocab)
+    include_insertions = False
+    if insertions_and_deletions in ["insertions", "both"]:
+        include_insertions = True
+        rows += 1
+
+    cols = len(vocab)
+    include_deletions = False
+    if insertions_and_deletions in ["deletions", "both"]:
+        include_deletions = True
+        cols += 1
+
+    cm = np.zeros(shape=(len(vocab) + 1, len(vocab) + 1))
+    all_transitions = compute_transitions(preds, target)
+    for pred, tgt, (deletions, insertions, substitutions) in zip(preds, targets, all_transitions):
+        pred = pred.split()
+        tgt = tgt.split()
+
+        for i, j in substitutions:
+            tgt_token = tgt[i]
+            pred_token = pred[j]
+
+            tgt_token_index = vocab.index(tgt_token)
+            pred_token_index = vocab.index(pred_token)
+
+            cm[tgt_token_index, pred_token_index] += 1
+
+        if include_deletions:
+            for i in deletions:
+                tgt_token = tgt[i]
+                tgt_token_index = vocab.index(tgt_token)
+                cm[tgt_token_index, -1] += 1
+
+        if include_insertions:
+            for j in insertions:
+                pred_token = pred[j]
+                pred_token_index = vocab.index(pred_token)
+                cm[-1, pred_token_index] += 1
+
+
+    with np.errstate(all="ignore"):
+        if normalize == "true":
+            cm = cm / cm.sum(axis=1, keepdims=True)
+        elif normalize == "pred":
+            cm = cm / cm.sum(axis=0, keepdims=True)
+        elif normalize == "all":
+            cm = cm / cm.sum()
+        cm = np.nan_to_num(cm)
+
+    return cm
