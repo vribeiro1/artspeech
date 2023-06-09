@@ -56,7 +56,6 @@ def main(
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
 
-    dataset_config = DATASET_CONFIG[database_name]
     feature = Feature(feature)
     target = Target(target)
     plot_target = Target(plot_target) if plot_target else target

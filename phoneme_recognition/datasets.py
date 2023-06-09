@@ -6,9 +6,7 @@ import torch
 import torchaudio
 import torchaudio.functional as F
 
-from enum import Enum
 from itertools import groupby
-from tempfile import mkdtemp
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
 from torchaudio import transforms
@@ -19,7 +17,6 @@ from vt_tools import (
     LOWER_INCISOR,
     LOWER_LIP,
     PHARYNX,
-    SOFT_PALATE,
     SOFT_PALATE_MIDLINE,
     THYROID_CARTILAGE,
     TONGUE,
@@ -30,22 +27,20 @@ from vt_tools import (
 
 from database_collector import DATABASE_COLLECTORS
 from phoneme_recognition import Feature, Target
-from settings import BASE_DIR, DATASET_CONFIG
+from settings import DATASET_CONFIG
 from vocal_tract_loader import VocalTractShapeLoader, cached_load_articulator_array
 
 ARTICULATORS = [
-    # ARYTENOID_CARTILAGE,
-    # EPIGLOTTIS,
-    # LOWER_INCISOR,
+    ARYTENOID_CARTILAGE,
+    EPIGLOTTIS,
+    LOWER_INCISOR,
     LOWER_LIP,
-    # PHARYNX,
-    SOFT_PALATE,
-    # SOFT_PALATE_MIDLINE,
-    # THYROID_CARTILAGE,
+    PHARYNX,
+    SOFT_PALATE_MIDLINE,
+    THYROID_CARTILAGE,
     TONGUE,
-    # UPPER_INCISOR,
     UPPER_LIP,
-    # VOCAL_FOLDS
+    VOCAL_FOLDS
 ]
 
 
