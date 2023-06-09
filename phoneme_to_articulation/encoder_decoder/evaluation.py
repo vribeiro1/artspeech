@@ -21,8 +21,10 @@ def run_test(
     criterion,
     outputs_dir,
     articulators,
+    beta1,
+    beta2,
     device=None,
-    regularize_out=False
+    regularize_out=False,
 ):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -46,18 +48,29 @@ def run_test(
         targets,
         lengths,
         phonemes,
-        sentence_frames
+        sentence_frames,
+        voicing,
     ) in progress_bar:
         sentences = sentences.to(device)
         targets = targets.to(device)
 
         with torch.set_grad_enabled(False):
             outputs = model(sentences, lengths)
-            loss = criterion(outputs, targets)
+            euclid_loss, recog_loss = criterion(outputs, targets, voicing)
             padding_mask = make_padding_mask(lengths)
-            bs, max_len, num_articulators, features = loss.shape
-            loss = loss.view(bs * max_len, num_articulators, features)
-            loss = loss[padding_mask.view(bs * max_len)].mean()
+
+            bs, max_len, num_articulators, features = euclid_loss.shape
+            euclid_loss = euclid_loss.view(bs * max_len, num_articulators, features)
+            euclid_loss = euclid_loss[padding_mask.view(bs * max_len)].mean()
+
+            if recog_loss is not None:
+                bs, max_len, features = recog_loss.shape
+                recog_loss = recog_loss.view(bs * max_len, features)
+                recog_loss = recog_loss[padding_mask.view(bs * max_len)].mean()
+
+                loss = beta1 * euclid_loss + beta2 * recog_loss
+            else:
+                loss = euclid_loss
 
         outputs = outputs.detach().cpu()
         targets = targets.detach().cpu()

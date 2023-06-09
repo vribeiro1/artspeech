@@ -44,6 +44,9 @@ def pad_sequence_collate_fn(batch):
     sentence_frames = [batch[i][6] for i in sentences_sorted_indices]
     sentences_ids = [batch[i][0] for i in sentences_sorted_indices]
 
+    voicing = [batch[i][7] for i in sentences_sorted_indices]
+    voicing = pad_sequence(voicing, batch_first=True, padding_value=-1)
+
     return (
         sentences_ids,
         padded_sentence_numerized,
@@ -51,7 +54,8 @@ def pad_sequence_collate_fn(batch):
         len_sentences_sorted,
         phonemes,
         # padded_critical_masks,
-        sentence_frames
+        sentence_frames,
+        voicing,
     )
 
 
@@ -70,7 +74,8 @@ class ArtSpeechDataset(Dataset):
         articulators,
         n_samples=50,
         clip_tails=False,
-        TVs=None
+        TVs=None,
+        voiced_tokens=None,
     ):
         self.vocabulary = vocabulary
         self.datadir = datadir
@@ -79,6 +84,7 @@ class ArtSpeechDataset(Dataset):
         self.n_samples = n_samples
         self.clip_tails = clip_tails
         self.TVs = TVs or []
+        self.voiced_tokens = voiced_tokens or []
 
         collector = DATABASE_COLLECTORS[database_name](datadir)
         data = collector.collect_data(sequences)
@@ -186,6 +192,12 @@ class ArtSpeechDataset(Dataset):
             for token in sentence_tokens
         ], dtype=torch.long)
 
+        # Voicing information
+        voicing = torch.tensor(
+            [phoneme in self.voiced_tokens for phoneme in sentence_tokens],
+            dtype=torch.float
+        )
+
         return (
             sentence_name,
             sentence_numerized,
@@ -193,5 +205,6 @@ class ArtSpeechDataset(Dataset):
             sentence_tokens,
             sentence_references,
             critical_masks,
-            frame_ids
+            frame_ids,
+            voicing,
         )
