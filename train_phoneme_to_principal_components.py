@@ -71,7 +71,8 @@ def run_epoch(
         len_inputs,
         _,
         critical_masks,
-        _
+        _,
+        _,
     ) in progress_bar:
         inputs = inputs.to(device)
         targets = targets.to(device)
@@ -153,9 +154,6 @@ def main(
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
 
-    if TV_to_phoneme_map is None:
-        TV_to_phoneme_map = {}
-
     if isinstance(list(indices_dict.values())[0], int):
         indices_dict = make_indices_dict(indices_dict)
     articulators = sorted(indices_dict.keys())
@@ -171,7 +169,10 @@ def main(
         model.load_state_dict(state_dict)
     model.to(device)
 
+    if TV_to_phoneme_map is None:
+        TV_to_phoneme_map = {}
     TVs = sorted(TV_to_phoneme_map.keys())
+
     loss_fn = AutoencoderLoss2(
         indices_dict=indices_dict,
         TVs=TVs,

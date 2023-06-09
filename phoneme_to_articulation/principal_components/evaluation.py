@@ -312,6 +312,7 @@ def run_phoneme_to_principal_components_test(
         sentence_lengths,
         sentence_phonemes,
         critical_masks,
+        reference_arrays,
         sentence_frames
     ) in progress_bar:
         sentence_inputs = sentence_inputs.to(device)
@@ -373,11 +374,33 @@ def run_phoneme_to_principal_components_test(
                 articulator_targets = sentence_targets[:, :, i, :, :]
                 sentence_targets[:, :, i, :, :] = articulator_denorm_fn(articulator_targets)
 
+            # The upper incisor is the reference of the coordinate system and since it has a fixed
+            # shape, it is non-sense to include it in the prediction. However, it is important for
+            # tract variables and visualization. Therefore, we inject it in the arrays in order to
+            # have it available for the next steps.
+            if UPPER_INCISOR not in articulators:
+                tv_articulators = sorted(articulators + [UPPER_INCISOR])
+                ref_idx = tv_articulators.index(UPPER_INCISOR)
+
+                sentence_pred_shapes = torch.concat([
+                    sentence_pred_shapes[:, :, :ref_idx, :, :],
+                    reference_arrays,
+                    sentence_pred_shapes[:, :, ref_idx:, :, :],
+                ], dim=2)
+
+                sentence_targets = torch.concat([
+                    sentence_targets[:, :, :ref_idx, :, :],
+                    reference_arrays,
+                    sentence_targets[:, :, ref_idx:, :, :],
+                ], dim=2)
+            else:
+                tv_articulators = articulators
+
             # Only calculate the tract variables if all of the required articulators are included
             # in the test
             if all(
                 [
-                    articulator in articulators
+                    articulator in tv_articulators
                     for articulator in REQUIRED_ARTICULATORS_FOR_TVS
                 ]
             ):
@@ -388,7 +411,7 @@ def run_phoneme_to_principal_components_test(
                     sentence_targets,
                     sentence_lengths,
                     sentence_phonemes,
-                    articulators,
+                    tv_articulators,
                     epoch_outputs_dir
                 )
 

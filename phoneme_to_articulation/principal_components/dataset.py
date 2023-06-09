@@ -96,7 +96,6 @@ class InputLoaderMixin:
 
         if normalize_fn is not None:
             articulator_array = normalize_fn(articulator_array)
-            coord_system_reference_array = normalize_fn(coord_system_reference_array)
 
         return articulator_array, coord_system_reference_array
 
@@ -230,11 +229,12 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
         sequence = item["sequence"]
         frame_ids = item["frame_ids"]
 
+        reference_arrays = torch.zeros(size=(0, 1, 2, self.num_samples))
         sentence_targets = torch.zeros(size=(0, len(self.articulators), 2, self.num_samples))
         for frame_id in frame_ids:
             frame_targets = torch.zeros(size=(0, 2, self.num_samples))
             for articulator in self.articulators:
-                articulator_array, _ = InputLoaderMixin.prepare_articulator_array(
+                articulator_array, reference_array = InputLoaderMixin.prepare_articulator_array(
                     self.datadir,
                     subject,
                     sequence,
@@ -248,6 +248,8 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
                 frame_targets = torch.cat([frame_targets, articulator_array], dim=0)
             frame_targets = frame_targets.unsqueeze(dim=0)  # (1, Nart, 2, D)
             sentence_targets = torch.cat([sentence_targets, frame_targets], dim=0)
+            reference_array = reference_array.unsqueeze(dim=0).unsqueeze(dim=0)
+            reference_arrays = torch.cat([reference_arrays, reference_array], dim=0)
 
         sentence_tokens = item["phonemes"]
         sentence_numerized = torch.tensor([
@@ -275,7 +277,8 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
             sentence_targets,
             sentence_tokens,
             critical_mask,
-            frame_ids
+            reference_arrays,
+            frame_ids,
         )
 
 
@@ -299,11 +302,11 @@ def pad_sequence_collate_fn(batch):
     padded_critical_masks = padded_critical_masks[sentences_sorted_indices]
     padded_critical_masks = padded_critical_masks.permute(0, 2, 1)
 
-    # critical_references = [item[5] for item in batch]
-    # padded_critical_references = pad_sequence(critical_references, batch_first=True)
-    # padded_critical_references = padded_critical_references[sentences_sorted_indices]
+    critical_references = [item[5] for item in batch]
+    padded_critical_references = pad_sequence(critical_references, batch_first=True)
+    padded_critical_references = padded_critical_references[sentences_sorted_indices]
 
-    sentence_frames = [batch[i][5] for i in sentences_sorted_indices]
+    sentence_frames = [batch[i][6] for i in sentences_sorted_indices]
 
     return (
         sentences_ids,
@@ -312,6 +315,6 @@ def pad_sequence_collate_fn(batch):
         len_sentences_sorted,
         phonemes,
         padded_critical_masks,
-        # padded_critical_references,
+        padded_critical_references,
         sentence_frames
     )

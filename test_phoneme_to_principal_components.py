@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 
 from helpers import sequences_from_dict, set_seeds, make_indices_dict
 from phoneme_recognition import UNKNOWN
+from phoneme_to_articulation import RNNType
 from phoneme_to_articulation.principal_components.dataset import (
     PrincipalComponentsPhonemeToArticulationDataset2,
     pad_sequence_collate_fn
@@ -32,8 +33,10 @@ def main(
     save_to,
     encoder_state_dict_filepath,
     decoder_state_dict_filepath,
+    rnn_type="GRU",
     beta1=1.0,
     beta2=1.0,
+    beta3=1.0,
     num_workers=0,
     TV_to_phoneme_map=None,
     clip_tails=True
@@ -49,14 +52,11 @@ def main(
     if isinstance(list(indices_dict.values())[0], int):
         indices_dict = make_indices_dict(indices_dict)
     articulators = sorted(indices_dict.keys())
-    num_components = 1 + max(set(
-        reduce(lambda l1, l2: l1 + l2,
-        indices_dict.values())
-    ))
 
     if TV_to_phoneme_map is None:
         TV_to_phoneme_map = {}
     TVs = sorted(TV_to_phoneme_map.keys())
+
     loss_fn = AutoencoderLoss2(
         indices_dict=indices_dict,
         TVs=TVs,
@@ -65,6 +65,7 @@ def main(
         decoder_state_dict_filepath=decoder_state_dict_filepath,
         beta1=beta1,
         beta2=beta2,
+        beta3=beta3,
         **autoencoder_kwargs,
     )
 
@@ -89,7 +90,8 @@ def main(
 
     model = PrincipalComponentsArtSpeech(
         vocab_size=len(vocabulary),
-        num_components=num_components,
+        indices_dict=indices_dict,
+        rnn=RNNType[rnn_type.upper()],
         **modelkwargs,
     )
     model_state_dict = torch.load(state_dict_filepath, map_location=device)
