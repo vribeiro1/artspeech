@@ -1,3 +1,4 @@
+import funcy
 import matplotlib.pyplot as plt
 import numpy as np
 import os
@@ -10,7 +11,7 @@ from tqdm import tqdm
 from sklearn.manifold import TSNE
 from sklearn.metrics import confusion_matrix
 
-from phoneme_recognition.metrics import CrossEntropyLoss
+from phoneme_recognition.metrics import CrossEntropyLoss, MetricsMixin, substitution_matrix
 from settings import TRAIN, SIL, UNKNOWN, BLANK
 
 CLASSES_NAMES = {
@@ -149,6 +150,7 @@ def run_test(
     model,
     dataloader,
     fn_metrics,
+    decoder,
     target: Target,
     plot_target: Target,
     feature: Feature = Feature.MELSPEC,
@@ -160,9 +162,14 @@ def run_test(
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     vocabulary = dataloader.dataset.vocabulary
-    model_predictions = torch.zeros(size=(0,))
-    model_features = torch.zeros(size=(0, model.classifier.in_features))
-    model_targets = torch.zeros(size=(0,))
+    model_predictions = torch.zeros(size=(0,))  # Used for plotting the confusion matrix with CE
+    model_features = torch.zeros(size=(0, model.classifier.in_features)) # Used for plotting model features
+    model_targets = torch.zeros(size=(0,))  # Used for plotting the confusion matrix with CE
+
+    all_outputs = []  # Used for computing the substitution matrix with CTC
+    all_targets = []  # Used for computing the substitution matrix with CTC
+    all_inputs_lengths = []  # Used for computing the substitution matrix with CTC
+    all_target_lengths = []  # Used for computing the substitution matrix with CE
 
     averaged_metrics = [
         metric_name for metric_name in fn_metrics
@@ -223,6 +230,12 @@ def run_test(
         predictions = [pred[:length] for pred, length in zip(predictions, input_lengths)]
         model_predictions = torch.cat([model_predictions] + predictions, dim=0)
 
+        targets = targets.detach().cpu()
+        all_outputs.extend(outputs)
+        all_targets.extend(targets)
+        all_inputs_lengths.extend(input_lengths)
+        all_target_lengths.extend(target_lengths)
+
     if save_dir is not None:
         save_filepath = os.path.join(save_dir, "model_features.pdf")
 
@@ -259,6 +272,29 @@ def run_test(
         plot_confusion_matrix(
             conf_mtx,
             save_filepath=os.path.join(save_dir, "confusion_matrix.pdf"),
+        )
+
+        subs_mtx = compute_substitution_matrix(
+            emissions=all_outputs,
+            targets=all_targets,
+            groups=PHONETIC_CLASSES,
+            input_lengths=all_inputs_lengths,
+            target_lengths=all_target_lengths,
+            decoder=decoder,
+            vocabulary=vocabulary,
+        )
+        np.save(
+            os.path.join(save_dir, "substitution_matrix.npy"),
+            subs_mtx
+        )
+
+        plot_confusion_matrix(
+            subs_mtx,
+            save_filepath=os.path.join(save_dir, "substitution_matrix.png"),
+        )
+        plot_confusion_matrix(
+            subs_mtx,
+            save_filepath=os.path.join(save_dir, "substitution_matrix.pdf"),
         )
 
     info = {}
@@ -375,6 +411,100 @@ def compute_confusion_matrix(
 
     conf_mtx = confusion_matrix(target_tokens, predicted_tokens, normalize=normalize)
     return conf_mtx
+
+
+def _make_tokenized_sequence(
+    sequence,
+    vocabulary_T,
+    groups_T=None,
+):
+    """
+    Args:
+        sequence (List[str])
+        vocabulary_T (Dict[int, str])
+        groups (Dict[str, int])
+    """
+    # sequence: List[str]
+    numerized_seq = funcy.lmap(lambda s: funcy.lmap(int, s.split()), sequence)
+
+    # numerized_seq: List[List[int]]
+    tokenized_seq = funcy.lmap(
+        lambda tokens: [vocabulary_T[i] for i in tokens],
+        numerized_seq
+    )
+
+    if groups_T:
+        other = max(groups_T.values()) + 1
+        tokenized_seq = funcy.lmap(
+            lambda tokens: [groups_T.get(i, other) for i in tokens],
+            tokenized_seq
+        )
+
+    tokenized_seq = funcy.lmap(
+        lambda tokens: " ".join(map(str, tokens)),
+        tokenized_seq
+    )
+
+    return tokenized_seq
+
+
+def compute_substitution_matrix(
+    emissions,
+    targets,
+    input_lengths,
+    target_lengths,
+    decoder,
+    vocabulary,
+    groups=None,
+):
+    pred_sequences = []
+    target_sequences = []
+
+    vocabulary_T = {i: token for token, i in vocabulary.items()}
+    subs_tokens = [token for token in vocabulary]
+    groups_T = None
+    if groups is not None:
+        subs_tokens = funcy.lmap(str, list(groups.keys()) + [max(groups.keys()) + 1])
+        groups_T = {}
+        for group_name, symbols in groups.items():
+            for symbol in symbols:
+                groups_T[symbol] = group_name
+
+    for (
+        emission,
+        target,
+        input_length,
+        target_length
+    ) in zip(
+        emissions,
+        targets,
+        input_lengths,
+        target_lengths
+    ):
+        emission = emission.unsqueeze(dim=0)
+        target = target.unsqueeze(dim=0)
+        input_length = torch.tensor([input_length])
+        target_length = torch.tensor([target_length])
+        pred, tgt = MetricsMixin.make_pred_and_target_sentences(
+            decoder,
+            emission,
+            target,
+            input_length,
+            target_length,
+        )
+
+        tokenized_pred = _make_tokenized_sequence(pred, vocabulary_T, groups_T)
+        tokenized_target = _make_tokenized_sequence(tgt, vocabulary_T, groups_T)
+        pred_sequences.extend(tokenized_pred)
+        target_sequences.extend(tokenized_target)
+
+    return substitution_matrix(
+        pred_sequences,
+        target_sequences,
+        subs_tokens,
+        insertions_and_deletions="both",
+        normalize="true",
+    )
 
 
 def plot_confusion_matrix(

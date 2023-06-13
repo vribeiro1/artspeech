@@ -321,6 +321,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         model=best_model,
         dataloader=test_dataloader,
         fn_metrics=metrics,
+        decoder=decoder,
         device=device,
         feature=feature,
         target=target,

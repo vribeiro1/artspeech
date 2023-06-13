@@ -129,6 +129,7 @@ def main(
         model=model,
         dataloader=dataloader,
         fn_metrics=metrics,
+        decoder=decoder,
         device=device,
         feature=feature,
         target=target,
