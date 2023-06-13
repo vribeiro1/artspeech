@@ -1,3 +1,4 @@
+import heapq
 import numpy as np
 import torch
 import torch.nn as nn
@@ -223,21 +224,22 @@ def shortest_path(M):
 
     orig = (0, 0)
     dest = (rows - 1, cols - 1)
-    unvisited = [(i, j) for i in range(rows) for j in range(cols)]
-
+    nodes = set((i, j) for i in range(rows) for j in range(cols))
     shortest_path_table = {
-        node: (0 if node == orig else np.inf, None) for node in unvisited
+        node: (0 if node == orig else np.inf, node, None) for node in nodes
     }
 
-    while unvisited:
-        unvisited_table = [
-            item for item in shortest_path_table.items()
-            if item[0] in unvisited
-        ]
+    visited = set()
+    queue = [(0, orig)]
+    heapq.heapify(queue)
 
-        curr_node, (dist_from_orig, _) = min(unvisited_table, key=lambda node: node[1][0])
-        unvisited.remove(curr_node)
+    while queue:
+        dist_from_orig, curr_node = heapq.heappop(queue)
 
+        if curr_node in visited:
+            continue
+
+        visited.add(curr_node)
         curr_i, curr_j = curr_node
         neighbors = [
             (curr_i + 1, curr_j),
@@ -252,16 +254,19 @@ def shortest_path(M):
             neighbor_i, neighbor_j = neighbor
             weight = M[neighbor_i][neighbor_j]
             neighbor_dist_from_orig = dist_from_orig + weight
-            if neighbor_dist_from_orig < shortest_path_table[neighbor][0]:
-                shortest_path_table[neighbor] = neighbor_dist_from_orig, curr_node
 
-    reversed_path = []
+            if neighbor_dist_from_orig < shortest_path_table[neighbor][0]:
+                shortest_path_table[neighbor] = neighbor_dist_from_orig, neighbor, curr_node
+
+            if neighbor not in visited:
+                heapq.heappush(queue, (weight, neighbor))
+
+    path = []
     previous = dest
     while previous:
-        reversed_path.append(previous)
-        previous = shortest_path_table[previous][1]
+        path = [previous] + path
+        previous = shortest_path_table[previous][-1]
 
-    path = list(reversed(reversed_path))
     return path
 
 
@@ -278,9 +283,9 @@ def _compute_transitions(path):
         next_i, next_j = next_node
 
         if curr_i == next_i:
-            deletions.append(curr_i)
+            deletions.append(curr_j)
         elif curr_j == next_j:
-            insertions.append(curr_j)
+            insertions.append(curr_i)
         else:
             substitutions.append((curr_j, curr_i))
 
@@ -349,7 +354,7 @@ def substitution_matrix(
 
     cm = np.zeros(shape=(len(vocab) + 1, len(vocab) + 1))
     all_transitions = compute_transitions(preds, target)
-    for pred, tgt, (deletions, insertions, substitutions) in zip(preds, targets, all_transitions):
+    for pred, tgt, (deletions, insertions, substitutions) in zip(preds, target, all_transitions):
         pred = pred.split()
         tgt = tgt.split()
 
