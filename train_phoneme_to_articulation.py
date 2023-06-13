@@ -10,6 +10,7 @@ import torch
 import ujson
 import yaml
 
+from collections import OrderedDict
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
@@ -21,8 +22,9 @@ from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
 from phoneme_to_articulation.encoder_decoder.loss import ArtSpeechLoss
+from phoneme_to_articulation.encoder_decoder.metrics import P2CPDistance
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
-from settings import BASE_DIR, TRAIN, VALID
+from settings import BASE_DIR, TRAIN, VALID, DATASET_CONFIG
 
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
@@ -41,8 +43,9 @@ def run_epoch(
     criterion,
     beta1,
     beta2,
+    fn_metrics=None,
     scheduler=None,
-    device=None
+    device=None,
 ):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -54,6 +57,7 @@ def run_epoch(
         model.eval()
 
     losses = []
+    metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
     for _, sentence, targets, lengths, _, _, voicing in progress_bar:
         sentence = sentence.to(device)
@@ -85,15 +89,28 @@ def run_epoch(
                 if scheduler is not None:
                     scheduler.step()
 
+            for metric_name, fn_metric in fn_metrics.items():
+                metric_val = fn_metric(outputs, targets, lengths)
+                metrics_values[metric_name].append(metric_val.item())
+
             losses.append(loss.item())
-            progress_bar.set_postfix(
-                loss=np.mean(losses)
-            )
+            postfixes = {
+                "loss": np.mean(losses)
+            }
+            postfixes.update({
+                metric_name: np.mean(metric_vals)
+                for metric_name, metric_vals in metrics_values.items()
+            })
+            progress_bar.set_postfix(OrderedDict(postfixes))
 
     mean_loss = np.mean(losses)
     info = {
         "loss": mean_loss
     }
+    info.update({
+        metric_name: np.mean(metric_values)
+        for metric_name, metric_values in metrics_values.items()
+    })
 
     return info
 
@@ -212,6 +229,13 @@ def main(
         collate_fn=pad_sequence_collate_fn
     )
 
+    dataset_config = DATASET_CONFIG[database_name]
+    fn_metrics = {
+        "p2cp_mean": P2CPDistance(
+            dataset_config=dataset_config,
+        )
+    }
+
     epochs = range(1, num_epochs + 1)
     best_metric = np.inf
     epochs_since_best = 0
@@ -245,6 +269,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             device=device,
             beta1=beta1,
             beta2=beta2,
+            fn_metrics=fn_metrics,
         )
 
         mlflow.log_metrics(
@@ -262,6 +287,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             device=device,
             beta1=beta1,
             beta2=beta2,
+            fn_metrics=fn_metrics,
         )
 
         mlflow.log_metrics(
@@ -271,8 +297,8 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
 
         scheduler.step(info_valid["loss"])
 
-        if info_valid["loss"] < best_metric:
-            best_metric = info_valid["loss"]
+        if info_valid["p2cp_mean"] < best_metric:
+            best_metric = info_valid["p2cp_mean"]
             torch.save(model.state_dict(), best_model_path)
             mlflow.log_artifact(best_model_path)
             epochs_since_best = 0
