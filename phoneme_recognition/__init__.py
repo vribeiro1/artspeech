@@ -7,12 +7,14 @@ import torch
 import torch.nn as nn
 
 from enum import Enum
+from matplotlib.axes import Axes
 from tqdm import tqdm
+from typing import Union, Tuple, List
 from sklearn.manifold import TSNE
 from sklearn.metrics import confusion_matrix
 
 from phoneme_recognition.metrics import CrossEntropyLoss, MetricsMixin, substitution_matrix
-from settings import TRAIN, SIL, UNKNOWN, BLANK
+from settings import TRAIN, UNKNOWN
 
 CLASSES_NAMES = {
     0: "dental",
@@ -288,12 +290,24 @@ def run_test(
             subs_mtx
         )
 
-        plot_confusion_matrix(
+        plot_substitution_matrix(
             subs_mtx,
+            include_deletions=True,
+            include_insertions=True,
+            vocab=list(CLASSES_NAMES.values()),
+            figsize=(15, 15),
+            width_ratios=(8, 1),
+            height_ratios=(8, 1),
             save_filepath=os.path.join(save_dir, "substitution_matrix.png"),
         )
-        plot_confusion_matrix(
+        plot_substitution_matrix(
             subs_mtx,
+            include_deletions=True,
+            include_insertions=True,
+            vocab=list(CLASSES_NAMES.values()),
+            figsize=(15, 15),
+            width_ratios=(8, 1),
+            height_ratios=(8, 1),
             save_filepath=os.path.join(save_dir, "substitution_matrix.pdf"),
         )
 
@@ -337,7 +351,7 @@ def plot_features(
     tsne_features = tsne.fit_transform(plot_features)  # (N, 2)
 
     cmap = plt.get_cmap("hsv")
-    fig, ax = plt.subplots(figsize=(10, 10))
+    _, ax = plt.subplots(figsize=(10, 10))
     num_groups = len(plot_groups)
     for group_i, (_, classes) in enumerate(plot_groups.items()):
         group_features = np.zeros(shape=(0, 2))
@@ -511,7 +525,7 @@ def plot_confusion_matrix(
     conf_mtx,
     save_filepath,
 ):
-    fig, ax = plt.subplots(figsize=(15, 15))
+    _, ax = plt.subplots(figsize=(15, 15))
     sns.heatmap(
         conf_mtx,
         annot=True,
@@ -526,6 +540,99 @@ def plot_confusion_matrix(
     ax.set_xlabel("Predicted Phonemes", fontsize=28)
     ax.set_ylabel("True Phonemes", fontsize=28)
     ax.tick_params(axis="both", which="major", labelsize=24)
+
+    plt.tight_layout()
+    plt.savefig(save_filepath)
+
+
+def plot_substitution_matrix(
+    subs_mtx: np.ndarray,
+    include_insertions: bool,
+    include_deletions: bool,
+    vocab: List[str],
+    figsize: Union[int, Tuple[int, int]],
+    width_ratios: Tuple,
+    height_ratios: Tuple,
+    save_filepath: str,
+    cmap: str = "coolwarm",
+):
+    ncols = 2 if include_deletions else 1
+    nrows = 2 if include_insertions else 1
+
+    if isinstance(figsize, int):
+        figsize=(figsize, figsize)
+
+    _, ax = plt.subplots(
+        nrows, ncols,
+        sharex=False,
+        sharey=False,
+        figsize=figsize,
+        width_ratios=width_ratios,
+        height_ratios=height_ratios
+    )
+
+    if isinstance(ax, Axes):
+        ax = [ax]
+    ax = funcy.lflatten(ax)
+    try:
+        ax = list(np.concatenate(ax).ravel())
+    except ValueError:
+        pass
+
+    ax0 = ax.pop(0)
+
+    plot_subs_mtx = subs_mtx
+    if include_insertions:
+        plot_subs_mtx = plot_subs_mtx[:-1, :]
+    if include_deletions:
+        plot_subs_mtx = plot_subs_mtx[:, :-1]
+
+    sns.heatmap(
+        plot_subs_mtx,
+        annot=True,
+        cbar=False,
+        square=True,
+        ax=ax0,
+        xticklabels=vocab,
+        yticklabels=vocab,
+        cmap=cmap,
+    )
+
+    if include_deletions:
+        ax1 = ax.pop(0)
+
+        sns.heatmap(
+            np.expand_dims(subs_mtx[:-1, -1], axis=1),
+            annot=True,
+            cbar=False,
+            square=False,
+            ax=ax1,
+            xticklabels=["deletions"],
+            yticklabels=vocab,
+            cmap=cmap,
+        )
+
+        ax1.axes.get_yaxis().set_visible(False)
+
+    if include_insertions:
+        ax0.axes.get_xaxis().set_visible(False)
+
+        ax2 = ax.pop(0)
+
+        sns.heatmap(
+            np.expand_dims(subs_mtx[-1, :-1], axis=0),
+            annot=True,
+            cbar=False,
+            square=False,
+            ax=ax2,
+            xticklabels=vocab,
+            yticklabels=["insertions"],
+            cmap=cmap,
+        )
+
+        if include_deletions:
+            ax3 = ax.pop(0)
+            ax3.axis("off")
 
     plt.tight_layout()
     plt.savefig(save_filepath)
