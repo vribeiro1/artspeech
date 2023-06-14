@@ -7,11 +7,11 @@ import torch
 from functools import lru_cache
 from torch.utils.data import Dataset
 from torch.nn.utils.rnn import pad_sequence
-from tqdm import tqdm
 from vt_shape_gen.helpers import load_articulator_array
 from vt_tools import UPPER_INCISOR
 
 from database_collector import DATABASE_COLLECTORS
+from phoneme_to_articulation import InputLoaderMixin
 from phoneme_to_articulation.tail_clipper import TailClipper
 from settings import DATASET_CONFIG, UNKNOWN
 
@@ -36,6 +36,10 @@ def pad_sequence_collate_fn(batch):
 
     phonemes = [batch[i][3] for i in sentences_sorted_indices]
 
+    references = [item[4] for item in batch]
+    padded_references = pad_sequence(references, batch_first=True)
+    padded_references = padded_references[sentences_sorted_indices]
+
     # critical_masks = [item[5].T for item in batch]
     # padded_critical_masks = pad_sequence(critical_masks, batch_first=True)
     # padded_critical_masks = padded_critical_masks[sentences_sorted_indices]
@@ -54,6 +58,7 @@ def pad_sequence_collate_fn(batch):
         len_sentences_sorted,
         phonemes,
         # padded_critical_masks,
+        padded_references,
         sentence_frames,
         voicing,
     )
@@ -80,8 +85,8 @@ class ArtSpeechDataset(Dataset):
         self.vocabulary = vocabulary
         self.datadir = datadir
         self.articulators = sorted(articulators)
-        self.n_articulators = len(articulators)
-        self.n_samples = n_samples
+        self.num_articulators = len(articulators)
+        self.num_samples = n_samples
         self.clip_tails = clip_tails
         self.TVs = TVs or []
         self.voiced_tokens = voiced_tokens or []
@@ -90,52 +95,6 @@ class ArtSpeechDataset(Dataset):
         data = collector.collect_data(sequences)
         self.data = funcy.lfilter(lambda d: d["has_all"], data)
         self.dataset_config = DATASET_CONFIG[database_name]
-
-    def prepare_articulator_array(self, subject, sequence, frame_id, articulator):
-        fp_articulator = os.path.join(
-            self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{articulator}.npy"
-        )
-
-        articulator_array = cached_load_articulator_array(
-            fp_articulator,
-            norm_value=self.dataset_config.RES
-        )
-
-        if self.clip_tails:
-            tail_clip_refs = {}
-            tail_clipper = TailClipper(self.dataset_config)
-            for reference in TailClipper.TAIL_CLIP_REFERENCES:
-                fp_reference = os.path.join(
-                    self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
-                )
-
-                reference_array = cached_load_articulator_array(
-                    fp_reference,
-                    norm_value=self.dataset_config.RES
-                )
-                tail_clip_refs[reference.replace("-", "_")] = reference_array
-
-            tail_clip_method_name = f"clip_{articulator.replace('-', '_')}_tails"
-            tail_clip_method = getattr(tail_clipper, tail_clip_method_name, None)
-
-            if tail_clip_method:
-                articulator_array = tail_clip_method(articulator_array, **tail_clip_refs)
-
-        articulator_array = articulator_array.T
-
-        return articulator_array
-
-    def get_frame_coordinate_system_reference(self, subject, sequence, frame_id):
-        fp_coord_system_reference = os.path.join(
-            self.datadir, subject, sequence, "inference_contours", f"{frame_id}_{UPPER_INCISOR}.npy"
-        )
-
-        coord_system_reference_array = cached_load_articulator_array(
-            fp_coord_system_reference,
-            norm_value=self.dataset_config.RES
-        ).T
-
-        return coord_system_reference_array
 
     def __len__(self):
         return len(self.data)
@@ -148,31 +107,27 @@ class ArtSpeechDataset(Dataset):
         frame_ids = item["frame_ids"]
         sentence_tokens = item["phonemes"]
 
-        sentence_targets = torch.zeros(size=(0, self.n_articulators, 2, self.n_samples))
-        sentence_references = torch.zeros(size=(0, 2, self.n_samples))
-        for frame_id in item["frame_ids"]:
-            coord_system_reference_array = self.get_frame_coordinate_system_reference(
-                subject, sequence, frame_id
-            )
-            coord_system_reference = coord_system_reference_array[:, -1]
-            coord_system_reference = coord_system_reference.unsqueeze(dim=-1)
+        sentence_targets = torch.zeros(size=(0, self.num_articulators, 2, self.num_samples))
+        reference_arrays = torch.zeros(size=(0, 1, 2, self.num_samples))
+        for frame_id in frame_ids:
+            frame_targets = torch.zeros(size=(0, 2, self.num_samples))
+            for articulator in self.articulators:
+                articulator_array, reference_array = InputLoaderMixin.prepare_articulator_array(
+                    self.datadir,
+                    subject,
+                    sequence,
+                    frame_id,
+                    articulator,
+                    self.dataset_config,
+                    clip_tails=self.clip_tails
+                )  # (2, D)
+                articulator_array = articulator_array.unsqueeze(dim=0)  # (1, 2, D)
+                frame_targets = torch.cat([frame_targets, articulator_array], dim=0)
 
-            coord_system_reference_array = coord_system_reference_array - coord_system_reference
-            coord_system_reference_array[0, :] = coord_system_reference_array[0, :] + 0.3
-            coord_system_reference_array[1, :] = coord_system_reference_array[1, :] + 0.3
-
-            frame_targets = torch.stack([
-                self.prepare_articulator_array(subject, sequence, frame_id, articulator)
-                for articulator in self.articulators
-            ], dim=0).unsqueeze(dim=0)
-
-            frame_targets = frame_targets - coord_system_reference
-            frame_targets[..., 0, :] = frame_targets[..., 0, :] + 0.3
-            frame_targets[..., 1, :] = frame_targets[..., 1, :] + 0.3
-
+            frame_targets = frame_targets.unsqueeze(dim=0)  # (1, Nart, 2, D)
             sentence_targets = torch.cat([sentence_targets, frame_targets], dim=0)
-            coord_system_reference_array = coord_system_reference_array.unsqueeze(dim=0)
-            sentence_references = torch.cat([sentence_references, coord_system_reference_array], dim=0)
+            reference_array = reference_array.unsqueeze(dim=0).unsqueeze(dim=0)
+            reference_arrays = torch.cat([reference_arrays, reference_array], dim=0)
 
         if len(self.TVs) == 0:
             critical_masks = torch.tensor([], dtype=torch.int)
@@ -185,7 +140,7 @@ class ArtSpeechDataset(Dataset):
             ])
 
         sentence_targets = sentence_targets.type(torch.float)
-        sentence_references = sentence_references.type(torch.float)
+        reference_arrays = reference_arrays.type(torch.float)
 
         sentence_numerized = torch.tensor([
             self.vocabulary.get(token, self.vocabulary[UNKNOWN])
@@ -203,7 +158,7 @@ class ArtSpeechDataset(Dataset):
             sentence_numerized,
             sentence_targets,
             sentence_tokens,
-            sentence_references,
+            reference_arrays,
             critical_masks,
             frame_ids,
             voicing,

@@ -16,8 +16,11 @@ class P2CPDistance(nn.Module):
         self.mean_p2cp = MeanP2CPDistance(reduction="none")
 
     def forward(self, outputs, targets, lengths):
-        p2cp = self.mean_p2cp(outputs, targets)
+        p2cp = self.mean_p2cp(
+            outputs.transpose(-1, -2),
+            targets.transpose(-1, -2)
+        )
         p2cp_mm = p2cp * self.to_mm
-        p2cp_mm = torch.concat([p2cp_mm[i, :l, :] for i, l in enumerate(lengths)])
+        p2cp_mm = torch.tensor([p2cp_mm[i, :l, :].mean() for i, l in enumerate(lengths)])
         mean_p2cp = p2cp_mm.mean()
         return mean_p2cp

@@ -17,15 +17,13 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict, make_padding_mask
-from phoneme_recognition import BLANK, UNKNOWN
 from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
 from phoneme_to_articulation.encoder_decoder.loss import ArtSpeechLoss
 from phoneme_to_articulation.encoder_decoder.metrics import P2CPDistance
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
-from settings import BASE_DIR, TRAIN, VALID, DATASET_CONFIG
-
+from settings import BASE_DIR, TRAIN, VALID, DATASET_CONFIG, BLANK, UNKNOWN
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
@@ -59,7 +57,16 @@ def run_epoch(
     losses = []
     metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
-    for _, sentence, targets, lengths, _, _, voicing in progress_bar:
+    for(
+        _,  # sentence_ids
+        sentence,
+        targets,
+        lengths,
+        _,  # phonemes
+        _,  # references
+        _,  # sentence_frames
+        voicing
+    ) in progress_bar:
         sentence = sentence.to(device)
         targets = targets.to(device)
         voicing = voicing.to(device)
@@ -371,7 +378,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         device=device,
         beta1=beta1,
         beta2=beta2,
-        regularize_out=True
+        regularize_out=True,
     )
     mlflow.log_artifact(test_outputs_dir)
 

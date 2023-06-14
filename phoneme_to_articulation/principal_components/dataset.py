@@ -4,15 +4,11 @@ import os
 import pandas as pd
 import torch
 
-from functools import lru_cache
 from torch.nn.utils.rnn import pad_sequence
 from torch.utils.data import Dataset
-from tqdm import tqdm
-from vt_tools import UPPER_INCISOR
-from vt_shape_gen.helpers import load_articulator_array
 
 from database_collector import DATABASE_COLLECTORS
-from phoneme_to_articulation.tail_clipper import TailClipper
+from phoneme_to_articulation import InputLoaderMixin
 from phoneme_to_articulation.transforms import Normalize
 from settings import DATASET_CONFIG, UNKNOWN
 
@@ -29,75 +25,6 @@ phoneme_weights = {
     "yh": 0.1,
     "uh": 0.1,
 }
-
-
-@lru_cache(maxsize=None)
-def cached_load_articulator_array(filepath, norm_value):
-    return torch.from_numpy(load_articulator_array(filepath, norm_value)).type(torch.float)
-
-
-class InputLoaderMixin:
-    @staticmethod
-    def prepare_articulator_array(
-        datadir,
-        subject,
-        sequence,
-        frame_id,
-        articulator,
-        dataset_config,
-        normalize_fn=None,
-        clip_tails=True
-    ):
-        fp_articulator = os.path.join(
-            datadir, subject, sequence, "inference_contours", f"{frame_id}_{articulator}.npy"
-        )
-        articulator_array = cached_load_articulator_array(
-            fp_articulator,
-            norm_value=dataset_config.RES
-        )
-
-        if clip_tails:
-            tail_clip_refs = {}
-            tail_clipper = TailClipper(dataset_config)
-            for reference in TailClipper.TAIL_CLIP_REFERENCES:
-                fp_reference = os.path.join(
-                    datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
-                )
-                reference_array = cached_load_articulator_array(
-                    fp_reference,
-                    norm_value=dataset_config.RES
-                )
-                tail_clip_refs[reference.replace("-", "_")] = reference_array
-
-            tail_clip_method_name = f"clip_{articulator.replace('-', '_')}_tails"
-            tail_clip_method = getattr(tail_clipper, tail_clip_method_name, None)
-            if tail_clip_method:
-                articulator_array = tail_clip_method(articulator_array, **tail_clip_refs)
-
-        fp_coord_system_reference = os.path.join(
-            datadir, subject, sequence, "inference_contours", f"{frame_id}_{UPPER_INCISOR}.npy"
-        )
-        coord_system_reference_array = cached_load_articulator_array(
-            fp_coord_system_reference,
-            norm_value=dataset_config.RES
-        )
-        coord_system_reference = coord_system_reference_array.T[:, -1]
-        coord_system_reference = coord_system_reference.unsqueeze(dim=-1)
-
-        coord_system_reference_array = coord_system_reference_array.T
-        coord_system_reference_array = coord_system_reference_array - coord_system_reference
-        coord_system_reference_array[0, :] = coord_system_reference_array[0, :] + 0.3
-        coord_system_reference_array[1, :] = coord_system_reference_array[1, :] + 0.3
-
-        articulator_array = articulator_array.T
-        articulator_array = articulator_array - coord_system_reference
-        articulator_array[0, :] = articulator_array[0, :] + 0.3
-        articulator_array[1, :] = articulator_array[1, :] + 0.3
-
-        if normalize_fn is not None:
-            articulator_array = normalize_fn(articulator_array)
-
-        return articulator_array, coord_system_reference_array
 
 
 class PrincipalComponentsAutoencoderDataset2(Dataset):
@@ -302,9 +229,9 @@ def pad_sequence_collate_fn(batch):
     padded_critical_masks = padded_critical_masks[sentences_sorted_indices]
     padded_critical_masks = padded_critical_masks.permute(0, 2, 1)
 
-    critical_references = [item[5] for item in batch]
-    padded_critical_references = pad_sequence(critical_references, batch_first=True)
-    padded_critical_references = padded_critical_references[sentences_sorted_indices]
+    references = [item[5] for item in batch]
+    padded_references = pad_sequence(references, batch_first=True)
+    padded_references = padded_references[sentences_sorted_indices]
 
     sentence_frames = [batch[i][6] for i in sentences_sorted_indices]
 
@@ -315,6 +242,6 @@ def pad_sequence_collate_fn(batch):
         len_sentences_sorted,
         phonemes,
         padded_critical_masks,
-        padded_critical_references,
+        padded_references,
         sentence_frames
     )

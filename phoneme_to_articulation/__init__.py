@@ -1,9 +1,11 @@
 import numpy as np
 import os
 import pandas as pd
+import torch
 import torch.nn as nn
 
 from enum import Enum
+from functools import lru_cache
 from vt_tools import (
     LOWER_LIP,
     PHARYNX,
@@ -12,8 +14,11 @@ from vt_tools import (
     UPPER_LIP,
     UPPER_INCISOR,
 )
+from vt_tools import UPPER_INCISOR
 from vt_tools.bs_regularization import regularize_Bsplines
+from vt_shape_gen.helpers import load_articulator_array
 
+from phoneme_to_articulation.tail_clipper import TailClipper
 from tract_variables import calculate_vocal_tract_variables
 
 REQUIRED_ARTICULATORS_FOR_TVS = [
@@ -29,6 +34,75 @@ REQUIRED_ARTICULATORS_FOR_TVS = [
 class RNNType(Enum):
     LSTM = nn.LSTM
     GRU = nn.GRU
+
+
+@lru_cache(maxsize=None)
+def cached_load_articulator_array(filepath, norm_value):
+    return torch.from_numpy(load_articulator_array(filepath, norm_value)).type(torch.float)
+
+
+class InputLoaderMixin:
+    @staticmethod
+    def prepare_articulator_array(
+        datadir,
+        subject,
+        sequence,
+        frame_id,
+        articulator,
+        dataset_config,
+        normalize_fn=None,
+        clip_tails=True
+    ):
+        fp_articulator = os.path.join(
+            datadir, subject, sequence, "inference_contours", f"{frame_id}_{articulator}.npy"
+        )
+        articulator_array = cached_load_articulator_array(
+            fp_articulator,
+            norm_value=dataset_config.RES
+        )
+
+        if clip_tails:
+            tail_clip_refs = {}
+            tail_clipper = TailClipper(dataset_config)
+            for reference in TailClipper.TAIL_CLIP_REFERENCES:
+                fp_reference = os.path.join(
+                    datadir, subject, sequence, "inference_contours", f"{frame_id}_{reference}.npy"
+                )
+                reference_array = cached_load_articulator_array(
+                    fp_reference,
+                    norm_value=dataset_config.RES
+                )
+                tail_clip_refs[reference.replace("-", "_")] = reference_array
+
+            tail_clip_method_name = f"clip_{articulator.replace('-', '_')}_tails"
+            tail_clip_method = getattr(tail_clipper, tail_clip_method_name, None)
+            if tail_clip_method:
+                articulator_array = tail_clip_method(articulator_array, **tail_clip_refs)
+
+        fp_coord_system_reference = os.path.join(
+            datadir, subject, sequence, "inference_contours", f"{frame_id}_{UPPER_INCISOR}.npy"
+        )
+        coord_system_reference_array = cached_load_articulator_array(
+            fp_coord_system_reference,
+            norm_value=dataset_config.RES
+        )
+        coord_system_reference = coord_system_reference_array.T[:, -1]
+        coord_system_reference = coord_system_reference.unsqueeze(dim=-1)
+
+        coord_system_reference_array = coord_system_reference_array.T
+        coord_system_reference_array = coord_system_reference_array - coord_system_reference
+        coord_system_reference_array[0, :] = coord_system_reference_array[0, :] + 0.3
+        coord_system_reference_array[1, :] = coord_system_reference_array[1, :] + 0.3
+
+        articulator_array = articulator_array.T
+        articulator_array = articulator_array - coord_system_reference
+        articulator_array[0, :] = articulator_array[0, :] + 0.3
+        articulator_array[1, :] = articulator_array[1, :] + 0.3
+
+        if normalize_fn is not None:
+            articulator_array = normalize_fn(articulator_array)
+
+        return articulator_array, coord_system_reference_array
 
 
 def save_outputs(

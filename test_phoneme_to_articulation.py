@@ -10,12 +10,12 @@ import ujson
 from torch.utils.data import DataLoader
 
 from helpers import set_seeds, sequences_from_dict
-from phoneme_recognition import UNKNOWN
-from phoneme_to_articulation.metrics import EuclideanDistance
+from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
+from phoneme_to_articulation.encoder_decoder.loss import ArtSpeechLoss
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
-from phoneme_to_articulation.metrics import EuclideanDistance
+from settings import UNKNOWN, BLANK
 
 
 def main(
@@ -27,12 +27,16 @@ def main(
     vocab_filepath,
     articulators,
     save_to,
+    beta1,
+    beta2,
+    recognizer_filepath=None,
+    recognizer_params=None,
     clip_tails=True,
     num_workers=0
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    default_tokens = [UNKNOWN]
+    default_tokens = [BLANK, UNKNOWN]
     vocabulary = {token: i for i, token in enumerate(default_tokens)}
     with open(vocab_filepath) as f:
         tokens = ujson.load(f)
@@ -67,7 +71,17 @@ def main(
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
-    loss_fn = EuclideanDistance("none")
+    if recognizer_filepath:
+        recognizer = DeepSpeech2(num_classes=len(vocabulary), **recognizer_params)
+        recog_state_dict = torch.load(recognizer_filepath, map_location=device)
+        recognizer.load_state_dict(recog_state_dict)
+        recognizer.to(device)
+
+        for p in recognizer.parameters():
+            p.requires_grad = False
+    else:
+        recognizer = None
+    loss_fn = ArtSpeechLoss(recognizer)
 
     test_results = run_test(
         epoch=0,
@@ -77,7 +91,9 @@ def main(
         outputs_dir=test_outputs_dir,
         articulators=articulators,
         device=device,
-        regularize_out=True
+        beta1=beta1,
+        beta2=beta2,
+        regularize_out=True,
     )
 
     test_results_filepath = os.path.join(save_to, "test_results.json")
@@ -94,8 +110,6 @@ def main(
         results_item[f"p2cp_mm_{articulator}"] = test_results[articulator]["p2cp_mm"]
         results_item[f"med_{articulator}"] = test_results[articulator]["med"]
         results_item[f"med_mm_{articulator}"] = test_results[articulator]["med_mm"]
-        results_item[f"x_corr_{articulator}"] = test_results[articulator]["x_corr"]
-        results_item[f"y_corr_{articulator}"] = test_results[articulator]["y_corr"]
 
     df = pd.DataFrame([results_item])
     df_filepath = os.path.join(save_to, "test_results.csv")

@@ -1,6 +1,5 @@
 import numpy as np
 import os
-import pandas as pd
 import torch
 
 from tqdm import tqdm
@@ -12,6 +11,7 @@ from phoneme_to_articulation import (
     tract_variables,
     REQUIRED_ARTICULATORS_FOR_TVS
 )
+from vt_tools import UPPER_INCISOR
 
 
 def run_test(
@@ -48,6 +48,7 @@ def run_test(
         targets,
         lengths,
         phonemes,
+        reference_arrays,
         sentence_frames,
         voicing,
     ) in progress_bar:
@@ -96,11 +97,33 @@ def run_test(
         losses.append(loss.item())
         progress_bar.set_postfix(loss=np.mean(losses))
 
+        # The upper incisor is the reference of the coordinate system and since it has a fixed
+        # shape, it is non-sense to include it in the prediction. However, it is important for
+        # tract variables and visualization. Therefore, we inject it in the arrays in order to
+        # have it available for the next steps.
+        if UPPER_INCISOR not in articulators:
+            tv_articulators = sorted(articulators + [UPPER_INCISOR])
+            ref_idx = tv_articulators.index(UPPER_INCISOR)
+
+            outputs = torch.concat([
+                outputs[:, :, :ref_idx, :, :],
+                reference_arrays,
+                outputs[:, :, ref_idx:, :, :],
+            ], dim=2)
+
+            targets = torch.concat([
+                targets[:, :, :ref_idx, :, :],
+                reference_arrays,
+                targets[:, :, ref_idx:, :, :],
+            ], dim=2)
+        else:
+            tv_articulators = articulators
+
         # Only calculate the tract variables if all of the required articulators are included
         # in the test
         if all(
             [
-                articulator in articulators
+                articulator in tv_articulators
                 for articulator in REQUIRED_ARTICULATORS_FOR_TVS
             ]
         ):
@@ -111,7 +134,7 @@ def run_test(
                 targets,
                 lengths,
                 phonemes,
-                articulators,
+                tv_articulators,
                 epoch_outputs_dir
             )
 
