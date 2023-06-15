@@ -18,16 +18,18 @@ from phoneme_recognition import (
     Criterion,
     Feature,
     Target,
-    SIL,
-    BLANK,
-    UNKNOWN
 )
 from phoneme_recognition.datasets import PhonemeRecognitionDataset, collate_fn
 from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_recognition.metrics import EditDistance, WordInfoLost, Accuracy, AUROC
 from phoneme_recognition.synthetic_shapes import SyntheticPhonemeRecognitionDataset
-from settings import BASE_DIR, DATASET_CONFIG
+from settings import (
+    BASE_DIR,
+    SIL,
+    BLANK,
+    UNKNOWN
+)
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)

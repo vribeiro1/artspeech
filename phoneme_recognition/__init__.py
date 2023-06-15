@@ -580,6 +580,7 @@ def plot_substitution_matrix(
         pass
 
     ax0 = ax.pop(0)
+    ax0.tick_params(axis="both", which="major", labelsize=24)
 
     plot_subs_mtx = subs_mtx
     if include_insertions:
@@ -595,11 +596,14 @@ def plot_substitution_matrix(
         ax=ax0,
         xticklabels=vocab,
         yticklabels=vocab,
+        fmt=".3f",
+        annot_kws={"fontsize": 22},
         cmap=cmap,
     )
 
     if include_deletions:
         ax1 = ax.pop(0)
+        ax1.tick_params(axis="both", which="major", labelsize=24)
 
         sns.heatmap(
             np.expand_dims(subs_mtx[:-1, -1], axis=1),
@@ -609,6 +613,8 @@ def plot_substitution_matrix(
             ax=ax1,
             xticklabels=["deletions"],
             yticklabels=vocab,
+            fmt=".3f",
+            annot_kws={"fontsize": 22},
             cmap=cmap,
         )
 
@@ -618,6 +624,7 @@ def plot_substitution_matrix(
         ax0.axes.get_xaxis().set_visible(False)
 
         ax2 = ax.pop(0)
+        ax2.tick_params(axis="both", which="major", labelsize=24)
 
         sns.heatmap(
             np.expand_dims(subs_mtx[-1, :-1], axis=0),
@@ -627,6 +634,8 @@ def plot_substitution_matrix(
             ax=ax2,
             xticklabels=vocab,
             yticklabels=["insertions"],
+            fmt=".3f",
+            annot_kws={"fontsize": 22},
             cmap=cmap,
         )
 
