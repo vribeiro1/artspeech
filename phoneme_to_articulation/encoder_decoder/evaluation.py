@@ -54,6 +54,7 @@ def run_test(
     ) in progress_bar:
         sentences = sentences.to(device)
         targets = targets.to(device)
+        voicing = voicing.to(device)
 
         with torch.set_grad_enabled(False):
             outputs = model(sentences, lengths)
@@ -145,7 +146,7 @@ def run_test(
             targets,
             lengths,
             phonemes,
-            articulators,
+            tv_articulators,
             epoch_outputs_dir,
             regularize_out
         )

@@ -5,7 +5,6 @@ from vt_tools import (
     LOWER_LIP,
     PHARYNX,
     SOFT_PALATE,
-    TONGUE,
     UPPER_LIP
 )
 
@@ -191,10 +190,3 @@ class RegularizedLatentsMSELoss2(nn.Module):
         )
 
         return mse + latents_mean_loss + latents_cov_loss
-
-        # cov_loss = torch.tensor([
-        #     torch.cov(latents.T[indices]).square().sum() - torch.cov(latents.T[indices]).diag().square().sum()
-        #     for _, indices in self.indices_dict.items() if len(indices) > 1
-        # ]).sum()
-
-        # return mse + self.alpha * cov_loss

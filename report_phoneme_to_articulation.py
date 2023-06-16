@@ -8,7 +8,6 @@ import seaborn as sns
 import torch
 import yaml
 
-from glob import glob
 from tqdm import tqdm
 
 from metrics import p2cp_distance, euclidean_distance

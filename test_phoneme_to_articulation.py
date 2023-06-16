@@ -31,6 +31,7 @@ def main(
     beta2,
     recognizer_filepath=None,
     recognizer_params=None,
+    voicing_filepath=None,
     clip_tails=True,
     num_workers=0
 ):
@@ -42,6 +43,11 @@ def main(
         tokens = ujson.load(f)
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
+    if voicing_filepath is not None:
+        with open(voicing_filepath) as f:
+            voiced_tokens = ujson.load(f)
+    else:
+        voiced_tokens = None
 
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = ArtSpeechDataset(
@@ -50,7 +56,8 @@ def main(
         test_sequences,
         vocabulary,
         articulators,
-        clip_tails=clip_tails
+        clip_tails=clip_tails,
+        voiced_tokens=voiced_tokens,
     )
     test_dataloader = DataLoader(
         test_dataset,
