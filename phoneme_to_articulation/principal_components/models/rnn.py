@@ -23,14 +23,8 @@ class PrincipalComponentsPredictor(nn.Module):
             nn.LayerNorm([hidden_features]),
             nn.Linear(in_features=hidden_features, out_features=hidden_features),
             nn.ReLU(),
-            nn.LayerNorm([hidden_features]),
-            nn.Linear(in_features=hidden_features, out_features=hidden_features),
-            nn.ReLU(),
             nn.LayerNorm(hidden_features),
             nn.Linear(in_features=hidden_features, out_features=hidden_features // 2),
-            nn.ReLU(),
-            nn.LayerNorm(hidden_features // 2),
-            nn.Linear(in_features=hidden_features // 2, out_features=hidden_features // 2),
             nn.ReLU(),
             nn.LayerNorm(hidden_features // 2),
             nn.Linear(in_features=hidden_features // 2, out_features=num_components)
@@ -57,8 +51,6 @@ class PrincipalComponentsArtSpeech(nn.Module):
             reduce(lambda l1, l2: l1 + l2,
             indices_dict.values())
         ))
-        self.indices_dict = indices_dict
-        self.sorted_articulators = sorted(indices_dict.keys())
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)
 
@@ -77,13 +69,11 @@ class PrincipalComponentsArtSpeech(nn.Module):
             nn.ReLU()
         )
 
-        self.predictors = nn.ModuleDict({
-            articulator: PrincipalComponentsPredictor(
-                in_features=hidden_size,
-                num_components=len(components),
-                hidden_features=128,
-            ) for articulator, components in indices_dict.items()
-        })
+        self.predictor = PrincipalComponentsPredictor(
+            in_features=hidden_size,
+            num_components=self.latent_size,
+            hidden_features=128,
+        )
 
     def forward(self, x, lengths):
         """
@@ -107,24 +97,5 @@ class PrincipalComponentsArtSpeech(nn.Module):
         )
 
         linear_out = self.linear(rnn_out)  # (bs, seq_len, embed_dim)
-
-        bs, seq_len = x.shape
-        articulators_components = {
-            articulator: -torch.inf * torch.ones(
-                size=(bs, seq_len, self.latent_size),
-                dtype=torch.float, device=x.device
-            ) for articulator in self.sorted_articulators
-        }
-
-        for articulator in self.sorted_articulators:
-            indices = self.indices_dict[articulator]
-            predictor = self.predictors[articulator]
-            articulators_components[articulator][..., indices] = predictor(linear_out)
-
-        components = torch.stack([
-            articulators_components[articulator] for articulator in self.sorted_articulators
-        ], dim=2)
-        components, _ = torch.max(components, dim=2)
-        components = torch.tanh(components)
-
+        components = torch.tanh(self.predictor(linear_out))
         return components

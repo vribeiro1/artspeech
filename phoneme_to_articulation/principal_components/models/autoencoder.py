@@ -97,10 +97,14 @@ class MultiDecoder(nn.Module):
         })
 
     def forward(self, x):
-        outputs = torch.concat([
-            self.decoders[articulator](x[..., self.indices_dict[articulator]]).unsqueeze(dim=1)
-            for articulator in self.sorted_articulators
-        ], dim=1)
+        output_list = []
+        for articulator in self.sorted_articulators:
+            decoder = self.decoders[articulator]
+            indices = self.indices_dict[articulator]
+            decoder_input = x[..., indices]
+            decoder_output = decoder(decoder_input).unsqueeze(dim=2)
+            output_list.append(decoder_output)
+        outputs = torch.concat(output_list, dim=2)
 
         return outputs
 
