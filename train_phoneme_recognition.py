@@ -32,7 +32,7 @@ from phoneme_recognition import (
 from phoneme_recognition.datasets import  PhonemeRecognitionDataset, collate_fn
 from phoneme_recognition.decoders import TopKDecoder
 from phoneme_recognition.deepspeech2 import DeepSpeech2
-from phoneme_recognition.metrics import EditDistance, Accuracy, AUROC, F1Score
+from phoneme_recognition.metrics import EditDistance
 from settings import BASE_DIR, TRAIN, VALID
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")

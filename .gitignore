@@ -22,8 +22,9 @@ __pycache__
 
 config/*
 !config/*.yaml.example
+data/*
+!data/.gitkeep
 
-data
 tmp*
 results*
 mlruns
