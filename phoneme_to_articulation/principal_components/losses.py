@@ -112,7 +112,7 @@ class AutoencoderLoss2(nn.Module):
         _, num_pcs = target_pcs.shape
         target_pcs = target_pcs.reshape(bs, seq_len, num_pcs)
 
-        output_shapes = self.decode(output_pcs)
+        output_shapes = self.decode(output_pcs).transpose(1, 2)
         output_shapes = output_shapes.reshape(bs, seq_len, num_articulators, 2, num_samples)
 
         # outputs_pcs : (bs, seq_len, num_components)
@@ -155,6 +155,7 @@ class AutoencoderLoss2(nn.Module):
         )
 
 
+import pdb
 class RegularizedLatentsMSELoss2(nn.Module):
     def __init__(
         self,
@@ -175,6 +176,7 @@ class RegularizedLatentsMSELoss2(nn.Module):
         target,
         sample_weights=None
     ):
+        pdb.set_trace()
         mse = self.mse(outputs, target)
         if sample_weights is not None:
             mse = mse.permute(2, 1, 0)

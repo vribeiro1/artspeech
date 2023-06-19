@@ -102,9 +102,9 @@ class MultiDecoder(nn.Module):
             decoder = self.decoders[articulator]
             indices = self.indices_dict[articulator]
             decoder_input = x[..., indices]
-            decoder_output = decoder(decoder_input).unsqueeze(dim=2)
+            decoder_output = decoder(decoder_input).unsqueeze(dim=1)
             output_list.append(decoder_output)
-        outputs = torch.concat(output_list, dim=2)
+        outputs = torch.concat(output_list, dim=1)
 
         return outputs
 
