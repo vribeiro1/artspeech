@@ -317,12 +317,14 @@ def run_phoneme_to_principal_components_test(
     ) in progress_bar:
         sentence_inputs = sentence_inputs.to(device)
         sentence_targets = sentence_targets.to(device)
+        reference_arrays = reference_arrays.to(device)
 
         with torch.set_grad_enabled(False):
             sentence_outputs = model(sentence_inputs, sentence_lengths)
             loss = criterion(
                 sentence_outputs,
                 sentence_targets,
+                reference_arrays,
                 sentence_lengths,
                 critical_masks,
             )
@@ -351,8 +353,7 @@ def run_phoneme_to_principal_components_test(
             if not os.path.exists(epoch_outputs_dir):
                 os.makedirs(epoch_outputs_dir)
 
-            sentence_pred_shapes = decode_transform(sentence_outputs)  # (B, N_art, T, 2 * D)
-            sentence_pred_shapes = sentence_pred_shapes.permute(0, 2, 1, 3)
+            sentence_pred_shapes = decode_transform(sentence_outputs)  # (B, T, N_art, 2 * D)
             bs, seq_len, num_articulators, features = sentence_pred_shapes.shape
             sentence_pred_shapes = sentence_pred_shapes.reshape(
                 bs,
@@ -364,6 +365,7 @@ def run_phoneme_to_principal_components_test(
 
             sentence_pred_shapes = sentence_pred_shapes.detach().cpu()
             sentence_targets = sentence_targets.detach().cpu()
+            reference_arrays = reference_arrays.detach().cpu()
 
             for i, articulator in enumerate(articulators):
                 articulator_denorm_fn = normalize_dict[articulator].inverse
