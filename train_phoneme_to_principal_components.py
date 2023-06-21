@@ -64,22 +64,29 @@ def run_epoch(
     metrics_values = {metric_name: [] for metric_name in fn_metrics}
     progress_bar = tqdm(dataloader, desc=f"Epoch {epoch} - {phase}")
     for (
-        _,
-        inputs,
-        targets,
-        len_inputs,
-        _,
-        critical_masks,
-        _,
-        _,
+        _,  # sentence_name
+        inputs,  # sentence_numerized
+        targets,  # sentence_targets
+        len_inputs,  # lengths
+        _,  # phonemes
+        critical_masks,  # critical masks
+        reference_arrays,  # reference_arrays
+        _,  # sentence_frames
     ) in progress_bar:
         inputs = inputs.to(device)
         targets = targets.to(device)
+        reference_arrays = reference_arrays.to(device)
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
             outputs = model(inputs, len_inputs)
-            loss = criterion(outputs, targets, len_inputs, critical_masks)
+            loss = criterion(
+                outputs,
+                targets,
+                reference_arrays,
+                len_inputs,
+                critical_masks
+            )
 
             if training:
                 loss.backward()
@@ -168,32 +175,6 @@ def main(
         model.load_state_dict(state_dict)
     model.to(device)
 
-    if TV_to_phoneme_map is None:
-        TV_to_phoneme_map = {}
-    TVs = sorted(TV_to_phoneme_map.keys())
-
-    loss_fn = AutoencoderLoss2(
-        indices_dict=indices_dict,
-        TVs=TVs,
-        device=device,
-        encoder_state_dict_filepath=encoder_state_dict_filepath,
-        decoder_state_dict_filepath=decoder_state_dict_filepath,
-        beta1=beta1,
-        beta2=beta2,
-        beta3=beta3,
-        **autoencoder_kwargs,
-    )
-    optimizer = Adam(
-        model.parameters(),
-        lr=learning_rate,
-        weight_decay=weight_decay
-    )
-    scheduler = ReduceLROnPlateau(
-        optimizer,
-        factor=0.1,
-        patience=10
-    )
-
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsPhonemeToArticulationDataset2(
         database_name,
@@ -230,6 +211,37 @@ def main(
         num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn,
+    )
+
+    if TV_to_phoneme_map is None:
+        TV_to_phoneme_map = {}
+    TVs = sorted(TV_to_phoneme_map.keys())
+
+    denorm_fn = {
+        articulator: normalize.inverse
+        for articulator, normalize in train_dataset.normalize.items()
+    }
+    loss_fn = AutoencoderLoss2(
+        indices_dict=indices_dict,
+        TVs=TVs,
+        device=device,
+        encoder_state_dict_filepath=encoder_state_dict_filepath,
+        decoder_state_dict_filepath=decoder_state_dict_filepath,
+        beta1=beta1,
+        beta2=beta2,
+        beta3=beta3,
+        denormalize_fn=denorm_fn,
+        **autoencoder_kwargs,
+    )
+    optimizer = Adam(
+        model.parameters(),
+        lr=learning_rate,
+        weight_decay=weight_decay
+    )
+    scheduler = ReduceLROnPlateau(
+        optimizer,
+        factor=0.1,
+        patience=10
     )
 
     fn_metrics = {
