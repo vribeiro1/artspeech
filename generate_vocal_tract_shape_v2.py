@@ -25,6 +25,12 @@ from helpers import npy_to_xarticul, sequences_from_dict
 from phoneme_to_articulation.phoneme_wise_mean_contour import forward_mean_contour
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
+from phoneme_to_articulation.principal_components.models import (
+    MultiDecoder,
+    PrincipalComponentsArtSpeech,
+    PrincipalComponentsArtSpeechWrapper,
+)
+from phoneme_to_articulation.transforms import Normalize
 from settings import DATASET_CONFIG, BLANK, UNKNOWN
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -67,25 +73,24 @@ def get_phonetic_sequences(textgrid, framerate=55):
     return sentences
 
 
-def make_frame(outputs, phoneme, regularize_outputs=True):
+def make_frame(articulators, outputs, phoneme, reference_array=None, regularize_outputs=True):
     lw = 5
     fig = Figure(figsize=(10, 10))
     canvas = FigureCanvas(fig)
 
     ax = fig.gca()
 
-    for j, output in enumerate(outputs):
-        articulator = list(COLORS.keys())[j]
-        output = output.copy().T
+    if reference_array is not None:
+        ax.plot(*reference_array, c=COLORS[UPPER_INCISOR], lw=lw, linestyle="--")
 
+    for articulator, output in zip(articulators, outputs):
         if regularize_outputs:
-            reg_X, reg_Y = regularize_Bsplines(output, 3)
-            output = np.array([reg_X, reg_Y]).T
+            reg_X, reg_Y = regularize_Bsplines(output.T, 3)
+            output = np.array([reg_X, reg_Y])
 
-        ax.plot(*zip(*output), c=COLORS[articulator], linewidth=lw)
+        ax.plot(*output, c=COLORS[articulator], linewidth=lw)
 
     ax.text(0.475, 0.15, f"/{phoneme[0]}/", fontsize=56, color="blue")
-
     ax.set_ylim([1., 0.])
     ax.set_xlim([0., 1.])
     ax.axis("off")
@@ -97,7 +102,15 @@ def make_frame(outputs, phoneme, regularize_outputs=True):
     return frame
 
 
-def make_vocal_tract_shape_video(outputs, phonemes, video_filepath, regularize_outputs=True, framerate=55):
+def make_vocal_tract_shape_video(
+        articulators,
+        outputs,
+        reference_arrays,
+        phonemes,
+        video_filepath,
+        regularize_outputs=True,
+        framerate=50
+    ):
     video_writer = cv2.VideoWriter(
         video_filepath,
         cv2.VideoWriter_fourcc(*"DIVX"),
@@ -106,21 +119,31 @@ def make_vocal_tract_shape_video(outputs, phonemes, video_filepath, regularize_o
     )
 
     np_outputs = outputs.detach().cpu().numpy()
-    for _, (frame_outputs, phoneme) in enumerate(zip(np_outputs, phonemes)):
-        frame = make_frame(frame_outputs, phoneme, regularize_outputs)
+    np_references = reference_arrays.detach().cpu().numpy()
+    for frame_outputs, frame_ref, phoneme in zip(np_outputs, np_references, phonemes):
+        frame = make_frame(
+            articulators,
+            frame_outputs,
+            phoneme,
+            frame_ref,
+            regularize_outputs=regularize_outputs,
+        )
         video_writer.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
 
     video_writer.release()
 
 
-def save_vocal_tract_shape(outputs, phonemes, save_to, regularize_outputs=True):
-    lw = 5
-
+def save_vocal_tract_shape(articulators, outputs, phonemes, save_to, regularize_outputs=True):
     np_outputs = outputs.detach().cpu().numpy()
     for i_frame, (frame_outputs, phoneme) in enumerate(zip(np_outputs, phonemes)):
         plt.figure(figsize=(10, 10))
 
-        frame = make_frame(frame_outputs, phoneme, regularize_outputs)
+        frame = make_frame(
+            articulators,
+            frame_outputs,
+            phoneme,
+            regularize_outputs=regularize_outputs,
+        )
         plt.imshow(frame)
         plt.axis("off")
 
@@ -168,6 +191,9 @@ def main(
     vocab_filepath,
     articulators,
     save_to,
+    model_params=None,
+    aux_state_dict_filepath=None,
+    aux_model_params=None,
 ):
     dataset_config = DATASET_CONFIG[database_name]
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -179,19 +205,51 @@ def main(
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
 
-    if method == "neural-network":
+    if method == "encoder_decoder":
         model = ArtSpeech(len(vocabulary), 10)
         state_dict = torch.load(state_dict_filepath, map_location=device)
         model.load_state_dict(state_dict)
         model.to(device)
-    elif method == "mean-contour":
-        articulators = sorted(COLORS.keys())
-
+    elif method == "mean_contour":
         df = pd.read_csv(state_dict_filepath)
         for articulator in articulators:
             df[articulator] = df[articulator].apply(eval)
 
         model = partial(forward_mean_contour, df=df, articulators=articulators)
+    elif method == "autoencoder":
+        denormalize = {}
+        for articulator in articulators:
+            mean_filepath = os.path.join(
+                datadir,
+                "normalization_statistics",
+                f"{articulator}_mean.npy"
+            )
+            mean = torch.from_numpy(np.load(mean_filepath))
+            std_filepath = os.path.join(
+                datadir,
+                "normalization_statistics",
+                f"{articulator}_std.npy"
+            )
+            std = torch.from_numpy(np.load(std_filepath))
+            denormalize[articulator] = Normalize(mean, std).inverse
+
+        decoder = MultiDecoder(
+            **aux_model_params
+        )
+        aux_state_dict = torch.load(aux_state_dict_filepath, map_location=device)
+        decoder.load_state_dict(aux_state_dict)
+        decoder.to(device)
+
+        rnn = PrincipalComponentsArtSpeech(
+            len(vocabulary),
+            **model_params
+        )
+        state_dict = torch.load(state_dict_filepath, map_location=device)
+        rnn.load_state_dict(state_dict)
+        rnn.to(device)
+
+        model = PrincipalComponentsArtSpeechWrapper(rnn, decoder, denormalize)
+        model.to(device)
     else:
         raise Exception(f"Unavailable method '{method}'")
 
@@ -242,15 +300,26 @@ def main(
         seq_len = len(sentence_tokens)
         lengths = torch.tensor([seq_len], dtype=torch.long).cpu()
 
-        if method == "neural-network":
+        if method in ["encoder_decoder", "autoencoder"]:
             sentence_numerized = sentence_numerized.unsqueeze(dim=0)
             outputs = model(sentence_numerized, lengths)
-        elif method == "mean-contour":
+        elif method == "mean_contour":
             outputs = model(sentence_tokens)
 
         video_filepath = os.path.join(save_sentence_dir, f"{sentence_name}.avi")
-        save_vocal_tract_shape(outputs.squeeze(dim=0), sentence_tokens, save_plots_dir)
-        make_vocal_tract_shape_video(outputs.squeeze(dim=0), sentence_tokens, video_filepath)
+        save_vocal_tract_shape(
+            articulators,
+            outputs.squeeze(dim=0),
+            sentence_tokens,
+            save_plots_dir
+        )
+        make_vocal_tract_shape_video(
+            articulators,
+            outputs.squeeze(dim=0),
+            reference_arrays.squeeze(dim=0).squeeze(dim=1),
+            sentence_tokens,
+            video_filepath
+        )
 
         articulators_dicts = save_contours(
             outputs.squeeze(dim=0),

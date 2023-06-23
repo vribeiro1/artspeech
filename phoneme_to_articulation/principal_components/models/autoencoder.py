@@ -2,6 +2,8 @@ import funcy
 import torch
 import torch.nn as nn
 
+from helpers import make_indices_dict
+
 
 class Encoder(nn.Module):
     def __init__(self, in_features, num_components, hidden_features):
@@ -43,6 +45,10 @@ class MultiEncoder(nn.Module):
         hidden_features,
     ):
         super().__init__()
+
+        if isinstance(list(indices_dict.values())[0], int):
+            indices_dict = make_indices_dict(indices_dict)
+            
         self.indices_dict = indices_dict
         self.latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
         self.sorted_articulators = sorted(self.indices_dict.keys())
@@ -84,6 +90,10 @@ class MultiDecoder(nn.Module):
         hidden_features,
     ):
         super().__init__()
+
+        if isinstance(list(indices_dict.values())[0], int):
+            indices_dict = make_indices_dict(indices_dict)
+
         self.indices_dict = indices_dict
         self.latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
         self.sorted_articulators = sorted(self.indices_dict.keys())
@@ -117,6 +127,10 @@ class MultiArticulatorAutoencoder(nn.Module):
         hidden_features=64,
     ):
         super().__init__()
+
+        if isinstance(list(indices_dict.values())[0], int):
+            indices_dict = make_indices_dict(indices_dict)
+
         self.indices_dict = indices_dict
         self.latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
         self.sorted_articulators = sorted(self.indices_dict.keys())

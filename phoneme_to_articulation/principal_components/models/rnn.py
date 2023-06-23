@@ -4,6 +4,7 @@ import torch.nn as nn
 from functools import reduce
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
+from helpers import make_indices_dict
 from phoneme_to_articulation import RNNType
 
 
@@ -47,6 +48,9 @@ class PrincipalComponentsArtSpeech(nn.Module):
     ):
         super().__init__()
 
+        if isinstance(list(indices_dict.values())[0], int):
+            indices_dict = make_indices_dict(indices_dict)
+
         self.latent_size = 1 + max(set(
             reduce(lambda l1, l2: l1 + l2,
             indices_dict.values())
@@ -54,6 +58,8 @@ class PrincipalComponentsArtSpeech(nn.Module):
 
         self.embedding = nn.Embedding(vocab_size, embed_dim)
 
+        if isinstance(rnn, str):
+            rnn = RNNType[rnn.upper()]
         rnn_class = rnn.value
         self.rnn = rnn_class(
             embed_dim,
