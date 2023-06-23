@@ -19,7 +19,6 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict, make_indices_dict
-from phoneme_recognition import UNKNOWN
 from phoneme_to_articulation import RNNType
 from phoneme_to_articulation.principal_components.dataset import (
     PrincipalComponentsPhonemeToArticulationDataset2,
@@ -29,7 +28,14 @@ from phoneme_to_articulation.principal_components.evaluation import run_phoneme_
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
 from phoneme_to_articulation.principal_components.metrics import DecoderMeanP2CPDistance2
 from phoneme_to_articulation.principal_components.models.rnn import PrincipalComponentsArtSpeech
-from settings import BASE_DIR, TRAIN, VALID, DATASET_CONFIG
+from settings import (
+    BASE_DIR,
+    BLANK,
+    UNKNOWN,
+    TRAIN,
+    VALID,
+    DATASET_CONFIG
+)
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
 TMP_DIR = tempfile.mkdtemp(dir=TMPFILES)
@@ -154,7 +160,8 @@ def main(
     last_model_path = os.path.join(RESULTS_DIR, "last_model.pt")
     save_checkpoint_path = os.path.join(RESULTS_DIR, "checkpoint.pt")
 
-    vocabulary = {UNKNOWN: 0}
+    default_tokens = [BLANK, UNKNOWN]
+    vocabulary = {token: i for i, token in enumerate(default_tokens)}
     with open(vocab_filepath) as f:
         tokens = ujson.load(f)
         for i, token in enumerate(tokens, start=len(vocabulary)):
