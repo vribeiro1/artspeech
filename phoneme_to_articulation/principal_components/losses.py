@@ -54,7 +54,7 @@ class CriticalLoss(nn.Module):
         reference_arrays,
         critical_mask,
     ):
-        if len(self.TVs) < 0:
+        if len(self.TVs) == 0:
             critical_loss = torch.tensor(0, device=target_shapes.device, dtype=torch.float)
             return critical_loss
 
@@ -114,14 +114,18 @@ class AutoencoderLoss2(nn.Module):
         beta1=1.0,
         beta2=1.0,
         beta3=1.0,
+        beta4=0.0,
+        recognizer=None,
         **kwargs,
     ):
         super().__init__()
 
-        beta1 = beta1
-        beta2 = beta2
-        beta3 = beta3
-        self.beta1, self.beta2, self.beta3 = self.normalize_betas([beta1, beta2, beta3])
+        (
+            self.beta1,
+            self.beta2,
+            self.beta3,
+            self.beta4
+        ) = self.normalize_betas([beta1, beta2, beta3, beta4])
 
         encoder = MultiEncoder(
             indices_dict,
@@ -158,6 +162,8 @@ class AutoencoderLoss2(nn.Module):
         self.reconstruction = nn.MSELoss(reduction="none")
         articulators = sorted(indices_dict.keys())
         self.critical = CriticalLoss(TVs, articulators, denormalize_fn)
+        self.recognition = nn.MSELoss(reduction="none")
+        self.recognizer = recognizer
 
     @staticmethod
     def normalize_betas(betas):
@@ -171,6 +177,7 @@ class AutoencoderLoss2(nn.Module):
         reference_arrays,
         lengths,
         critical_mask,
+        voicing=None,
     ):
         """
         Args:
@@ -208,10 +215,31 @@ class AutoencoderLoss2(nn.Module):
         # Critical loss
         critical_loss = self.critical(output_shapes, target_shapes, reference_arrays, critical_mask)
 
+        # Recognition loss
+        bs, seq_len, n_art, chann, n_samples = target_shapes.shape
+        if self.recognizer is not None:
+            _, target_features = self.recognizer(
+                target_shapes.view(bs, chann, n_art * n_samples, seq_len),
+                voicing,
+                return_features=True
+            )
+            _, output_features = self.recognizer(
+                output_shapes.view(bs, chann, n_art * n_samples, seq_len),
+                voicing,
+                return_features=True
+            )
+            recognition_loss = self.recognition(output_features, target_features)
+            _, _, features = recognition_loss.shape
+            recognition_loss = recognition_loss.view(bs * seq_len, features)
+            recognition_loss = recognition_loss[padding_mask.view(bs * seq_len)].mean()
+        else:
+            recognition_loss = torch.tensor(0, device=target_shapes.device, dtype=torch.float)
+
         return (
             self.beta1 * latent_loss +
             self.beta2 * reconstruction_loss +
-            self.beta3 * critical_loss
+            self.beta3 * critical_loss +
+            self.beta4 * recognition_loss
         )
 
 
@@ -233,7 +261,7 @@ class RegularizedLatentsMSELoss2(nn.Module):
         outputs,
         latents,
         target,
-        sample_weights=None
+        sample_weights=None,
     ):
         mse = self.mse(outputs, target)
         if sample_weights is not None:

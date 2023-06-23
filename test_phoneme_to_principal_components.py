@@ -9,6 +9,7 @@ from torch.utils.data import DataLoader
 
 from helpers import sequences_from_dict, set_seeds, make_indices_dict
 from phoneme_recognition import UNKNOWN
+from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_to_articulation import RNNType
 from phoneme_to_articulation.principal_components.dataset import (
     PrincipalComponentsPhonemeToArticulationDataset2,
@@ -37,6 +38,10 @@ def main(
     beta1=1.0,
     beta2=1.0,
     beta3=1.0,
+    beta4=0.0,
+    recognizer_filepath=None,
+    recognizer_params=None,
+    voicing_filepath=None,
     num_workers=0,
     TV_to_phoneme_map=None,
     clip_tails=True
@@ -48,26 +53,15 @@ def main(
         tokens = ujson.load(f)
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
+    if voicing_filepath is not None:
+        with open(voicing_filepath) as f:
+            voiced_tokens = ujson.load(f)
+    else:
+        voiced_tokens = None
 
     if isinstance(list(indices_dict.values())[0], int):
         indices_dict = make_indices_dict(indices_dict)
     articulators = sorted(indices_dict.keys())
-
-    if TV_to_phoneme_map is None:
-        TV_to_phoneme_map = {}
-    TVs = sorted(TV_to_phoneme_map.keys())
-
-    loss_fn = AutoencoderLoss2(
-        indices_dict=indices_dict,
-        TVs=TVs,
-        device=device,
-        encoder_state_dict_filepath=encoder_state_dict_filepath,
-        decoder_state_dict_filepath=decoder_state_dict_filepath,
-        beta1=beta1,
-        beta2=beta2,
-        beta3=beta3,
-        **autoencoder_kwargs,
-    )
 
     sequences = sequences_from_dict(datadir, seq_dict)
     test_dataset = PrincipalComponentsPhonemeToArticulationDataset2(
@@ -78,6 +72,7 @@ def main(
         articulators,
         TV_to_phoneme_map,
         clip_tails=clip_tails,
+        voiced_tokens=voiced_tokens,
     )
     test_dataloader = DataLoader(
         test_dataset,
@@ -86,6 +81,39 @@ def main(
         num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=pad_sequence_collate_fn,
+    )
+
+    if TV_to_phoneme_map is None:
+        TV_to_phoneme_map = {}
+    TVs = sorted(TV_to_phoneme_map.keys())
+
+    if recognizer_filepath:
+        recognizer = DeepSpeech2(num_classes=len(vocabulary), **recognizer_params)
+        recog_state_dict = torch.load(recognizer_filepath, map_location=device)
+        recognizer.load_state_dict(recog_state_dict)
+        recognizer.to(device)
+
+        for p in recognizer.parameters():
+            p.requires_grad = False
+    else:
+        recognizer = None
+    denorm_fn = {
+        articulator: normalize.inverse
+        for articulator, normalize in test_dataset.normalize.items()
+    }
+    loss_fn = AutoencoderLoss2(
+        indices_dict=indices_dict,
+        TVs=TVs,
+        device=device,
+        encoder_state_dict_filepath=encoder_state_dict_filepath,
+        decoder_state_dict_filepath=decoder_state_dict_filepath,
+        denormalize_fn=denorm_fn,
+        beta1=beta1,
+        beta2=beta2,
+        beta3=beta3,
+        beta4=beta4,
+        recognizer=recognizer,
+        **autoencoder_kwargs,
     )
 
     model = PrincipalComponentsArtSpeech(

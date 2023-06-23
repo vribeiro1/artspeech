@@ -65,7 +65,7 @@ def run_epoch(
         _,  # phonemes
         _,  # references
         _,  # sentence_frames
-        voicing
+        voicing,
     ) in progress_bar:
         sentence = sentence.to(device)
         targets = targets.to(device)

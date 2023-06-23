@@ -1,5 +1,3 @@
-import pdb
-
 import argparse
 import logging
 import mlflow
@@ -28,6 +26,7 @@ from phoneme_to_articulation.principal_components.evaluation import run_phoneme_
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
 from phoneme_to_articulation.principal_components.metrics import DecoderMeanP2CPDistance2
 from phoneme_to_articulation.principal_components.models.rnn import PrincipalComponentsArtSpeech
+from phoneme_recognition.deepspeech2 import DeepSpeech2
 from settings import (
     BASE_DIR,
     BLANK,
@@ -78,10 +77,12 @@ def run_epoch(
         critical_masks,  # critical masks
         reference_arrays,  # reference_arrays
         _,  # sentence_frames
+        voicing,  # voicing
     ) in progress_bar:
         inputs = inputs.to(device)
         targets = targets.to(device)
         reference_arrays = reference_arrays.to(device)
+        voicing = voicing.to(device)
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
@@ -91,7 +92,8 @@ def run_epoch(
                 targets,
                 reference_arrays,
                 len_inputs,
-                critical_masks
+                critical_masks,
+                voicing,
             )
 
             if training:
@@ -146,6 +148,10 @@ def main(
     beta1=1.0,
     beta2=1.0,
     beta3=1.0,
+    beta4=0.0,
+    recognizer_filepath=None,
+    recognizer_params=None,
+    voicing_filepath=None,
     TV_to_phoneme_map=None,
     clip_tails=True,
     num_workers=0,
@@ -166,6 +172,11 @@ def main(
         tokens = ujson.load(f)
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
+    if voicing_filepath is not None:
+        with open(voicing_filepath) as f:
+            voiced_tokens = ujson.load(f)
+    else:
+        voiced_tokens = None
 
     if isinstance(list(indices_dict.values())[0], int):
         indices_dict = make_indices_dict(indices_dict)
@@ -191,6 +202,7 @@ def main(
         articulators,
         TV_to_phoneme_map,
         clip_tails=clip_tails,
+        voiced_tokens=voiced_tokens,
     )
     train_dataloader = DataLoader(
         train_dataset,
@@ -210,6 +222,7 @@ def main(
         articulators,
         TV_to_phoneme_map,
         clip_tails=clip_tails,
+        voiced_tokens=voiced_tokens,
     )
     valid_dataloader = DataLoader(
         valid_dataset,
@@ -224,6 +237,16 @@ def main(
         TV_to_phoneme_map = {}
     TVs = sorted(TV_to_phoneme_map.keys())
 
+    if recognizer_filepath:
+        recognizer = DeepSpeech2(num_classes=len(vocabulary), **recognizer_params)
+        recog_state_dict = torch.load(recognizer_filepath, map_location=device)
+        recognizer.load_state_dict(recog_state_dict)
+        recognizer.to(device)
+
+        for p in recognizer.parameters():
+            p.requires_grad = False
+    else:
+        recognizer = None
     denorm_fn = {
         articulator: normalize.inverse
         for articulator, normalize in train_dataset.normalize.items()
@@ -234,10 +257,12 @@ def main(
         device=device,
         encoder_state_dict_filepath=encoder_state_dict_filepath,
         decoder_state_dict_filepath=decoder_state_dict_filepath,
+        denormalize_fn=denorm_fn,
         beta1=beta1,
         beta2=beta2,
         beta3=beta3,
-        denormalize_fn=denorm_fn,
+        beta4=beta4,
+        recognizer=recognizer,
         **autoencoder_kwargs,
     )
     optimizer = Adam(
@@ -370,6 +395,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         articulators,
         TV_to_phoneme_map,
         clip_tails=clip_tails,
+        voiced_tokens=voiced_tokens,
     )
     test_dataloader = DataLoader(
         test_dataset,

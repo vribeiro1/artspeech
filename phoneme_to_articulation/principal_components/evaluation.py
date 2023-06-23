@@ -313,11 +313,13 @@ def run_phoneme_to_principal_components_test(
         sentence_phonemes,
         critical_masks,
         reference_arrays,
-        sentence_frames
+        sentence_frames,
+        voicing,
     ) in progress_bar:
         sentence_inputs = sentence_inputs.to(device)
         sentence_targets = sentence_targets.to(device)
         reference_arrays = reference_arrays.to(device)
+        voicing = voicing.to(device)
 
         with torch.set_grad_enabled(False):
             sentence_outputs = model(sentence_inputs, sentence_lengths)
@@ -327,6 +329,7 @@ def run_phoneme_to_principal_components_test(
                 reference_arrays,
                 sentence_lengths,
                 critical_masks,
+                voicing,
             )
             losses.append(loss.item())
 

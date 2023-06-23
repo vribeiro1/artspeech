@@ -34,7 +34,7 @@ class PrincipalComponentsAutoencoderDataset2(Dataset):
         datadir,
         sequences,
         articulators,
-        clip_tails=True
+        clip_tails=True,
     ):
         self.datadir = datadir
         self.dataset_config = DATASET_CONFIG[database_name]
@@ -118,6 +118,7 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
         TV_to_phoneme_map,
         num_samples=50,
         clip_tails=True,
+        voiced_tokens=None,
     ):
         self.datadir = datadir
         self.dataset_config = DATASET_CONFIG[database_name]
@@ -125,7 +126,8 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
         self.articulators = sorted(articulators)
         self.num_samples = num_samples
         self.clip_tails = clip_tails
-        self.TV_to_phoneme_map = TV_to_phoneme_map
+        self.TV_to_phoneme_map = TV_to_phoneme_map or {}
+        self.voiced_tokens = voiced_tokens or []
 
         collector = DATABASE_COLLECTORS[database_name](datadir)
         self.data = collector.collect_data(sequences)
@@ -198,6 +200,12 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
         else:
             critical_mask = torch.zeros(size=(0, len(sentence_tokens)))
 
+        # Voicing information
+        voicing = torch.tensor(
+            [phoneme in self.voiced_tokens for phoneme in sentence_tokens],
+            dtype=torch.float
+        )
+
         return (
             sentence_name,
             sentence_numerized,
@@ -206,6 +214,7 @@ class PrincipalComponentsPhonemeToArticulationDataset2(Dataset):
             critical_mask,
             reference_arrays,
             frame_ids,
+            voicing,
         )
 
 
@@ -235,6 +244,9 @@ def pad_sequence_collate_fn(batch):
 
     sentence_frames = [batch[i][6] for i in sentences_sorted_indices]
 
+    voicing = [batch[i][7] for i in sentences_sorted_indices]
+    voicing = pad_sequence(voicing, batch_first=True, padding_value=-1)
+
     return (
         sentences_ids,
         padded_sentence_numerized,
@@ -243,5 +255,6 @@ def pad_sequence_collate_fn(batch):
         phonemes,
         padded_critical_masks,
         padded_references,
-        sentence_frames
+        sentence_frames,
+        voicing,
     )
