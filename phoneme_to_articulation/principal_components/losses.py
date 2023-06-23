@@ -11,7 +11,7 @@ from vt_tools import (
 )
 
 from helpers import make_padding_mask
-from phoneme_to_articulation.principal_components.models.autoencoder import (
+from phoneme_to_articulation.principal_components.models import (
     MultiEncoder,
     MultiDecoder
 )
