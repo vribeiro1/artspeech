@@ -10,11 +10,10 @@ import ujson
 from torch.utils.data import DataLoader
 
 from helpers import set_seeds, sequences_from_dict
-from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
-from phoneme_to_articulation.encoder_decoder.loss import ArtSpeechLoss
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
+from phoneme_to_articulation.metrics import EuclideanDistance
 from settings import UNKNOWN, BLANK
 
 
@@ -27,11 +26,6 @@ def main(
     vocab_filepath,
     articulators,
     save_to,
-    beta1,
-    beta2,
-    recognizer_filepath=None,
-    recognizer_params=None,
-    voicing_filepath=None,
     clip_tails=True,
     num_workers=0
 ):
@@ -43,11 +37,6 @@ def main(
         tokens = ujson.load(f)
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
-    if voicing_filepath is not None:
-        with open(voicing_filepath) as f:
-            voiced_tokens = ujson.load(f)
-    else:
-        voiced_tokens = None
 
     test_sequences = sequences_from_dict(datadir, test_seq_dict)
     test_dataset = ArtSpeechDataset(
@@ -57,7 +46,6 @@ def main(
         vocabulary,
         articulators,
         clip_tails=clip_tails,
-        voiced_tokens=voiced_tokens,
     )
     test_dataloader = DataLoader(
         test_dataset,
@@ -78,17 +66,7 @@ def main(
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
-    if recognizer_filepath:
-        recognizer = DeepSpeech2(num_classes=len(vocabulary), **recognizer_params)
-        recog_state_dict = torch.load(recognizer_filepath, map_location=device)
-        recognizer.load_state_dict(recog_state_dict)
-        recognizer.to(device)
-
-        for p in recognizer.parameters():
-            p.requires_grad = False
-    else:
-        recognizer = None
-    loss_fn = ArtSpeechLoss(recognizer)
+    loss_fn = EuclideanDistance("none")
 
     test_results = run_test(
         epoch=0,
@@ -98,8 +76,6 @@ def main(
         outputs_dir=test_outputs_dir,
         articulators=articulators,
         device=device,
-        beta1=beta1,
-        beta2=beta2,
         regularize_out=True,
     )
 

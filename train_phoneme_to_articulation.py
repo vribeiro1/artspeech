@@ -17,12 +17,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict, make_padding_mask
-from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
-from phoneme_to_articulation.encoder_decoder.loss import ArtSpeechLoss
 from phoneme_to_articulation.encoder_decoder.metrics import P2CPDistance
 from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
+from phoneme_to_articulation.metrics import EuclideanDistance
 from settings import BASE_DIR, TRAIN, VALID, DATASET_CONFIG, BLANK, UNKNOWN
 
 TMPFILES = os.path.join(BASE_DIR, "tmp")
@@ -39,14 +38,14 @@ def run_epoch(
     dataloader,
     optimizer,
     criterion,
-    beta1,
-    beta2,
     fn_metrics=None,
     scheduler=None,
     device=None,
 ):
     if device is None:
         device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if fn_metrics is None:
+        fn_metrics = {}
     training = phase == TRAIN
 
     if training:
@@ -65,30 +64,19 @@ def run_epoch(
         _,  # phonemes
         _,  # references
         _,  # sentence_frames
-        voicing,
+        _,  # voicing
     ) in progress_bar:
         sentence = sentence.to(device)
         targets = targets.to(device)
-        voicing = voicing.to(device)
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
             outputs = model(sentence, lengths)
-            euclid_loss, recog_loss = criterion(outputs, targets, voicing)
+            loss = criterion(outputs, targets)
             padding_mask = make_padding_mask(lengths)
-
-            bs, max_len, num_articulators, features = euclid_loss.shape
-            euclid_loss = euclid_loss.view(bs * max_len, num_articulators, features)
-            euclid_loss = euclid_loss[padding_mask.view(bs * max_len)].mean()
-
-            if recog_loss is not None:
-                bs, max_len, features = recog_loss.shape
-                recog_loss = recog_loss.view(bs * max_len, features)
-                recog_loss = recog_loss[padding_mask.view(bs * max_len)].mean()
-
-                loss = beta1 * euclid_loss + beta2 * recog_loss
-            else:
-                loss = euclid_loss
+            bs, max_len, num_articulators, features = loss.shape
+            loss = loss.view(bs * max_len, num_articulators, features)
+            loss = loss[padding_mask.view(bs * max_len)].mean()
 
             if training:
                 loss.backward()
@@ -135,11 +123,6 @@ def main(
     test_seq_dict,
     vocab_filepath,
     articulators,
-    beta1=1.,
-    beta2=0.,
-    recognizer_filepath=None,
-    recognizer_params=None,
-    voicing_filepath=None,
     num_workers=0,
     clip_tails=True,
     state_dict_filepath=None,
@@ -158,11 +141,6 @@ def main(
         tokens = ujson.load(f)
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
-    if voicing_filepath is not None:
-        with open(voicing_filepath) as f:
-            voiced_tokens = ujson.load(f)
-    else:
-        voiced_tokens = None
 
     num_articulators = len(articulators)
     model = ArtSpeech(
@@ -175,18 +153,7 @@ def main(
         model.load_state_dict(state_dict)
     model.to(device)
 
-    if recognizer_filepath:
-        recognizer = DeepSpeech2(num_classes=len(vocabulary), **recognizer_params)
-        recog_state_dict = torch.load(recognizer_filepath, map_location=device)
-        recognizer.load_state_dict(recog_state_dict)
-        recognizer.to(device)
-
-        for p in recognizer.parameters():
-            p.requires_grad = False
-    else:
-        recognizer = None
-    loss_fn = ArtSpeechLoss(recognizer)
-
+    loss_fn = EuclideanDistance(reduction="none")
     optimizer = Adam(
         model.parameters(),
         lr=learning_rate,
@@ -206,7 +173,6 @@ def main(
         vocabulary,
         articulators,
         clip_tails=clip_tails,
-        voiced_tokens=voiced_tokens,
     )
     train_dataloader = DataLoader(
         train_dataset,
@@ -225,7 +191,6 @@ def main(
         vocabulary,
         articulators,
         clip_tails=clip_tails,
-        voiced_tokens=voiced_tokens,
     )
     valid_dataloader = DataLoader(
         valid_dataset,
@@ -274,9 +239,6 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             optimizer=optimizer,
             criterion=loss_fn,
             device=device,
-            beta1=beta1,
-            beta2=beta2,
-            fn_metrics=fn_metrics,
         )
 
         mlflow.log_metrics(
@@ -292,8 +254,6 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             optimizer=optimizer,
             criterion=loss_fn,
             device=device,
-            beta1=beta1,
-            beta2=beta2,
             fn_metrics=fn_metrics,
         )
 
@@ -344,7 +304,6 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         vocabulary,
         articulators,
         clip_tails=clip_tails,
-        voiced_tokens=voiced_tokens,
     )
     test_dataloader = DataLoader(
         test_dataset,
@@ -376,8 +335,6 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         outputs_dir=test_outputs_dir,
         articulators=test_dataset.articulators,
         device=device,
-        beta1=beta1,
-        beta2=beta2,
         regularize_out=True,
     )
     mlflow.log_artifact(test_outputs_dir)
