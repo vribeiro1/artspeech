@@ -269,12 +269,9 @@ class RegularizedLatentsMSELoss2(nn.Module):
             mse = (sample_weights * mse).permute(2, 1, 0)
         mse = mse.mean()
 
-        latents_mean_loss = latents.mean(dim=0).square().sum()
+        cov_loss = torch.tensor([
+            torch.cov(latents.T[indices]).square().sum() - torch.cov(latents.T[indices]).diag().square().sum()
+            for _, indices in self.indices_dict.items() if len(indices) > 1
+        ]).sum()
 
-        _, latent_size = latents.shape
-        latents_cov_loss = self.latents_cov_mse(
-            torch.cov(latents.T),
-            0.3 * torch.eye(latent_size).to(latents.device)
-        )
-
-        return mse + latents_mean_loss + latents_cov_loss
+        return mse + self.alpha * cov_loss

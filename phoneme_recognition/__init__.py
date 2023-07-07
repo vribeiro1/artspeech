@@ -543,6 +543,7 @@ def plot_confusion_matrix(
 
     plt.tight_layout()
     plt.savefig(save_filepath)
+    plt.close()
 
 
 def plot_substitution_matrix(
@@ -645,3 +646,4 @@ def plot_substitution_matrix(
 
     plt.tight_layout()
     plt.savefig(save_filepath)
+    plt.close()
