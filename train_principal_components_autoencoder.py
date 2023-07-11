@@ -3,11 +3,14 @@ import logging
 import mlflow
 import numpy as np
 import os
+import random
 import shutil
 import tempfile
 import torch
 import yaml
 
+from numpy.random import MT19937
+from numpy.random import RandomState, SeedSequence
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
@@ -73,6 +76,7 @@ def main(
     clip_tails=True,
     state_dict_fpath=None,
     checkpoint_filepath=None,
+    seed=0,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
@@ -95,6 +99,9 @@ def main(
         autoencoder.load_state_dict(state_dict)
     autoencoder.to(device)
 
+    gen = torch.Generator(device=device)
+    gen.manual_seed(seed)
+
     dataset_config = DATASET_CONFIG[database_name]
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PrincipalComponentsAutoencoderDataset2(
@@ -102,14 +109,15 @@ def main(
         datadir=datadir,
         sequences=train_sequences,
         articulators=articulators,
-        clip_tails=clip_tails
+        clip_tails=clip_tails,
     )
     train_dataloader = DataLoader(
         train_dataset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        worker_init_fn=set_seeds
+        worker_init_fn=set_seeds,
+        generator=gen,
     )
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
@@ -118,14 +126,15 @@ def main(
         datadir=datadir,
         sequences=valid_sequences,
         articulators=articulators,
-        clip_tails=clip_tails
+        clip_tails=clip_tails,
     )
     valid_dataloader = DataLoader(
         valid_dataset,
         batch_size=batch_size,
         shuffle=True,
         num_workers=num_workers,
-        worker_init_fn=set_seeds
+        worker_init_fn=set_seeds,
+        generator=gen,
     )
 
     loss_fn = RegularizedLatentsMSELoss2(
@@ -151,7 +160,7 @@ def main(
             outputs, targets,
             denorm_fn_dict=denorm_fn_dict,
             px_space=dataset_config.PIXEL_SPACING,
-            res=dataset_config.RES
+            res=dataset_config.RES,
         )
     }
 
@@ -182,7 +191,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             dataloader=train_dataloader,
             optimizer=optimizer,
             criterion=loss_fn,
-            device=device
+            device=device,
         )
 
         mlflow.log_metrics({
@@ -197,7 +206,7 @@ so far {best_metric} seen {epochs_since_best} epochs ago.
             optimizer=optimizer,
             criterion=loss_fn,
             fn_metrics=metrics,
-            device=device
+            device=device,
         )
 
         mlflow.log_metrics({
@@ -251,14 +260,15 @@ Best metric: {best_metric}, Epochs since best: {epochs_since_best}
         datadir=datadir,
         sequences=test_sequences,
         articulators=articulators,
-        clip_tails=clip_tails
+        clip_tails=clip_tails,
     )
     test_dataloader = DataLoader(
         test_dataset,
         batch_size=batch_size,
         shuffle=False,
         num_workers=num_workers,
-        worker_init_fn=set_seeds
+        worker_init_fn=set_seeds,
+        generator=gen,
     )
 
     best_autoencoder = MultiArticulatorAutoencoder(
@@ -303,6 +313,11 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", dest="checkpoint_filepath", default=None)
     args = parser.parse_args()
 
+    seed = 0
+    rs = RandomState(MT19937(SeedSequence(seed)))
+    random.seed(seed)
+    torch.manual_seed(seed)
+
     if args.mlflow_tracking_uri is not None:
         mlflow.set_tracking_uri(args.mlflow_tracking_uri)
 
@@ -324,6 +339,7 @@ if __name__ == "__main__":
             main(
                 **cfg,
                 checkpoint_filepath=args.checkpoint_filepath,
+                seed=seed,
             )
         finally:
             shutil.rmtree(TMP_DIR)

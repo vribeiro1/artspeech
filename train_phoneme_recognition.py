@@ -1,10 +1,9 @@
-import pdb
-
 import argparse
 import logging
 import mlflow
 import numpy as np
 import os
+import random
 import shutil
 import tempfile
 import torch
@@ -13,6 +12,8 @@ import ujson
 import yaml
 
 from functools import partial
+from numpy.random import MT19937
+from numpy.random import RandomState, SeedSequence
 from torch.optim import Adam
 from torch.optim.lr_scheduler import CyclicLR
 from torch.utils.data import DataLoader
@@ -66,6 +67,7 @@ def main(
     voicing_filepath=None,
     state_dict_filepath=None,
     checkpoint_filepath=None,
+    seed=0,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
@@ -117,6 +119,9 @@ def main(
         model.load_state_dict(state_dict)
     model.to(device)
 
+    gen = torch.Generator(device=device)
+    gen.manual_seed(seed)
+
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = PhonemeRecognitionDataset(
         datadir=datadir,
@@ -134,6 +139,7 @@ def main(
         num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=partial(collate_fn, features_names=[feature]),
+        generator=gen,
     )
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
@@ -153,6 +159,7 @@ def main(
         num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=partial(collate_fn, features_names=[feature]),
+        generator=gen,
     )
 
     if loss_params is None:
@@ -302,6 +309,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         num_workers=num_workers,
         worker_init_fn=set_seeds,
         collate_fn=partial(collate_fn, features_names=[feature]),
+        generator=gen,
     )
 
     if pretrained:
@@ -356,6 +364,11 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", dest="checkpoint_filepath", default=None)
     args = parser.parse_args()
 
+    seed = 0
+    rs = RandomState(MT19937(SeedSequence(seed)))
+    random.seed(seed)
+    torch.manual_seed(seed)
+
     if args.mlflow_tracking_uri is not None:
         mlflow.set_tracking_uri(args.mlflow_tracking_uri)
 
@@ -377,6 +390,7 @@ if __name__ == "__main__":
             main(
                 **cfg,
                 checkpoint_filepath=args.checkpoint_filepath,
+                seed=seed,
             )
         finally:
             shutil.rmtree(TMP_DIR)

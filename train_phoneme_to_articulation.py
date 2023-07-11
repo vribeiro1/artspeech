@@ -4,6 +4,7 @@ import mlflow
 import numpy as np
 import os
 import pandas as pd
+import random
 import shutil
 import tempfile
 import torch
@@ -11,6 +12,8 @@ import ujson
 import yaml
 
 from collections import OrderedDict
+from numpy.random import MT19937
+from numpy.random import RandomState, SeedSequence
 from torch.optim import Adam
 from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch.utils.data import DataLoader
@@ -127,6 +130,7 @@ def main(
     clip_tails=True,
     state_dict_filepath=None,
     checkpoint_filepath=None,
+    seed=0,
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     logging.info(f"Running on '{device.type}'")
@@ -165,6 +169,9 @@ def main(
         patience=10,
     )
 
+    gen = torch.Generator(device=device)
+    gen.manual_seed(seed)
+
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
     train_dataset = ArtSpeechDataset(
         datadir,
@@ -180,7 +187,8 @@ def main(
         shuffle=True,
         num_workers=num_workers,
         worker_init_fn=set_seeds,
-        collate_fn=pad_sequence_collate_fn
+        collate_fn=pad_sequence_collate_fn,
+        generator=gen,
     )
 
     valid_sequences = sequences_from_dict(datadir, valid_seq_dict)
@@ -198,7 +206,8 @@ def main(
         shuffle=False,
         num_workers=num_workers,
         worker_init_fn=set_seeds,
-        collate_fn=pad_sequence_collate_fn
+        collate_fn=pad_sequence_collate_fn,
+        generator=gen,
     )
 
     dataset_config = DATASET_CONFIG[database_name]
@@ -311,7 +320,8 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         shuffle=False,
         num_workers=num_workers,
         worker_init_fn=set_seeds,
-        collate_fn=pad_sequence_collate_fn
+        collate_fn=pad_sequence_collate_fn,
+        generator=gen,
     )
 
     best_model = ArtSpeech(
@@ -368,6 +378,11 @@ if __name__ == "__main__":
     parser.add_argument("--checkpoint", dest="checkpoint_filepath", default=None)
     args = parser.parse_args()
 
+    seed = 0
+    rs = RandomState(MT19937(SeedSequence(seed)))
+    random.seed(seed)
+    torch.manual_seed(seed)
+
     if args.mlflow_tracking_uri is not None:
         mlflow.set_tracking_uri(args.mlflow_tracking_uri)
 
@@ -389,6 +404,7 @@ if __name__ == "__main__":
             main(
                 **cfg,
                 checkpoint_filepath=args.checkpoint_filepath,
+                seed=seed,
             )
         finally:
             shutil.rmtree(TMP_DIR)
