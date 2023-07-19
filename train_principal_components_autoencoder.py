@@ -99,7 +99,7 @@ def main(
         autoencoder.load_state_dict(state_dict)
     autoencoder.to(device)
 
-    gen = torch.Generator(device=device)
+    gen = torch.Generator(device="cpu")
     gen.manual_seed(seed)
 
     dataset_config = DATASET_CONFIG[database_name]

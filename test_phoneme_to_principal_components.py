@@ -8,7 +8,6 @@ from functools import reduce
 from torch.utils.data import DataLoader
 
 from helpers import sequences_from_dict, set_seeds, make_indices_dict
-from phoneme_recognition import UNKNOWN
 from phoneme_recognition.deepspeech2 import DeepSpeech2
 from phoneme_to_articulation import RNNType
 from phoneme_to_articulation.principal_components.dataset import (
@@ -18,7 +17,7 @@ from phoneme_to_articulation.principal_components.dataset import (
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_principal_components_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
 from phoneme_to_articulation.principal_components.models.rnn import PrincipalComponentsArtSpeech
-from settings import DATASET_CONFIG
+from settings import BLANK, UNKNOWN 
 
 
 def main(
@@ -48,7 +47,8 @@ def main(
 ):
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-    vocabulary = {UNKNOWN: 0}
+    default_tokens = [BLANK, UNKNOWN]
+    vocabulary = {token: i for i, token in enumerate(default_tokens)}
     with open(vocab_filepath) as f:
         tokens = ujson.load(f)
         for i, token in enumerate(tokens, start=len(vocabulary)):

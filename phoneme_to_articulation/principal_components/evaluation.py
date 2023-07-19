@@ -427,7 +427,7 @@ def run_phoneme_to_principal_components_test(
                 sentence_targets,
                 sentence_lengths,
                 sentence_phonemes,
-                articulators,
+                tv_articulators,
                 epoch_outputs_dir,
                 regularize_out=False
             )

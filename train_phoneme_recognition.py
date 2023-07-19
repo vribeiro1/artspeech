@@ -119,7 +119,7 @@ def main(
         model.load_state_dict(state_dict)
     model.to(device)
 
-    gen = torch.Generator(device=device)
+    gen = torch.Generator(device="cpu")
     gen.manual_seed(seed)
 
     train_sequences = sequences_from_dict(datadir, train_seq_dict)
