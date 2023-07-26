@@ -11,6 +11,7 @@ import torch.nn.functional as F
 from functools import partial
 from itertools import groupby
 from tqdm import tqdm
+from vt_tools import UPPER_INCISOR
 
 from phoneme_to_articulation.metrics import EuclideanDistance
 from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
@@ -31,7 +32,7 @@ def _calculate_tokens_lengths_and_positions(tokens):
 
 
 def process_sentence_with_pos(sentence, articulators):
-    _, _, sentence_targets, sentence_tokens, _, _, _ = sentence
+    _, _, sentence_targets, sentence_tokens, _, _, _, _ = sentence
 
     tokens_seqs_len, tokens_pos = _calculate_tokens_lengths_and_positions(sentence_tokens)
     tokens_seqs_len = functools.reduce(
@@ -67,7 +68,7 @@ def process_sentence_with_pos(sentence, articulators):
 
 
 def process_sentence(sentence, articulators):
-    _, _, sentence_targets, sentence_tokens, _, _, _ = sentence
+    _, _, sentence_targets, sentence_tokens, _, _, _, _ = sentence
 
     data = []
     for token, token_targets in zip(sentence_tokens, sentence_targets):
@@ -172,7 +173,7 @@ def test(dataset, df, save_to, weighted=False):
     x_corrs = [[] for _ in dataset.articulators]
     y_corrs = [[] for _ in dataset.articulators]
     forward_fn = forward_weighted_mean_contour if weighted else forward_mean_contour
-    for sentence_name, _, sentence_targets, sentence_tokens, _, _, frame_ids in tqdm(dataset, "test"):
+    for sentence_name, _, sentence_targets, sentence_tokens, reference_arrays, _, frame_ids, _ in tqdm(dataset, "test"):
         sentence_outputs = forward_fn(sentence_tokens, df, dataset.articulators)
         sentence_outputs = sentence_outputs.unsqueeze(dim=0)
         sentence_targets = sentence_targets.unsqueeze(dim=0)
@@ -193,6 +194,28 @@ def test(dataset, df, save_to, weighted=False):
             p2cp_per_articulator[i_art].extend([dist.item() for dist in p2cp[:, i_art]])
             euclidean_per_articulator[i_art].extend([dist.item() for dist in euclidean[:, i_art]])
 
+        # The upper incisor is the reference of the coordinate system and since it has a fixed
+        # shape, it is non-sense to include it in the prediction. However, it is important for
+        # tract variables and visualization. Therefore, we inject it in the arrays in order to
+        # have it available for the next steps.
+        if UPPER_INCISOR not in dataset.articulators:
+            tv_articulators = sorted(dataset.articulators + [UPPER_INCISOR])
+            ref_idx = tv_articulators.index(UPPER_INCISOR)
+
+            sentence_outputs = torch.concat([
+                sentence_outputs[:, :, :ref_idx, :, :],
+                reference_arrays,
+                sentence_outputs[:, :, ref_idx:, :, :],
+            ], dim=2)
+
+            sentence_targets = torch.concat([
+                sentence_targets[:, :, :ref_idx, :, :],
+                reference_arrays,
+                sentence_targets[:, :, ref_idx:, :, :],
+            ], dim=2)
+        else:
+            tv_articulators = dataset.articulators
+
         tract_variables(
             sentences_ids=[sentence_name],
             frame_ids=[frame_ids],
@@ -200,7 +223,7 @@ def test(dataset, df, save_to, weighted=False):
             targets=sentence_targets,
             lengths=[len(frame_ids)],
             phonemes=[sentence_tokens],
-            articulators=dataset.articulators,
+            articulators=tv_articulators,
             save_to=save_to,
         )
 
@@ -211,7 +234,7 @@ def test(dataset, df, save_to, weighted=False):
             targets=sentence_targets,
             lengths=[len(frame_ids)],
             phonemes=[sentence_tokens],
-            articulators=dataset.articulators,
+            articulators=tv_articulators,
             save_to=save_to,
             regularize_out=True
         )
