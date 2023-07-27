@@ -1,5 +1,3 @@
-import pdb
-
 import argparse
 import funcy
 import matplotlib.pyplot as plt
@@ -27,27 +25,24 @@ BLUE = np.array([0, 139, 231, 255]) / 255
 
 
 def plot_nomograms(
-    orig_shape,
-    orig_reconstruction,
-    orig_latents,
     autoencoder,
     normalize,
     plots_dir,
-    device=None,
+    device
 ):
-    if device is None:
-        device = orig_latents.device
     articulators = autoencoder.sorted_articulators
     num_articulators = len(articulators)
-    latent_size = len(orig_latents)
+    indices_dict = autoencoder.indices_dict
+    latent_size = autoencoder.latent_size
+
     for i_PC in range(latent_size):
         plt.figure(figsize=(10, 10))
 
         PC_range = np.arange(-1, 1.01, 0.1)
         for v in PC_range:
-            latents = orig_latents.clone()
-            latents[i_PC] = v
-            latents = latents.unsqueeze(dim=0).to(device)
+            latents = torch.zeros(size=(1, latent_size))
+            latents[0, i_PC] = v
+            latents = latents.to(device)
 
             reconstruction = torch.concat([
                 autoencoder.decoders.decoders[articulator](
@@ -58,19 +53,17 @@ def plot_nomograms(
             reconstruction = reconstruction.detach().cpu()
             reconstruction = reconstruction.reshape(1, num_articulators, 2, 50)
 
-            for i, articulator in enumerate(articulators):
+            for i_art, articulator in enumerate(articulators):
                 denorm_fn = normalize[articulator].inverse
-                reconstruction[:, i, :, :] = denorm_fn(reconstruction[:, i, :, :])
+                reconstruction[:, i_art, :, :] = denorm_fn(reconstruction[:, i_art, :, :])
             reconstruction = reconstruction.squeeze(dim=0)
 
-            color = PINK if v <= 0 else BLUE
-            for rec in reconstruction:
-                plt.plot(*rec, color=color, lw=3, alpha=0.2)
+            for articulator, articulator_rec in zip(articulators, reconstruction):
+                color = "lightgrey"
+                if i_PC in indices_dict[articulator]:
+                    color = PINK if v <= 0 else BLUE
 
-        for shape in orig_shape:
-            plt.plot(*shape, "--", color="red", lw=5, alpha=0.5)
-        for rec in orig_reconstruction:
-            plt.plot(*rec, color="limegreen", lw=5, alpha=0.5)
+                plt.plot(*articulator_rec, color=color, lw=3, alpha=0.2)
 
         plt.xlim([0., 1.])
         plt.ylim([1., 0.])
@@ -192,14 +185,7 @@ def evaluate_autoencoder(
     df_errors_agg.to_csv(df_errors_agg_filepath, index=False)
 
     # Nomogram plots
-    idx = 100
-    orig_shape = data_targets[idx]
-    orig_reconstruction = data_reconstructions[idx]
-    orig_latents = data_latents[idx]
     plot_nomograms(
-        orig_shape=orig_shape,
-        orig_reconstruction=orig_reconstruction,
-        orig_latents=orig_latents,
         autoencoder=autoencoder,
         normalize=dataset.normalize,
         plots_dir=plots_dir,
