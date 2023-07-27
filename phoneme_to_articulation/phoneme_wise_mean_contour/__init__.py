@@ -1,5 +1,3 @@
-import pdb
-
 import funcy
 import functools
 import numpy as np
@@ -177,6 +175,7 @@ def test(dataset, df, save_to, weighted=False):
         sentence_outputs = forward_fn(sentence_tokens, df, dataset.articulators)
         sentence_outputs = sentence_outputs.unsqueeze(dim=0)
         sentence_targets = sentence_targets.unsqueeze(dim=0)
+        reference_arrays = reference_arrays.unsqueeze(dim=0)
 
         loss = criterion(sentence_outputs, sentence_targets)
         p2cp = p2cp_distance(sentence_outputs, sentence_targets).mean(dim=1)  # (bs, n_articulators)

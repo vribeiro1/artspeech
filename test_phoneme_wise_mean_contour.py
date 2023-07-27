@@ -1,5 +1,3 @@
-import pdb
-
 import argparse
 import os
 import pandas as pd
@@ -43,6 +41,7 @@ def main(
     df = pd.read_csv(state_dict_filepath)
     for articulator in test_dataset.articulators:
         df[articulator] = df[articulator].apply(eval)
+    print("Finished loading data frame")
 
     test_outputs_dir = os.path.join(save_to, "test_outputs")
     if not os.path.exists(test_outputs_dir):
