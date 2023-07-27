@@ -35,6 +35,7 @@ class PrincipalComponentsAutoencoderDataset2(Dataset):
         sequences,
         articulators,
         clip_tails=True,
+        normalize_data=True,
     ):
         self.datadir = datadir
         self.dataset_config = DATASET_CONFIG[database_name]
@@ -54,21 +55,23 @@ class PrincipalComponentsAutoencoderDataset2(Dataset):
                 })
         self.data = pd.DataFrame(data)
 
-        self.normalize = {}
-        for articulator in self.articulators:
-            mean_filepath = os.path.join(
-                datadir,
-                "normalization_statistics",
-                f"{articulator}_mean.npy"
-            )
-            mean = torch.from_numpy(np.load(mean_filepath))
-            std_filepath = os.path.join(
-                datadir,
-                "normalization_statistics",
-                f"{articulator}_std.npy"
-            )
-            std = torch.from_numpy(np.load(std_filepath))
-            self.normalize[articulator] = Normalize(mean, std)
+        self.normalize = None
+        if normalize_data:
+            self.normalize = {}
+            for articulator in self.articulators:
+                mean_filepath = os.path.join(
+                    datadir,
+                    "normalization_statistics",
+                    f"{articulator}_mean.npy"
+                )
+                mean = torch.from_numpy(np.load(mean_filepath))
+                std_filepath = os.path.join(
+                    datadir,
+                    "normalization_statistics",
+                    f"{articulator}_std.npy"
+                )
+                std = torch.from_numpy(np.load(std_filepath))
+                self.normalize[articulator] = Normalize(mean, std)
 
     def __len__(self):
         return len(self.data)
@@ -92,7 +95,7 @@ class PrincipalComponentsAutoencoderDataset2(Dataset):
                 frame_id,
                 articulator,
                 self.dataset_config,
-                self.normalize[articulator],
+                self.normalize[articulator] if self.normalize is not None else None,
                 self.clip_tails,
             )[0]
             for articulator in self.articulators

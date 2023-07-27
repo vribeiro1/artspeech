@@ -12,6 +12,8 @@ from vt_tools import (
 
 from helpers import make_padding_mask
 from phoneme_to_articulation.principal_components.models import (
+    Encoder,
+    Decoder,
     MultiEncoder,
     MultiDecoder
 )
@@ -110,11 +112,14 @@ class AutoencoderLoss2(nn.Module):
         encoder_state_dict_filepath,
         decoder_state_dict_filepath,
         device,
+        encoder_cls=Encoder,
+        decoder_cls=Decoder,
         denormalize_fn=None,
         beta1=1.0,
         beta2=1.0,
         beta3=1.0,
         beta4=0.0,
+        rescale_factor=1.0,
         recognizer=None,
         **kwargs,
     ):
@@ -131,6 +136,7 @@ class AutoencoderLoss2(nn.Module):
             indices_dict,
             in_features,
             hidden_features,
+            encoder_cls=encoder_cls,
         )
         encoder_state_dict = torch.load(
             encoder_state_dict_filepath,
@@ -147,6 +153,7 @@ class AutoencoderLoss2(nn.Module):
             indices_dict,
             in_features,
             hidden_features,
+            decoder_cls=decoder_cls,
         )
         decoder_state_dict = torch.load(
             decoder_state_dict_filepath,
@@ -158,6 +165,7 @@ class AutoencoderLoss2(nn.Module):
             device=device,
         )
 
+        self.rescale_factor = rescale_factor
         self.latent = nn.MSELoss(reduction="none")
         self.reconstruction = nn.MSELoss(reduction="none")
         articulators = sorted(indices_dict.keys())
@@ -193,7 +201,7 @@ class AutoencoderLoss2(nn.Module):
         _, num_pcs = target_pcs.shape
         target_pcs = target_pcs.reshape(bs, seq_len, num_pcs)
 
-        output_shapes = self.decode(output_pcs)
+        output_shapes = self.decode(self.rescale_factor * output_pcs)
         output_shapes = output_shapes.reshape(bs, seq_len, num_articulators, 2, num_samples)
 
         # outputs_pcs : (bs, seq_len, num_components)

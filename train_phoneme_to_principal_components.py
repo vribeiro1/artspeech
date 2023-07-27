@@ -28,7 +28,11 @@ from phoneme_to_articulation.principal_components.dataset import (
 from phoneme_to_articulation.principal_components.evaluation import run_phoneme_to_principal_components_test
 from phoneme_to_articulation.principal_components.losses import AutoencoderLoss2
 from phoneme_to_articulation.principal_components.metrics import DecoderMeanP2CPDistance2
-from phoneme_to_articulation.principal_components.models.rnn import PrincipalComponentsArtSpeech
+from phoneme_to_articulation.principal_components.models import (
+    EncoderType,
+    DecoderType,
+    PrincipalComponentsArtSpeech
+)
 from phoneme_recognition.deepspeech2 import DeepSpeech2
 from settings import (
     BASE_DIR,
@@ -147,11 +151,14 @@ def main(
     autoencoder_kwargs,
     encoder_state_dict_filepath,
     decoder_state_dict_filepath,
+    encoder_type="AE",
+    decoder_type="AE",
     rnn_type="GRU",
     beta1=1.0,
     beta2=1.0,
     beta3=1.0,
     beta4=0.0,
+    rescale_factor=1.0,
     recognizer_filepath=None,
     recognizer_params=None,
     voicing_filepath=None,
@@ -260,6 +267,10 @@ def main(
         articulator: normalize.inverse
         for articulator, normalize in train_dataset.normalize.items()
     }
+
+    encoder_cls = EncoderType[encoder_type.upper()].value
+    decoder_cls = DecoderType[decoder_type.upper()].value
+
     loss_fn = AutoencoderLoss2(
         indices_dict=indices_dict,
         TVs=TVs,
@@ -271,6 +282,9 @@ def main(
         beta2=beta2,
         beta3=beta3,
         beta4=beta4,
+        rescale_factor=rescale_factor,
+        encoder_cls=encoder_cls,
+        decoder_cls=decoder_cls,
         recognizer=recognizer,
         **autoencoder_kwargs,
     )
@@ -292,6 +306,7 @@ def main(
             indices_dict=indices_dict,
             autoencoder_kwargs=autoencoder_kwargs,
             device=device,
+            decoder_cls=decoder_cls,
             denorm_fns={
                 articulator: train_dataset.normalize[articulator].inverse
                 for articulator in articulators

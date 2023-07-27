@@ -2,7 +2,10 @@ import torch
 import torch.nn as nn
 
 from phoneme_to_articulation.metrics import MeanP2CPDistance
-from phoneme_to_articulation.principal_components.models.autoencoder import MultiDecoder
+from phoneme_to_articulation.principal_components.models.autoencoder import (
+    Decoder,
+    MultiDecoder
+)
 from phoneme_to_articulation.principal_components.transforms import InputTransform
 
 
@@ -15,6 +18,7 @@ class DecoderMeanP2CPDistance2(nn.Module):
         autoencoder_kwargs,
         denorm_fns,
         device,
+        decoder_cls=Decoder
     ):
         super().__init__()
 
@@ -23,6 +27,7 @@ class DecoderMeanP2CPDistance2(nn.Module):
         self.to_mm = self.dataset_config.RES * self.dataset_config.PIXEL_SPACING
         decoder = MultiDecoder(
             indices_dict,
+            decoder_cls=decoder_cls,
             **autoencoder_kwargs,
         )
         decoder_state_dict = torch.load(

@@ -2,7 +2,81 @@ import funcy
 import torch
 import torch.nn as nn
 
+from enum import Enum
+
 from helpers import make_indices_dict
+
+
+class PCAEncoder(nn.Module):
+    def __init__(
+        self,
+        in_features,
+        num_components,
+        mean=None,
+        whiten=False,
+        **kwargs,
+    ):
+        super().__init__()
+        self.eigenvalues = nn.Parameter(
+            torch.rand(
+                size=(num_components,),
+            )
+        )
+        self.eigenvectors = nn.Parameter(
+            torch.rand(
+                size=(num_components, in_features),
+            )
+        )
+        self.mean = mean or torch.zeros(size=(in_features,))
+        self.whiten = whiten
+
+    def forward(self, x):
+        x = x - self.mean.to(x.device)
+        z = torch.mm(x, self.eigenvectors.T)
+        if self.whiten:
+            z /= torch.sqrt(self.eigenvalues)
+
+        return z
+
+
+class PCADecoder(nn.Module):
+    def __init__(
+        self,
+        out_features,
+        num_components,
+        mean=None,
+        whiten=False,
+        **kwargs,
+    ):
+        super().__init__()
+        self.eigenvalues = nn.Parameter(
+            torch.rand(
+                size=(num_components, 1)
+            )
+        )
+        self.eigenvectors = nn.Parameter(
+            torch.rand(
+                size=(num_components, out_features),
+            )
+        )
+        self.mean = mean or torch.zeros(size=(out_features,))
+        self.whiten = whiten
+
+    def forward(self, z):
+        bs, length, dim1 = z.shape
+        z = z.reshape(bs * length, dim1)
+
+        if self.whiten:
+            out = torch.mm(z, torch.sqrt(self.eigenvalues)) * self.eigenvectors
+            out += self.mean
+        else:
+            out = torch.mm(z, self.eigenvectors)
+            out += self.mean.to(z.device)
+
+        _, dim2 = out.shape
+        out = out.reshape(bs, length, dim2)
+
+        return out
 
 
 class Encoder(nn.Module):
@@ -37,23 +111,38 @@ class Decoder(nn.Module):
         return self.decoder(x)
 
 
+class EncoderType(Enum):
+    AE = Encoder
+    PCA = PCAEncoder
+
+
+class DecoderType(Enum):
+    AE = Decoder
+    PCA = PCADecoder
+
+
 class MultiEncoder(nn.Module):
     def __init__(
         self,
         indices_dict,
         in_features,
         hidden_features,
+        encoder_cls=Encoder,
     ):
         super().__init__()
 
         if isinstance(list(indices_dict.values())[0], int):
             indices_dict = make_indices_dict(indices_dict)
-            
+
         self.indices_dict = indices_dict
         self.latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
         self.sorted_articulators = sorted(self.indices_dict.keys())
+
+        if isinstance(encoder_cls, str):
+            encoder_cls = EncoderType[encoder_cls].value
+
         self.encoders = nn.ModuleDict({
-            articulator: Encoder(
+            articulator: encoder_cls(
                 in_features=in_features,
                 num_components=len(indices),
                 hidden_features=hidden_features,
@@ -88,6 +177,7 @@ class MultiDecoder(nn.Module):
         indices_dict,
         in_features,
         hidden_features,
+        decoder_cls=Decoder,
     ):
         super().__init__()
 
@@ -97,8 +187,12 @@ class MultiDecoder(nn.Module):
         self.indices_dict = indices_dict
         self.latent_size = max(funcy.flatten(self.indices_dict.values())) + 1
         self.sorted_articulators = sorted(self.indices_dict.keys())
+
+        if isinstance(decoder_cls, str):
+            decoder_cls = DecoderType[decoder_cls].value
+
         self.decoders = nn.ModuleDict({
-            articulator: Decoder(
+            articulator: decoder_cls(
                 num_components=len(indices),
                 out_features=in_features,
                 hidden_features=hidden_features,

@@ -1,9 +1,12 @@
-import os
 import torch.nn as nn
 
 from phoneme_to_articulation.principal_components.models.autoencoder import (
+    PCAEncoder,
+    PCADecoder,
     Encoder,
     Decoder,
+    EncoderType,
+    DecoderType,
     MultiEncoder,
     MultiDecoder,
     MultiArticulatorAutoencoder

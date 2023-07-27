@@ -44,21 +44,3 @@ class MeanP2CPDistance(nn.Module):
         mean_p2cp = (torch.sum(u2cp, dim=-1) / n + torch.sum(v2cp, dim=-1) / m) / 2
 
         return self.reduction(mean_p2cp)
-
-
-def minimal_distance(u_, v_):
-    """
-    Calculates the minimal distance between two arrays.
-
-    Args:
-    u_ (torch.tensor): Tensor of shape (*, N, 2)
-    v_ (torch.tensor): Tensor of shape (*, N, 2)
-    """
-    n = u_.shape[-2]
-    m = v_.shape[-2]
-
-    dist_matrix = torch.cdist(u_, v_)
-    dist_matrix = dist_matrix.view(*(list(dist_matrix.shape[:-2]) + [n * m]))
-    mindist, _ = dist_matrix.min(dim=-1)
-
-    return mindist
