@@ -22,9 +22,6 @@ class PrincipalComponentsPredictor(nn.Module):
             nn.Linear(in_features=in_features, out_features=hidden_features),
             nn.ReLU(),
             nn.LayerNorm([hidden_features]),
-            nn.Linear(in_features=hidden_features, out_features=hidden_features),
-            nn.ReLU(),
-            nn.LayerNorm(hidden_features),
             nn.Linear(in_features=hidden_features, out_features=hidden_features // 2),
             nn.ReLU(),
             nn.LayerNorm(hidden_features // 2),
@@ -78,7 +75,7 @@ class PrincipalComponentsArtSpeech(nn.Module):
         self.predictor = PrincipalComponentsPredictor(
             in_features=hidden_size,
             num_components=self.latent_size,
-            hidden_features=128,
+            hidden_features=256,
         )
 
     def forward(self, x, lengths):
