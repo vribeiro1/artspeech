@@ -126,6 +126,7 @@ def main(
     test_seq_dict,
     vocab_filepath,
     articulators,
+    model_kwargs=None,
     num_workers=0,
     clip_tails=True,
     state_dict_filepath=None,
@@ -147,10 +148,11 @@ def main(
             vocabulary[token] = i
 
     num_articulators = len(articulators)
+    model_kwargs = model_kwargs or {}
     model = ArtSpeech(
         len(vocabulary),
         num_articulators,
-        gru_dropout=0.2
+        **model_kwargs,
     )
     if state_dict_filepath is not None:
         state_dict = torch.load(state_dict_filepath, map_location=device)

@@ -446,7 +446,6 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
         model=best_model,
         dataloader=test_dataloader,
         criterion=loss_fn,
-        fn_metrics=fn_metrics,
         outputs_dir=test_outputs_dir,
         decode_transform=loss_fn.decode,
         device=device,

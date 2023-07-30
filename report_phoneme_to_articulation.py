@@ -131,16 +131,12 @@ def main(
         map(lambda fp: os.path.join(sentences_basedir, fp), sentences_names)
     )
 
-    # If it wasn't done yet, merge all tract_variables.csv files together
     df_TVs_filepath = os.path.join(results_dir, "tract_variables.csv")
-    if not os.path.exists(df_TVs_filepath):
-        df_TVs = pd.concat([
-            pd.read_csv(os.path.join(sentence_dir, "tract_variables.csv"))
-            for sentence_dir in sentences_dirs
-        ])
-        df_TVs.to_csv(df_TVs_filepath, index=False)
-    else:
-        df_TVs = pd.read_csv(df_TVs_filepath)
+    df_TVs = pd.concat([
+        pd.read_csv(os.path.join(sentence_dir, "tract_variables.csv"))
+        for sentence_dir in sentences_dirs
+    ])
+    df_TVs.to_csv(df_TVs_filepath, index=False)
     df_TVs = df_TVs.sort_values(["sentence", "frame"])
 
     to_mm = dataset_config.RES * dataset_config.PIXEL_SPACING
