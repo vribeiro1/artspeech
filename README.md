@@ -17,8 +17,9 @@ This repository contains the code related to three papers, which are:
 <ul>
 
 <li>
-<b>Evaluating Articulatory Synthesis of Speech with Phoneme Recognition</b><br>
+<b>Evaluating Speech Articulation Synthesis with Phoneme Recognition</b><br>
 Vinicius Ribeiro, Yves Laprie<br>
+Under review
 </li>
 
 <li>
