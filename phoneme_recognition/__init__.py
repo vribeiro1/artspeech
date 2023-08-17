@@ -555,7 +555,7 @@ def plot_substitution_matrix(
     width_ratios: Tuple,
     height_ratios: Tuple,
     save_filepath: str,
-    cmap: str = "coolwarm",
+    cmap: str = "PuRd",
 ):
     ncols = 2 if include_deletions else 1
     nrows = 2 if include_insertions else 1
@@ -581,7 +581,6 @@ def plot_substitution_matrix(
         pass
 
     ax0 = ax.pop(0)
-    ax0.tick_params(axis="both", which="major", labelsize=24)
 
     plot_subs_mtx = subs_mtx
     if include_insertions:
@@ -602,9 +601,10 @@ def plot_substitution_matrix(
         cmap=cmap,
     )
 
+    ax0.tick_params(axis="both", which="major", labelsize=24, labelrotation=45)
+
     if include_deletions:
         ax1 = ax.pop(0)
-        ax1.tick_params(axis="both", which="major", labelsize=24)
 
         sns.heatmap(
             np.expand_dims(subs_mtx[:-1, -1], axis=1),
@@ -612,12 +612,14 @@ def plot_substitution_matrix(
             cbar=False,
             square=False,
             ax=ax1,
-            xticklabels=["deletions"],
+            xticklabels=[""],
             yticklabels=vocab,
             fmt=".3f",
             annot_kws={"fontsize": 22},
             cmap=cmap,
         )
+
+        ax1.tick_params(axis="both", which="major", labelsize=24, labelrotation=45)
 
         ax1.axes.get_yaxis().set_visible(False)
 
@@ -625,7 +627,6 @@ def plot_substitution_matrix(
         ax0.axes.get_xaxis().set_visible(False)
 
         ax2 = ax.pop(0)
-        ax2.tick_params(axis="both", which="major", labelsize=24)
 
         sns.heatmap(
             np.expand_dims(subs_mtx[-1, :-1], axis=0),
@@ -640,9 +641,23 @@ def plot_substitution_matrix(
             cmap=cmap,
         )
 
+        ax2.tick_params(axis="both", which="major", labelsize=24, labelrotation=45)
+
         if include_deletions:
             ax3 = ax.pop(0)
-            ax3.axis("off")
+            ax3.set_xlabel("deletions", fontsize=24, rotation=45)
+
+            ax3.set_yticklabels([])
+            ax3.set_xticklabels([])
+
+            ax3.tick_params(axis="both", color="white")
+
+            ax3.spines["top"].set_color("white")
+            ax3.spines["bottom"].set_color("white")
+            ax3.spines["left"].set_color("white")
+            ax3.spines["right"].set_color("white")
+
+            # ax3.plot([0.5, 0.5], [0., 1.], "--", color="black", lw=0.7)
 
     plt.tight_layout()
     plt.savefig(save_filepath)

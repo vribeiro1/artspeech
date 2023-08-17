@@ -2,8 +2,6 @@
 Create videos from the datasets, plotting together the MR images and the articulator contours,
 together with phonemes, subject id, sequence id and frame number.
 """
-import pdb
-
 import argparse
 import cv2
 import os
@@ -65,7 +63,7 @@ def make_frame(
     for articulator in articulators:
         ax.plot(*contours[articulator], lw=3, color=COLORS[articulator])
     ax.text(65, 20, f"/{phoneme}/", color="yellow", fontsize=24)
-    ax.text(10, 130, f"{subject}.{sequence}.{frame_id}", color="yellow", fontsize=18)
+    ax.text(10, 130, f"{subject} {sequence} {frame_id}", color="yellow", fontsize=18)
 
     ax.axis("off")
     ax.set_xlim([0, 136])
