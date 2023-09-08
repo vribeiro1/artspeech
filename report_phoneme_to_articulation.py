@@ -29,8 +29,12 @@ def plot_tract_variables_for_sentence(
     sentence_name,
     plots_dir,
     suffix=None,
-    which="both"
+    which="both",
+    TVs=None,
 ):
+    if TVs is None:
+        TVs = list(TV_COLORS.keys())
+
     plot_pred = which in ["pred", "both"]
     plot_target = which in ["target", "both"]
 
@@ -52,10 +56,10 @@ def plot_tract_variables_for_sentence(
         start_frame = int(frame)
         current_phoneme = phoneme
 
-    plt.figure(figsize=(20, 5))
+    plt.figure(figsize=(25, 7))
 
-    y_margin = 9
-    y_rule_margin = 4
+    y_margin = 18
+    y_rule_margin = 3
     y_min = -2
     y_max = max([
         df[f"{TV}_pred"].max() for TV in TV_COLORS
@@ -63,7 +67,7 @@ def plot_tract_variables_for_sentence(
         df[f"{TV}_target"].max() for TV in TV_COLORS
     ])
 
-    for TV in TV_COLORS:
+    for TV in TVs:
         if plot_pred:
             plt.plot(
                 df.frame,
@@ -96,22 +100,26 @@ def plot_tract_variables_for_sentence(
 
         # Alternate phonetic labels below and above the rule
         y_rule = y_max + y_rule_margin
-        p = 1 if even else -1
+        p = 3 * ((4 - i) % 4)
         plt.text(
             start_frame,
             y_rule + p,
-            phoneme
+            phoneme,
+            fontsize=18
         )
 
-    plt.xlabel("Frame Number")
-    plt.ylabel("TV value (mm)")
-
-    plt.grid(True, "major")
     plt.ylim(y_min, y_max + y_margin)
+    plt.xlabel("Frame Number", fontsize=22)
+    plt.ylabel("TV value (mm)", fontsize=22)
+    plt.xticks(fontsize=14)
+    plt.yticks(fontsize=14)
+    plt.grid(True, "major")
+
     plt.tight_layout()
     filename = f"TVs_{sentence_name}"
     if suffix is not None:
         filename = "_".join([filename, suffix])
+
     plt.savefig(os.path.join(plots_dir, f"{filename}.pdf"), format="pdf")
     plt.savefig(os.path.join(plots_dir, f"{filename}.jpg"), format="jpg")
     plt.close()
@@ -177,6 +185,15 @@ def main(
             suffix="target",
             which="target"
         )
+
+        for TV in TV_COLORS:
+            plot_tract_variables_for_sentence(
+                df_sentence,
+                sentence_name,
+                plots_dir,
+                suffix=TV,
+                TVs=[TV],
+            )
 
         contours_dir = os.path.join(sentence_dir, "contours")
         frames = list(df_sentence.frame)
