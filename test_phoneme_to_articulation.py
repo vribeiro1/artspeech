@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from helpers import set_seeds, sequences_from_dict
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
-from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
+from phoneme_to_articulation.encoder_decoder.models import ArtSpeech, SimplestArtSpeech
 from phoneme_to_articulation.metrics import EuclideanDistance
 from settings import UNKNOWN, BLANK
 
@@ -26,6 +26,7 @@ def main(
     vocab_filepath,
     articulators,
     save_to,
+    model_kwargs=None,
     clip_tails=True,
     num_workers=0
 ):
@@ -57,7 +58,12 @@ def main(
     )
 
     num_articulators = len(articulators)
-    best_model = ArtSpeech(len(vocabulary), num_articulators, gru_dropout=0.2)
+    model_kwargs = model_kwargs or {}
+    best_model = ArtSpeech(
+        len(vocabulary),
+        num_articulators,
+        **model_kwargs,
+    )
     state_dict = torch.load(state_dict_fpath, map_location=device)
     best_model.load_state_dict(state_dict)
     best_model.to(device)

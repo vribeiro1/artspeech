@@ -49,6 +49,48 @@ class Decoder(nn.Module):
         return torch.sigmoid(out)
 
 
+class SimplestArtSpeech(nn.Module):
+    def __init__(
+        self,
+        vocab_size,
+        n_articulators,
+        embed_dim=64,
+        hidden_size=128,
+        num_samples=50,
+        dropout=0.,
+    ):
+        super().__init__()
+        self.embedding = nn.Embedding(vocab_size, embed_dim)
+        self.dropout = nn.Dropout(dropout)
+
+        self.linear = nn.Sequential(
+            nn.Linear(embed_dim, hidden_size),
+            nn.ReLU()
+        )
+
+        self.predictors = nn.ModuleList([
+            ArticulatorPredictor(hidden_size, num_samples) for _ in range(n_articulators)
+        ])
+
+    def forward(self, x, lengths):
+        """
+        Args:
+            x (torch.tensor): Torch tensor of shape (bs, seq_len).
+            lengths (list): Lengths of the input sequences sorted in decreasing order.
+
+        Return:
+            output (torch.tensor): Torch tensor of shape (bs, seq_len, n_articulators, 2, n_samples)
+        """
+        embed = self.embedding(x)  # (bs, seq_len, embed_dim)
+
+        linear_out = self.linear(self.dropout(embed))  # (bs, seq_len, embed_dim)
+        out = torch.stack([
+            predictor(linear_out) for predictor in self.predictors
+        ], dim=2)
+
+        return torch.sigmoid(out)
+
+
 class ArtSpeech(nn.Module):
     def __init__(
         self,
@@ -57,11 +99,11 @@ class ArtSpeech(nn.Module):
         embed_dim=64,
         hidden_size=128,
         n_samples=50,
-        gru_dropout=0.,
+        dropout=0.,
     ):
         super().__init__()
         self.embedding = nn.Embedding(vocab_size, embed_dim)
-        self.rnn = nn.GRU(embed_dim, hidden_size, num_layers=2, bidirectional=True, dropout=gru_dropout, batch_first=True)
+        self.rnn = nn.GRU(embed_dim, hidden_size, num_layers=2, bidirectional=True, dropout=dropout, batch_first=True)
 
         self.linear = nn.Sequential(
             nn.Linear(2 * hidden_size, hidden_size),
@@ -69,7 +111,7 @@ class ArtSpeech(nn.Module):
         )
 
         self.predictors = nn.ModuleList([
-            ArticulatorPredictor(hidden_size, n_samples) for i in range(n_articulators)
+            ArticulatorPredictor(hidden_size, n_samples) for _ in range(n_articulators)
         ])
 
     def forward(self, x, lengths):

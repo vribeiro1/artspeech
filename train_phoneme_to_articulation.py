@@ -23,7 +23,7 @@ from helpers import set_seeds, sequences_from_dict, make_padding_mask
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
 from phoneme_to_articulation.encoder_decoder.metrics import P2CPDistance
-from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
+from phoneme_to_articulation.encoder_decoder.models import ArtSpeech, SimplestArtSpeech
 from phoneme_to_articulation.metrics import EuclideanDistance
 from settings import BASE_DIR, TRAIN, VALID, DATASET_CONFIG, BLANK, UNKNOWN
 
@@ -329,7 +329,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
     best_model = ArtSpeech(
         len(vocabulary),
         num_articulators,
-        gru_dropout=0.2
+        **model_kwargs,
     )
     state_dict = torch.load(best_model_path, map_location=device)
     best_model.load_state_dict(state_dict)
