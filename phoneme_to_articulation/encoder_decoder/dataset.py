@@ -11,6 +11,7 @@ from vt_shape_gen.helpers import load_articulator_array
 from vt_tools import UPPER_INCISOR
 
 from database_collector import DATABASE_COLLECTORS
+from helpers import make_padding_mask
 from phoneme_to_articulation import InputLoaderMixin
 from phoneme_to_articulation.tail_clipper import TailClipper
 from settings import DATASET_CONFIG, UNKNOWN
@@ -61,6 +62,64 @@ def pad_sequence_collate_fn(batch):
         padded_references,
         sentence_frames,
         voicing,
+    )
+
+
+def pad_sequence_transformer_collate_fn(batch):
+    batch_size = len(batch)
+
+    sentence_numerized = [item[1] for item in batch]
+    len_sentences = torch.tensor(funcy.lmap(len, sentence_numerized), dtype=torch.int)
+    len_sentences_sorted, sentences_sorted_indices = len_sentences.sort(descending=True)
+    padded_sentence_numerized = pad_sequence(sentence_numerized, batch_first=True)
+    padded_sentence_numerized = padded_sentence_numerized[sentences_sorted_indices]
+
+    sentence_targets = [item[2] for item in batch]
+    padded_sentence_targets = pad_sequence(sentence_targets, batch_first=True)
+    padded_sentence_targets = padded_sentence_targets[sentences_sorted_indices]
+
+    phonemes = [batch[i][3] for i in sentences_sorted_indices]
+
+    references = [item[4] for item in batch]
+    padded_references = pad_sequence(references, batch_first=True)
+    padded_references = padded_references[sentences_sorted_indices]
+
+    sentence_frames = [batch[i][6] for i in sentences_sorted_indices]
+    sentences_ids = [batch[i][0] for i in sentences_sorted_indices]
+
+    voicing = [batch[i][7] for i in sentences_sorted_indices]
+    voicing = pad_sequence(voicing, batch_first=True, padding_value=-1)
+
+    key_padding_mask = ~make_padding_mask(len_sentences_sorted)
+    src_key_padding_mask = torch.zeros_like(key_padding_mask).float()
+    src_key_padding_mask[key_padding_mask] = float("-inf")
+
+    key_padding_mask = ~make_padding_mask(len_sentences_sorted)
+    tgt_key_padding_mask = torch.zeros_like(key_padding_mask).float()
+    tgt_key_padding_mask[key_padding_mask] = float("-inf")
+
+    max_length = max(len_sentences_sorted)
+    tril = torch.tril(torch.ones(max_length, max_length))
+
+    src_attn_mask = torch.zeros(batch_size, max_length, max_length)
+    src_attn_mask = src_attn_mask.masked_fill(tril == 0, float("-inf"))
+
+    tgt_attn_mask = torch.zeros(batch_size, max_length, max_length)
+    tgt_attn_mask = tgt_attn_mask.masked_fill(tril == 0, float("-inf"))
+
+    return (
+        sentences_ids,
+        padded_sentence_numerized,
+        padded_sentence_targets,
+        len_sentences_sorted,
+        phonemes,
+        padded_references,
+        sentence_frames,
+        voicing,
+        src_key_padding_mask,
+        tgt_key_padding_mask,
+        src_attn_mask,
+        tgt_attn_mask,
     )
 
 

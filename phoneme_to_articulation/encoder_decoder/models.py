@@ -49,7 +49,7 @@ class Decoder(nn.Module):
         return torch.sigmoid(out)
 
 
-class SimplestArtSpeech(nn.Module):
+class SimpleArtSpeech(nn.Module):
     def __init__(
         self,
         vocab_size,
