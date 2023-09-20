@@ -24,7 +24,7 @@ from vt_shape_gen.vocal_tract_tube import generate_vocal_tract_tube
 from helpers import npy_to_xarticul, sequences_from_dict
 from phoneme_to_articulation.phoneme_wise_mean_contour import forward_mean_contour
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset
-from phoneme_to_articulation.encoder_decoder.models import ArtSpeech
+from phoneme_to_articulation.encoder_decoder.models import ArtSpeech, SimpleArtSpeech
 from phoneme_to_articulation.principal_components.models import (
     MultiDecoder,
     PrincipalComponentsArtSpeech,
@@ -205,8 +205,14 @@ def main(
         for i, token in enumerate(tokens, start=len(vocabulary)):
             vocabulary[token] = i
 
+    model_params = model_params or {}
+    aux_model_params = aux_model_params or {}
     if method == "encoder_decoder":
-        model = ArtSpeech(len(vocabulary), 10)
+        model = ArtSpeech(
+            len(vocabulary),
+            len(articulators),
+            **model_params
+        )
         state_dict = torch.load(state_dict_filepath, map_location=device)
         model.load_state_dict(state_dict)
         model.to(device)

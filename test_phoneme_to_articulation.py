@@ -12,7 +12,7 @@ from torch.utils.data import DataLoader
 from helpers import set_seeds, sequences_from_dict
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
 from phoneme_to_articulation.encoder_decoder.evaluation import run_test
-from phoneme_to_articulation.encoder_decoder.models import ArtSpeech, SimplestArtSpeech
+from phoneme_to_articulation.encoder_decoder.models import ArtSpeech, SimpleArtSpeech
 from phoneme_to_articulation.metrics import EuclideanDistance
 from settings import UNKNOWN, BLANK
 
