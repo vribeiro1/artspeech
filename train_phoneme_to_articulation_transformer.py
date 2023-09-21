@@ -33,6 +33,8 @@ RESULTS_DIR = os.path.join(TMP_DIR, "results")
 if not os.path.exists(RESULTS_DIR):
     os.makedirs(RESULTS_DIR)
 
+torch.autograd.set_detect_anomaly(True)
+
 
 def run_epoch(
     phase,
