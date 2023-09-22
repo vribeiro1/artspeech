@@ -38,7 +38,8 @@ class Decoder(nn.Module):
         super(Decoder, self).__init__()
 
         self.predictors = nn.ModuleList([
-            ArticulatorPredictor(hidden_size, n_samples) for i in range(n_articulators)
+            ArticulatorPredictor(hidden_size, n_samples)
+            for _ in range(n_articulators)
         ])
 
     def forward(self, x):
