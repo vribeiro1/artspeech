@@ -1,5 +1,3 @@
-import pdb
-
 import argparse
 import os
 import pandas as pd
@@ -8,10 +6,14 @@ import yaml
 import ujson
 
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict
-from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_collate_fn
-from phoneme_to_articulation.encoder_decoder.evaluation import run_test
+from phoneme_to_articulation.transformer.evaluation import run_transformer_test
+from phoneme_to_articulation.encoder_decoder.dataset import (
+    ArtSpeechDataset,
+    pad_sequence_transformer_collate_fn
+)
 from phoneme_to_articulation.transformer.models import ArtSpeechTransformer
 from phoneme_to_articulation.metrics import EuclideanDistance
 from settings import UNKNOWN, BLANK
@@ -69,7 +71,7 @@ def main(
     best_model.to(device)
 
     print(f"""
-ArtSpeechTransformer -- {model.total_parameters} parameters
+ArtSpeechTransformer -- {best_model.total_parameters} parameters
 """)
 
     test_outputs_dir = os.path.join(save_to, "test_outputs")
@@ -78,7 +80,7 @@ ArtSpeechTransformer -- {model.total_parameters} parameters
 
     loss_fn = EuclideanDistance("none")
 
-    test_results = run_test(
+    test_results = run_transformer_test(
         epoch=0,
         model=best_model,
         dataloader=test_dataloader,

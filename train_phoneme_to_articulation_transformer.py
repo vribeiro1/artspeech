@@ -20,8 +20,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from helpers import set_seeds, sequences_from_dict, make_padding_mask
-from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset, pad_sequence_transformer_collate_fn
-from phoneme_to_articulation.encoder_decoder.evaluation import run_test
+from phoneme_to_articulation.encoder_decoder.dataset import (
+    ArtSpeechDataset,
+    pad_sequence_transformer_collate_fn
+)
+from phoneme_to_articulation.transformer.evaluation import run_transformer_test
 from phoneme_to_articulation.encoder_decoder.metrics import P2CPDistance
 from phoneme_to_articulation.transformer.models import ArtSpeechTransformer
 from phoneme_to_articulation.metrics import EuclideanDistance
@@ -86,17 +89,23 @@ def run_epoch(
 
         optimizer.zero_grad()
         with torch.set_grad_enabled(training):
+            targets_right_shifted = torch.cat([
+                torch.zeros(bs, 1, channels, 2 * features).to(device),
+                targets[:, 1:, ...].view(bs, seq_len - 1, channels, 2 * features)
+            ], dim=1)
+
             outputs = model(
                 sentence,
-                targets.view(bs, seq_len, channels, 2 * features),
+                targets_right_shifted,
                 src_key_padding_mask=src_key_padding_mask,
                 tgt_key_padding_mask=tgt_key_padding_mask,
                 src_attn_mask=src_attn_mask,
                 tgt_attn_mask=tgt_attn_mask,
             )
             outputs = outputs.view(bs, seq_len, channels, 2, features)
-            loss = criterion(outputs, targets)
+
             padding_mask = make_padding_mask(lengths)
+            loss = criterion(outputs, targets)
             bs, max_len, num_articulators, features = loss.shape
             loss = loss.view(bs * max_len, num_articulators, features)
             loss = loss[padding_mask.view(bs * max_len)].mean()
@@ -365,7 +374,7 @@ Best metric: {'%0.4f' % best_metric}, Epochs since best: {epochs_since_best}
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)
 
-    test_results = run_test(
+    test_results = run_transformer_test(
         epoch=0,
         model=best_model,
         dataloader=test_dataloader,

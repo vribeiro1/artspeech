@@ -1,5 +1,3 @@
-import pdb
-
 import math
 import torch
 import torch.nn as nn
@@ -282,13 +280,13 @@ class MultiChannelTransformerDecoderLayer(nn.Module):
 class ArtSpeechTransformer(nn.Module):
     def __init__(
         self,
-        vocab_size,
-        num_articulators,
-        embed_dim=64,
-        num_heads=4,
-        num_layers=4,
-        num_feat=100,
-        dropout=0.,
+        vocab_size: int,
+        num_articulators: int,
+        embed_dim: int = 64,
+        num_heads: int = 4,
+        num_layers: int = 4,
+        num_feat: int = 100,
+        dropout: float = 0.,
     ):
         super().__init__()
         self.dropout = nn.Dropout(dropout)
@@ -327,7 +325,7 @@ class ArtSpeechTransformer(nn.Module):
         )
         self.decoder = nn.TransformerDecoder(
             transformer_decoder_layer,
-            num_layers=2,
+            num_layers=num_layers,
         )
 
         self.linear = nn.Sequential(
@@ -339,6 +337,9 @@ class ArtSpeechTransformer(nn.Module):
         self.predictors = nn.ModuleList([
             ArticulatorPredictor(embed_dim, num_feat // 2) for _ in range(num_articulators)
         ])
+
+        start = torch.zeros(1, 1, num_articulators, num_feat)
+        self.register_buffer("start", start, persistent=False)  # (1, 1, num_art, 2 * num_samples)
 
     @property
     def total_parameters(self):
@@ -376,6 +377,69 @@ class ArtSpeechTransformer(nn.Module):
             is_causal=False,
         )
 
+        output = self._generate_one_step(
+            tgt=tgt,
+            memory=encoder_out,
+            tgt_mask=tgt_attn_mask,
+            memory_mask=src_attn_mask,
+            tgt_key_padding_mask=tgt_key_padding_mask,
+            memory_key_padding_mask=memory_key_padding_mask,
+        )
+
+        return output
+
+    def generate(
+        self,
+        src,
+        src_key_padding_mask
+    ):
+        bs, seq_len = src.shape
+
+        if self.start is None:
+            raise Exception("Can not generate without a START token setup.")
+
+        src_embed = src_embed = self.src_embedding(src)
+        src_pos_embed = self.pos_encoding(src_embed)
+
+        encoder_out = self.encoder(
+            src_pos_embed,
+            src_key_padding_mask=src_key_padding_mask,
+            is_causal=False,
+        )
+
+        tgt = torch.repeat_interleave(self.start, bs, dim=0)
+        for _ in range(seq_len):
+            next_tgt = self._generate_one_step(
+                tgt=tgt,
+                memory=encoder_out,
+                memory_key_padding_mask=src_key_padding_mask
+            )
+
+            bs, curr_seq_len, num_channels, _, num_samples = next_tgt.shape
+            next_tgt = next_tgt.reshape(bs, curr_seq_len, num_channels, 2 * num_samples)
+
+            tgt = torch.cat([
+                tgt,
+                next_tgt[:, [-1], :, :]
+            ], dim=1)
+
+        bs, curr_seq_len, num_channels, num_features = tgt.shape
+        tgt = tgt.reshape(bs, curr_seq_len, num_channels, 2, num_samples)
+
+        return tgt
+
+
+    def _generate_one_step(
+        self,
+        tgt,
+        memory,
+        tgt_mask=None,
+        memory_mask=None,
+        tgt_key_padding_mask=None,
+        memory_key_padding_mask=None,
+    ):
+        bs, seq_len, num_channels, num_feat = tgt.shape
+
         tgt_embed = self.tgt_embedding(tgt).permute(0, 2, 1, 3)
         tgt_pos_embed = self.pos_encoding(
             tgt_embed.reshape(
@@ -393,20 +457,20 @@ class ArtSpeechTransformer(nn.Module):
 
         decoder_out = self.decoder(
             tgt=tgt_pos_embed,
-            memory=encoder_out,
-            tgt_mask=tgt_attn_mask,
-            memory_mask=src_attn_mask,
+            memory=memory,
+            tgt_mask=tgt_mask,
+            memory_mask=memory_mask,
             tgt_key_padding_mask=tgt_key_padding_mask,
-            memory_key_padding_mask=src_key_padding_mask,
+            memory_key_padding_mask=memory_key_padding_mask,
         )
         decoder_out = decoder_out.permute(0, 2, 1, 3)  # (bs, seq_len, num_channels, num_feat)
 
         features = decoder_out.reshape(bs, seq_len, num_channels * self.embed_dim)
         features = self.linear(self.dropout(features))
 
-        out = torch.stack([
+        features = torch.stack([
             predictor(features) for predictor in self.predictors
         ], dim=2)
-        out = torch.sigmoid(out)
+        next_tgt = torch.sigmoid(features)
 
-        return out
+        return next_tgt
