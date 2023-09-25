@@ -99,6 +99,10 @@ def main(
     model.load_state_dict(state_dict)
     model.to(device)
 
+    print(f"""
+DeepSpeech2 -- {model.total_parameters} parameters
+""")
+
     sequences = sequences_from_dict(datadir, seq_dict)
     # dataset = SyntheticPhonemeRecognitionDataset(
     dataset = PhonemeRecognitionDataset(

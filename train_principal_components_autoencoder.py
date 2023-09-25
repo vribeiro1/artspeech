@@ -99,6 +99,12 @@ def main(
         autoencoder.load_state_dict(state_dict)
     autoencoder.to(device)
 
+    print(f"""
+MultiArticulatorAutoencoder -- {autoencoder.total_parameters} parameters
+""")
+
+    mlflow.log_param("num_network_params", model.total_parameters)
+
     gen = torch.Generator(device="cpu")
     gen.manual_seed(seed)
 

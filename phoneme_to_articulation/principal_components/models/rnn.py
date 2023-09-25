@@ -78,6 +78,11 @@ class PrincipalComponentsArtSpeech(nn.Module):
             hidden_features=256,
         )
 
+    @property
+    def total_parameters(self):
+        return sum(p.numel() for p in self.parameters())
+
+
     def forward(self, x, lengths):
         """
         Args:

@@ -162,6 +162,12 @@ def main(
         model.load_state_dict(state_dict)
     model.to(device)
 
+    print(f"""
+ArtSpeech -- {model.total_parameters} parameters
+""")
+
+    mlflow.log_param("num_network_params", model.total_parameters)
+
     loss_fn = EuclideanDistance(reduction="none")
     optimizer = Adam(
         model.parameters(),

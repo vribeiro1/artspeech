@@ -126,6 +126,10 @@ def main(
     model.load_state_dict(model_state_dict)
     model.to(device)
 
+    print(f"""
+PrincipalComponentsArtSpeech -- {model.total_parameters} parameters
+""")
+
     test_outputs_dir = os.path.join(save_to, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)

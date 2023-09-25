@@ -141,6 +141,10 @@ class DeepSpeech2(nn.Module):
         self.dropout = nn.Dropout(p=dropout)
         self.classifier = nn.Linear(rnn_hidden_size, num_classes)
 
+    @property
+    def total_parameters(self):
+        return sum(p.numel() for p in self.parameters())
+
     @staticmethod
     def get_noise_logits(x, factor):
         out = x + factor * torch.randn_like(x)

@@ -243,6 +243,10 @@ def main(
     best_autoencoder.decoders.load_state_dict(best_decoders_state_dict)
     best_autoencoder.to(device)
 
+    print(f"""
+MultiArticulatorAutoencoder -- {best_autoencoder.total_parameters} parameters
+""")
+
     test_outputs_dir = os.path.join(save_to, "test_outputs")
     if not os.path.exists(test_outputs_dir):
         os.makedirs(test_outputs_dir)

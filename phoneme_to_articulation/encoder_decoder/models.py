@@ -73,6 +73,10 @@ class SimpleArtSpeech(nn.Module):
             ArticulatorPredictor(hidden_size, num_samples) for _ in range(n_articulators)
         ])
 
+    @property
+    def total_parameters(self):
+        return sum(p.numel() for p in self.parameters())
+
     def forward(self, x, lengths):
         """
         Args:
@@ -114,6 +118,10 @@ class ArtSpeech(nn.Module):
         self.predictors = nn.ModuleList([
             ArticulatorPredictor(hidden_size, n_samples) for _ in range(n_articulators)
         ])
+
+    @property
+    def total_parameters(self):
+        return sum(p.numel() for p in self.parameters())
 
     def forward(self, x, lengths):
         """

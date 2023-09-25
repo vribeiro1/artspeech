@@ -239,6 +239,10 @@ class MultiArticulatorAutoencoder(nn.Module):
             hidden_features=hidden_features,
         )
 
+    @property
+    def total_parameters(self):
+        return sum(p.numel() for p in self.parameters())
+
     def forward(self, x):
         """
         Args:
