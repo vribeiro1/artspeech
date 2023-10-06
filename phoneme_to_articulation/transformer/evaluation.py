@@ -1,7 +1,19 @@
+import pdb
+
+import numpy as np
 import os
 import torch
 
+from helpers import make_padding_mask
+from metrics import pearsons_correlation, p2cp_distance, euclidean_distance
 from tqdm import tqdm
+
+from phoneme_to_articulation import (
+    save_outputs,
+    tract_variables,
+    REQUIRED_ARTICULATORS_FOR_TVS
+)
+from vt_tools import UPPER_INCISOR
 
 
 def run_transformer_test(
@@ -49,9 +61,33 @@ def run_transformer_test(
         src_key_padding_mask = src_key_padding_mask.to(device)
 
         with torch.set_grad_enabled(False):
-            outputs = model.generate(sentences, src_key_padding_mask)
+            outputs = model.generate(
+                sentences,
+                src_key_padding_mask=src_key_padding_mask,
+            )
+
+            # For some inputs, the Transformer's encoder generates only NaNs, and the output
+            # prediction is invalid. We need to filter out these cases to ba able to calculate the
+            # metrics.
+            # TODO: Find out why these (apparently valid) inputs produce invalid outputs in the
+            # Transformer's encoder.
+            nan_indices = [i for i, out in enumerate(outputs) if out.isnan().any()]
+            notnan_indices = [i for i, out in enumerate(outputs) if not out.isnan().any()]
+            if len(notnan_indices) == 0:
+                continue
+
+            if len(nan_indices) > 0:
+                nan_sentence_ids = [sentences_ids[i] for i in nan_indices]
+                invalid_sentences = "\n".join(nan_sentence_ids)
+                print(f"Invalid outputs produced for sentences:\n{invalid_sentences}\n")
+
+            outputs = outputs[notnan_indices]
+            targets = targets[notnan_indices]
+            reference_arrays = reference_arrays[notnan_indices]
+
             loss = criterion(outputs, targets)
             padding_mask = make_padding_mask(lengths)
+            padding_mask = padding_mask[notnan_indices]
             bs, max_len, num_articulators, features = loss.shape
             loss = loss.view(bs * max_len, num_articulators, features)
             loss = loss[padding_mask.view(bs * max_len)].mean()

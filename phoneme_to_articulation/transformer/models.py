@@ -391,14 +391,11 @@ class ArtSpeechTransformer(nn.Module):
     def generate(
         self,
         src,
-        src_key_padding_mask
+        src_key_padding_mask,
     ):
         bs, seq_len = src.shape
 
-        if self.start is None:
-            raise Exception("Can not generate without a START token setup.")
-
-        src_embed = src_embed = self.src_embedding(src)
+        src_embed = self.src_embedding(src)
         src_pos_embed = self.pos_encoding(src_embed)
 
         encoder_out = self.encoder(
@@ -425,6 +422,7 @@ class ArtSpeechTransformer(nn.Module):
 
         bs, curr_seq_len, num_channels, num_features = tgt.shape
         tgt = tgt.reshape(bs, curr_seq_len, num_channels, 2, num_samples)
+        tgt = tgt[:, 1:, ...]
 
         return tgt
 
