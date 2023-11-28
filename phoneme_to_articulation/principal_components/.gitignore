@@ -1,3 +1,7 @@
 config/*
 !config/.gitkeep
 !config/*.yaml.example
+!config/train_autoencoder.yaml
+!config/test_autoencoder.yaml
+!config/train_autoencoder_based.yaml
+!config/test_autoencoder_based.yaml
