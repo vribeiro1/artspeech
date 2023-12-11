@@ -1,3 +1,8 @@
+####################################################################################################
+#
+# Train the phoneme recognizer with acoustic or articulatory features
+#
+####################################################################################################
 import argparse
 import logging
 import mlflow

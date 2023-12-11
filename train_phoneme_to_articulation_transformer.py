@@ -1,3 +1,10 @@
+####################################################################################################
+#
+# Train the model-free phoneme-to-articulation using a transformer-based network
+#
+# This experiment is not included in the thesis
+#
+####################################################################################################
 import argparse
 import logging
 import mlflow
