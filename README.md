@@ -15,7 +15,7 @@ Université de Lorraine
 
 <li>
 <b>Deep Supervision of the Vocal Tract Shape for Articulatory Synthesis of Speech</b><br>
-Vinicius Ribeiro
+Vinicius Ribeiro<br>
 Ph.D. Thesis
 </li>
 
@@ -47,7 +47,7 @@ Aug 30, 2021 <a href="https://www.isca-speech.org/archive/interspeech_2021/ribei
 
 ### External dependencies
 
-This repository requires vt_tools, which can be found at <a href="https://gitlab.inria.fr/vsouzari/vt_tools">Inria's Gitlab</a>. To install the library, follow the instructions bellow.
+This repository requires <a href="https://gitlab.inria.fr/vsouzari/vt_tools">vt_tools</a>, which is available at Inria's Gitlab. To install the library, follow the instructions bellow.
 
 <ol>
 
