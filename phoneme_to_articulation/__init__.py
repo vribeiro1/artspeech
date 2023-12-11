@@ -1,3 +1,16 @@
+####################################################################################################
+#
+# Code base for the phoneme-to-articulation experiments
+#
+# Packages:
+#
+# phoneme_wise_mean_contour - Codebase for the mean contour phoneme-to-articulation
+# encoder_decoder - Codebase for the model-free phoneme-to-articulation
+# principal_components - Codebase for the autoencoder-based phoneme-to-articulation
+# transformer - Codebase for the model-free phoneme-to-articulation with a transformer network
+#               (not included in the thesis)
+#
+####################################################################################################
 import numpy as np
 import os
 import pandas as pd
