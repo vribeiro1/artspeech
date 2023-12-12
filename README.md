@@ -47,7 +47,7 @@ Aug 30, 2021 <a href="https://www.isca-speech.org/archive/interspeech_2021/ribei
 
 ### External dependencies
 
-This repository requires vt_tools (<a href="https://gitlab.inria.fr/vsouzari/vt_tools">Github</a>, <a href="https://gitlab.inria.fr/vsouzari/vt_tools">Gitlab</a>) and vt_shape_gen (<a href="https://github.com/vribeiro1/vt_shape_gen">Github</a>, <a href="https://github.com/vribeiro1/vt_shape_gen">Gitlab</a>). To install the library, follow the instructions bellow.
+This repository requires vt_tools (<a href="https://github.com/vribeiro1/vt_tools">Github</a>, <a href="https://gitlab.inria.fr/vsouzari/vt_tools">Gitlab</a>) and vt_shape_gen (<a href="https://github.com/vribeiro1/vt_shape_gen">Github</a>, <a href="https://gitlab.inria.fr/vsouzari/vt_shape_gen">Gitlab</a>). To install the library, follow the instructions bellow.
 
 <ol>
 
