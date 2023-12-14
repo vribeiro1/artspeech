@@ -1,0 +1,35 @@
+database_name: artspeech2
+datadir: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/datasets/ArtSpeech_Database_2
+batch_size: 4
+num_workers: 5
+vocab_filepath: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/datasets/ArtSpeech_Database_2/vocabulary.json
+pretrained: false
+feature: vocal_tract
+loss: CTC
+target: ctc_target
+plot_target: articulatory_target
+state_dict_filepath: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/paper_files/thesis/mlruns/367275904485465921/0dc08447c9db42299bc8c40ceb075e97/artifacts/best_model.pt
+save_dir: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/paper_files/thesis/mlruns/367275904485465921/0dc08447c9db42299bc8c40ceb075e97/artifacts
+model_params:
+    in_channels: 2
+    num_residual_layers: 4
+    num_rnn_layers: 2
+    rnn_hidden_size: 64
+    num_features: 500
+    adapter_out_features: 80
+    dropout: 0.1
+seq_dict:
+    "1775":
+        - S10
+        - S25
+        - S28
+        - S40
+    "1777":
+        - S37
+        - S14
+    "1789":
+        - S37
+        - S18
+        - S38
+    "1791":
+        - S34

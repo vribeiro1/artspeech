@@ -1,0 +1,32 @@
+database_name: artspeech2
+datadir: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/datasets/ArtSpeech_Database_2
+vocab_filepath: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/datasets/ArtSpeech_Database_2/vocabulary.json
+state_dict_filepath: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/paper_files/thesis/mlruns/233432967984160355/de6a3a99c01a442f9e307c23bd9cf72d/artifacts/phoneme_wise_articulators.csv
+save_to: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/paper_files/thesis/mlruns/233432967984160355/de6a3a99c01a442f9e307c23bd9cf72d/artifacts
+articulators:
+    - arytenoid-cartilage
+    - epiglottis
+    - lower-incisor
+    - lower-lip
+    - pharynx
+    - soft-palate-midline
+    - thyroid-cartilage
+    - tongue
+    - upper-lip
+    - vocal-folds
+clip_tails: true
+seq_dict:
+    "1775":
+        - S10
+        - S25
+        - S28
+        - S40
+    "1777":
+        - S37
+        - S14
+    "1789":
+        - S37
+        - S18
+        - S38
+    "1791":
+        - S34

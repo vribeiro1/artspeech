@@ -1,0 +1,13 @@
+database_name: artspeech2
+results_dir: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/paper_files/thesis/mlruns/800258051890611911/879898c341b74281b6e500903bd0caea/artifacts
+articulators:
+    - arytenoid-cartilage
+    - epiglottis
+    - lower-incisor
+    - lower-lip
+    - pharynx
+    - soft-palate-midline
+    - thyroid-cartilage
+    - tongue
+    - upper-lip
+    - vocal-folds

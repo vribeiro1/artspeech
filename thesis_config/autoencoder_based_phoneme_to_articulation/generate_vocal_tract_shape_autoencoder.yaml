@@ -1,0 +1,62 @@
+database_name: artspeech2
+datadir: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/datasets/ArtSpeech_Database_2
+method: autoencoder
+state_dict_filepath: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/paper_files/thesis/mlruns/800258051890611911/879898c341b74281b6e500903bd0caea/artifacts/best_model.pt
+vocab_filepath: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/datasets/ArtSpeech_Database_2/vocabulary.json
+save_to: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/datasets/ArtSpeech2_Generated_Shapes/Autoencoder2
+articulators:
+    - arytenoid-cartilage
+    - epiglottis
+    - lower-incisor
+    - lower-lip
+    - pharynx
+    - soft-palate-midline
+    - thyroid-cartilage
+    - tongue
+    - upper-lip
+    - vocal-folds
+seq_dict:
+    "1775":
+        - S10
+        - S25
+        - S28
+        - S40
+    "1777":
+        - S37
+        - S14
+    "1789":
+        - S37
+        - S18
+        - S38
+    "1791":
+        - S34
+model_params:
+    hidden_size: 128
+    embed_dim: 64
+    rnn_dropout: 0.1
+    indices_dict:
+        tongue: 8
+        lower-lip: 4
+        upper-lip: 4
+        soft-palate-midline: 3
+        thyroid-cartilage: 2
+        arytenoid-cartilage: 4
+        epiglottis: 3
+        lower-incisor: 3
+        pharynx: 2
+        vocal-folds: 2
+aux_state_dict_filepath: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/paper_files/thesis/mlruns/812589283295778426/891ed6734523443e82aad79af83f6079/artifacts/best_decoders.pt
+aux_model_params:
+    in_features: 100
+    hidden_features: 50
+    indices_dict:
+        tongue: 8
+        lower-lip: 4
+        upper-lip: 4
+        soft-palate-midline: 3
+        thyroid-cartilage: 2
+        arytenoid-cartilage: 4
+        epiglottis: 3
+        lower-incisor: 3
+        pharynx: 2
+        vocal-folds: 2
