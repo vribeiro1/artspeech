@@ -1,4 +1,2 @@
 config/*
 !config/*.yaml.example
-!config/train_mean_contour.yaml
-!config/test_mean_contour.yaml

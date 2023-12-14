@@ -1,5 +1,3 @@
 config/*
 !config/.gitkeep
 !config/*.yaml.example
-!config/train_model_free.yaml
-!config/test_model_free.yaml
