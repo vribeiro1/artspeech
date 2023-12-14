@@ -22,7 +22,6 @@ Ph.D. Thesis
 <li>
 <b>Evaluating Speech Articulation Synthesis with Phoneme Recognition</b><br>
 Vinicius Ribeiro, Yves Laprie<br>
-Under review
 </li>
 
 <li>
