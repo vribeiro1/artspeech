@@ -12,6 +12,7 @@ import yaml
 from functools import partial
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
+from torch.utils.data import Dataset
 from tgt import read_textgrid
 from tqdm import tqdm
 from vt_tools import (
@@ -19,8 +20,9 @@ from vt_tools import (
     UPPER_INCISOR,
 )
 from vt_tools.bs_regularization import regularize_Bsplines
-
 from vt_shape_gen.vocal_tract_tube import generate_vocal_tract_tube
+
+from database_collector import DATABASE_COLLECTORS
 from helpers import npy_to_xarticul, sequences_from_dict
 from phoneme_to_articulation.phoneme_wise_mean_contour import forward_mean_contour
 from phoneme_to_articulation.encoder_decoder.dataset import ArtSpeechDataset
@@ -34,6 +36,89 @@ from phoneme_to_articulation.transforms import Normalize
 from settings import DATASET_CONFIG, BLANK, UNKNOWN
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+class SynthesisDataset(Dataset):
+    ref_array = torch.tensor([
+        [
+            0.4690135 , 0.4662627 , 0.46351194, 0.46076113, 0.45801032,
+            0.45527017, 0.45255125, 0.44987226, 0.44734472, 0.44498724,
+            0.44288498, 0.4411229 , 0.43968427, 0.43846822, 0.43745804,
+            0.43643433, 0.43517762, 0.43364525, 0.43158084, 0.42894173,
+            0.42584795, 0.42241973, 0.4186992 , 0.4149394 , 0.41118246,
+            0.4073549 , 0.4033833 , 0.3991887 , 0.39429778, 0.38863158,
+            0.38197833, 0.37412614, 0.36517772, 0.35574925, 0.3459434 ,
+            0.33627468, 0.3272577 , 0.31895584, 0.3117499 , 0.30570334,
+            0.30080932, 0.29706097, 0.2944497 , 0.29292405, 0.29247546,
+            0.29290503, 0.29401374, 0.29574504, 0.29775932, 0.3
+        ],
+        [
+            0.2479401 , 0.24794108, 0.24794206, 0.24794301, 0.247944  ,
+            0.24794495, 0.24794582, 0.24794653, 0.24794671, 0.24794629,
+            0.24794495, 0.24794239, 0.24793896, 0.2479367 , 0.24793586,
+            0.2479395 , 0.24795061, 0.24796885, 0.24799258, 0.24802142,
+            0.24802947, 0.24799073, 0.24789768, 0.24770513, 0.24740562,
+            0.24718466, 0.24722782, 0.2476354 , 0.24900925, 0.25144967,
+            0.2552429 , 0.26067525, 0.26764584, 0.27554935, 0.28428498,
+            0.29333425, 0.30217865, 0.31071305, 0.3183063 , 0.32485318,
+            0.33003068, 0.33351567, 0.33525217, 0.3349038 , 0.33241457,
+            0.3281533 , 0.3224889 , 0.3155383 , 0.308003  , 0.3
+        ]
+    ], dtype=torch.float32)
+
+    def __init__(
+        self,
+        datadir,
+        database_name,
+        sequences,
+        vocabulary,
+        articulators,
+        n_samples=50,
+        voiced_tokens=None,
+    ):
+        self.vocabulary = vocabulary
+        self.datadir = datadir
+        self.articulators = sorted(articulators)
+        self.num_articulators = len(articulators)
+        self.num_samples = n_samples
+        self.voiced_tokens = voiced_tokens or []
+
+        collector = DATABASE_COLLECTORS[database_name](datadir)
+        self.data = collector.collect_data(sequences)
+        self.dataset_config = DATASET_CONFIG[database_name]
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, item):
+        item = self.data[item]
+        sentence_name = item["sentence_name"]
+        subject = item["subject"]
+        sequence = item["sequence"]
+        sentence_tokens = item["phonemes"]
+
+        reference_arrays = self.ref_array.clone()
+        reference_arrays = reference_arrays.unsqueeze(dim=0).unsqueeze(dim=0)
+        reference_arrays = reference_arrays.repeat_interleave(len(sentence_tokens), dim=0)
+
+        sentence_numerized = torch.tensor([
+            self.vocabulary.get(token, self.vocabulary[UNKNOWN])
+            for token in sentence_tokens
+        ], dtype=torch.long)
+
+        # Voicing information
+        voicing = torch.tensor(
+            [phoneme in self.voiced_tokens for phoneme in sentence_tokens],
+            dtype=torch.float
+        )
+
+        return (
+            sentence_name,
+            sentence_numerized,
+            sentence_tokens,
+            reference_arrays,
+            voicing,
+        )
 
 
 def validate_textgrid(textgrid_filepath, encoding="utf-8"):
@@ -216,6 +301,10 @@ def main(
         state_dict = torch.load(state_dict_filepath, map_location=device)
         model.load_state_dict(state_dict)
         model.to(device)
+
+        print(f"""
+Model-free Phoneme-to-Articulation -- {model.total_parameters} parameters
+""")
     elif method == "mean_contour":
         df = pd.read_csv(state_dict_filepath)
         for articulator in articulators:
@@ -254,31 +343,31 @@ def main(
         rnn.load_state_dict(state_dict)
         rnn.to(device)
 
+        print(f"""
+Autoencoder-based Phoneme-to-Articulation -- {rnn.total_parameters} parameters
+""")
+
         model = PrincipalComponentsArtSpeechWrapper(rnn, decoder, denormalize)
         model.to(device)
     else:
         raise Exception(f"Unavailable method '{method}'")
 
     sequences = sequences_from_dict(datadir, seq_dict)
-    dataset = ArtSpeechDataset(
+    dataset = SynthesisDataset(
         datadir,
         database_name,
         sequences,
         vocabulary,
         articulators,
-        clip_tails=True,
     )
     progress_bar = tqdm(dataset, desc="Synthesizing vocal tract")
 
     for (
         sentence_name,
         sentence_numerized,
-        _,
         sentence_tokens,
         reference_arrays,
-        _,
-        _,
-        _
+        voicing,
     ) in progress_bar:
         subject_sequence, _ = sentence_name.split("-")
         subject, _ = subject_sequence.split("_")

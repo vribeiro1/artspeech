@@ -1,0 +1,22 @@
+database_name: textgrid_only
+datadir: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/VCV_textgrid2
+method: encoder_decoder
+state_dict_filepath: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/paper_files/thesis/mlruns/136891258768294425/4dcd884ac74a4ccc91a87e7d0dd24471/artifacts/best_model.pt
+vocab_filepath: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/datasets/ArtSpeech_Database_2/vocabulary.json
+save_to: /srv/storage/talc2@talc-data2.nancy.grid5000.fr/multispeech/calcul/users/vsouzaribeiro/datasets/VCV_Synthesis/Model_Free
+articulators:
+    - arytenoid-cartilage
+    - epiglottis
+    - lower-incisor
+    - lower-lip
+    - pharynx
+    - soft-palate-midline
+    - thyroid-cartilage
+    - tongue
+    - upper-lip
+    - vocal-folds
+seq_dict:
+    "stretched0pct": []
+    "stretched20pct": []
+    "stretched40pct": []
+    "stretched60pct": []

@@ -31,8 +31,16 @@ class GottingenConfig:
     SYNC_SHIFT = 0
 
 
+class TextgridOnlyConfig:
+    RES = 136
+    PIXEL_SPACING = 1.6176470518112
+    FRAMERATE = 50
+    SYNC_SHIFT = 0
+
+
 DATASET_CONFIG = {
     "artspeech": ArtSpeechConfig,
     "artspeech2": ArtSpeech2Config,
-    "gottingen": GottingenConfig
+    "gottingen": GottingenConfig,
+    "textgrid_only": TextgridOnlyConfig,
 }

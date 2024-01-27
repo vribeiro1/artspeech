@@ -8,7 +8,12 @@ from tgt.io import read_textgrid
 from tqdm import tqdm
 
 from video import Video
-from settings import BASE_DIR, ArtSpeech2Config, GottingenConfig
+from settings import (
+    BASE_DIR,
+    ArtSpeech2Config,
+    GottingenConfig,
+    TextgridOnlyConfig,
+)
 
 
 class DatabaseCollector:
@@ -215,7 +220,78 @@ class GottingenDatabaseCollector(DatabaseCollector):
         return textgrid_filepath
 
 
+class TextgridOnlyDatabaseCollector(DatabaseCollector):
+    dataset_config = TextgridOnlyConfig
+
+    def get_sequence_dir(self, subject, sequence):
+        return os.path.join(self.datadir, subject, sequence)
+
+    def get_textgrid_filepath(self, subject, sequence):
+        sequence_dir = self.get_sequence_dir(subject, sequence)
+        textgrid_filepath = os.path.join(sequence_dir, f"{sequence}.textgrid")
+        return textgrid_filepath
+
+    def collect_data(self, sequences, **kwargs):
+        data = []
+        for subject, sequence in tqdm(sequences, desc="Collecting data"):
+            textgrid_filepath = self.get_textgrid_filepath(subject, sequence)
+            if not os.path.isfile(textgrid_filepath):
+                logging.warning(f"Skipping {subject}/{sequence} - Missing textgrid")
+                continue
+            textgrid = read_textgrid(textgrid_filepath)
+            phone_tier = textgrid.get_tier_by_name(self.phoneme_tier)
+            sentence_tier = textgrid.get_tier_by_name(self.sentence_tier)
+
+            for sentence_interval in sentence_tier.intervals:
+                def phone_is_in_interval(phone):
+                    return (
+                        phone.start_time >= sentence_interval.start_time and
+                        phone.end_time <= sentence_interval.end_time
+                    )
+
+                sentence_phone_intervals = filter(phone_is_in_interval, phone_tier)
+                sentence_phone_intervals = sorted(
+                    sentence_phone_intervals,
+                    key=lambda interval: interval.start_time
+                )
+                sentence_phonemes_with_time = []
+                sentence_phonemes = []
+                for phone_interval in sentence_phone_intervals:
+                    phoneme_duration = phone_interval.end_time - phone_interval.start_time
+                    num_frames = int(self.dataset_config.FRAMERATE * phoneme_duration)
+                    repeated_phoneme = [phone_interval.text] * num_frames
+                    sentence_phonemes.extend(repeated_phoneme)
+                    # Since the sentences are split into smaller wav files, the phoneme onset
+                    # and offset need to be adjusted
+                    sentence_phonemes_with_time.append((
+                        phone_interval.text,
+                        phone_interval.start_time - sentence_interval.start_time,
+                        phone_interval.end_time - sentence_interval.start_time
+                    ))
+
+                start_str = "%.04f" % sentence_interval.start_time
+                end_str = "%.04f" % sentence_interval.end_time
+                sentence_name = f"{subject}_{sequence}-{start_str}_{end_str}"
+
+                data.append({
+                    "subject": subject,
+                    "sequence": sequence,
+                    "sentence_name": sentence_name,
+                    "wav_filepath": None,
+                    "audio_duration": sentence_interval.end_time - sentence_interval.start_time,
+                    "textgrid_filepath": textgrid_filepath,
+                    "n_frames": 0,
+                    "frame_ids": [],
+                    "phonemes_with_time": sentence_phonemes_with_time,
+                    "phonemes": sentence_phonemes,
+                    "has_all": None,
+                })
+
+        return data
+
+
 DATABASE_COLLECTORS = {
     "artspeech2": ArtSpeechDatabase2Collector,
     "gottingen": GottingenDatabaseCollector,
+    "textgrid_only": TextgridOnlyDatabaseCollector,
 }

@@ -135,6 +135,10 @@ def evaluate_autoencoder(
     autoencoder.to(device)
     autoencoder.eval()
 
+    print(f"""
+MultiArticulatorAutoencoder -- {autoencoder.total_parameters} parameters
+""")
+
     p2cp_fn = MeanP2CPDistance(reduction="none")
     data_frame_names = []
     data_p2cp = torch.zeros(size=(0, n_articulators))
