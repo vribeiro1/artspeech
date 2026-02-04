@@ -16,7 +16,7 @@ Université de Lorraine
 <li>
 <b>Deep Supervision of the Vocal Tract Shape for Articulatory Synthesis of Speech</b><br>
 Vinicius Ribeiro<br>
-Ph.D. Thesis
+<a href="https://inria.hal.science/tel-04602247/">Ph.D. Thesis</a>
 </li>
 
 <li>
