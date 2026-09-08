@@ -22,7 +22,7 @@ Vinicius Ribeiro<br>
 <li>
 <b>Evaluating Speech Articulation Synthesis with Articulatory Phoneme Recognition</b><br>
 Vinicius Ribeiro, Yves Laprie<br>
-May 20, 2026, <a href="https://arxiv.org/pdf/2605.20920">Accepted for publication at EUSIPCO 2026</a>
+May 20, 2026, <a href="https://eurasip.org/Proceedings/Eusipco/Eusipco2026/pdfs/0000461.pdf">EUSIPCO 2026</a>
 </li>
 
 <li>
